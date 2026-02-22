@@ -175,8 +175,8 @@ export function FreelancerBoard({
   const hasFilter = !!(search || departmentFilter || monthFilter || groupFilter || managerFilter || bookedByFilter || dateFrom || dateTo);
   const clearFilters = () => { setSearch(""); setDepartmentFilter(""); setMonthFilter(""); setGroupFilter(""); setManagerFilter(""); setBookedByFilter(""); setDateFrom(""); setDateTo(""); };
 
-  const uniqueMonths = useMemo(() => [...new Set(rows.map(r => r.month).filter(m => m !== "—"))].sort(), [rows]);
-  const uniqueBookedBy = useMemo(() => [...new Set(rows.map(r => r.bookedBy).filter(b => b !== "—"))].sort(), [rows]);
+  const uniqueMonths = useMemo(() => Array.from(new Set(rows.map(r => r.month).filter(m => m !== "—"))).sort(), [rows]);
+  const uniqueBookedBy = useMemo(() => Array.from(new Set(rows.map(r => r.bookedBy).filter(b => b !== "—"))).sort(), [rows]);
 
   const filteredRows = useMemo(() => rows.filter(r => {
     if (search) { const q = search.toLowerCase(); if (![r.contractor, r.companyName, r.submittedBy, r.beneficiary, r.invNumber, r.serviceDescription, r.bookedBy, r.department, r.department2].some(v => v.toLowerCase().includes(q))) return false; }

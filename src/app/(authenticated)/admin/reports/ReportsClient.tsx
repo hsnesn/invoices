@@ -93,7 +93,7 @@ export function ReportsClient() {
     doc.save(`invoice-report-${report.period.replace(/\s+/g, "-")}.pdf`);
   }, [report]);
 
-  const years = useMemo(() => Array.from({ length: 5 }, (_, i) => now.getFullYear() - i), []);
+  const years = useMemo(() => { const y = new Date().getFullYear(); return Array.from({ length: 5 }, (_, i) => y - i); }, []);
   const TABS = useMemo(() => {
     const t: { key: typeof activeTab; label: string }[] = [{ key: "overview", label: "Overview" }, { key: "producers", label: "Producers" }, { key: "guests", label: "Top Guests" }, { key: "rejections", label: "Rejections" }];
     if (!report || report.invoiceType !== "guest") t.push({ key: "freelancer", label: "Freelancer" });
@@ -220,14 +220,14 @@ function OverviewTab({ report }: { report: ReportData }) {
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Monthly Trend</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={report.monthlyTrend}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="month" tick={{ fontSize: 11 }} /><YAxis yAxisId="left" tick={{ fontSize: 11 }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(v: number, name: string) => [name === "amount" ? fmt(v) : v, name === "amount" ? "Amount" : "Count"]} /><Line yAxisId="left" type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="count" /><Line yAxisId="right" type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="amount" /></LineChart>
+            <LineChart data={report.monthlyTrend}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="month" tick={{ fontSize: 11 }} /><YAxis yAxisId="left" tick={{ fontSize: 11 }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={((v: number | undefined, name?: string) => [name === "amount" ? fmt(v ?? 0) : (v ?? 0), name === "amount" ? "Amount" : "Count"]) as never} /><Line yAxisId="left" type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="count" /><Line yAxisId="right" type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="amount" /></LineChart>
           </ResponsiveContainer>
         </div>
         {/* Department chart */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Department Spending</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount).map(([name, d]) => ({ name: name.length > 12 ? name.slice(0, 12) + "…" : name, amount: d.amount, count: d.count }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(v: number) => fmt(v)} /><Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} /></BarChart>
+            <BarChart data={Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount).map(([name, d]) => ({ name: name.length > 12 ? name.slice(0, 12) + "…" : name, amount: d.amount, count: d.count }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} /><Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} /></BarChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -237,7 +237,7 @@ function OverviewTab({ report }: { report: ReportData }) {
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Status Distribution</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <PieChart><Pie data={Object.entries(report.byStatus).map(([name, value]) => ({ name: name.replace(/_/g, " "), value }))} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>{Object.keys(report.byStatus).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart>
+            <PieChart><Pie data={Object.entries(report.byStatus).map(([name, value]) => ({ name: name.replace(/_/g, " "), value }))} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>{Object.keys(report.byStatus).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart>
           </ResponsiveContainer>
         </div>
         {Object.keys(report.byPaymentType).length > 0 && (
@@ -323,7 +323,7 @@ function GuestsTab({ report }: { report: ReportData }) {
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Top 10 by Amount</h3>
           <ResponsiveContainer width="100%" height={Math.max(200, Math.min(entries.length, 10) * 32)}>
-            <BarChart layout="vertical" data={entries.slice(0, 10).map(([name, d]) => ({ name: name.length > 20 ? name.slice(0, 20) + "…" : name, amount: d.amount }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis type="number" tick={{ fontSize: 10 }} /><YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10 }} /><Tooltip formatter={(v: number) => fmt(v)} /><Bar dataKey="amount" fill="#f59e0b" radius={[0, 4, 4, 0]} /></BarChart>
+            <BarChart layout="vertical" data={entries.slice(0, 10).map(([name, d]) => ({ name: name.length > 20 ? name.slice(0, 20) + "…" : name, amount: d.amount }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis type="number" tick={{ fontSize: 10 }} /><YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10 }} /><Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} /><Bar dataKey="amount" fill="#f59e0b" radius={[0, 4, 4, 0]} /></BarChart>
           </ResponsiveContainer>
         </div>
       )}
@@ -402,7 +402,7 @@ function FreelancerTab({ report }: { report: ReportData }) {
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Spending by Department</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount).map(([name, d]) => ({ name: name.length > 14 ? name.slice(0, 14) + "…" : name, amount: d.amount, count: d.count }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(v: number) => fmt(v)} /><Bar dataKey="amount" fill="#06b6d4" radius={[4, 4, 0, 0]} /></BarChart>
+            <BarChart data={Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount).map(([name, d]) => ({ name: name.length > 14 ? name.slice(0, 14) + "…" : name, amount: d.amount, count: d.count }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} /><Bar dataKey="amount" fill="#06b6d4" radius={[4, 4, 0, 0]} /></BarChart>
           </ResponsiveContainer>
         </div>
       )}
