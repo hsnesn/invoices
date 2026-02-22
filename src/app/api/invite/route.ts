@@ -4,7 +4,11 @@ import { requireAdmin } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  return new Resend(key);
+}
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Invoice Approval Workflow";
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? `${APP_NAME} <noreply@example.com>`;
@@ -79,7 +83,8 @@ export async function POST(request: NextRequest) {
     });
 
     const magicLink = linkData?.properties?.action_link;
-    if (magicLink && process.env.RESEND_API_KEY) {
+    const resend = getResend();
+    if (magicLink && resend) {
       const inviterName = profile.full_name || "An administrator";
       await resend.emails.send({
         from: FROM_EMAIL, to: email,
@@ -128,7 +133,8 @@ export async function PATCH(request: NextRequest) {
     });
 
     const magicLink = linkData?.properties?.action_link;
-    if (magicLink && process.env.RESEND_API_KEY) {
+    const resend = getResend();
+    if (magicLink && resend) {
       const inviterName = profile.full_name || "An administrator";
       await resend.emails.send({
         from: FROM_EMAIL, to: email,
