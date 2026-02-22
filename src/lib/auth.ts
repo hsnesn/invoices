@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import type { Profile } from "@/lib/types";
 
@@ -17,7 +18,8 @@ export async function getProfile(): Promise<Profile | null> {
   } = await supabase.auth.getSession();
   if (!session?.user) return null;
 
-  const { data } = await supabase
+  const adminClient = createAdminClient();
+  const { data } = await adminClient
     .from("profiles")
     .select("*")
     .eq("id", session.user.id)
@@ -41,6 +43,7 @@ export async function requireAuth(): Promise<{ session: { user: { id: string } }
         role: "admin",
         department_id: null,
         program_ids: [],
+        allowed_pages: null,
         is_active: true,
         created_at: now,
         updated_at: now,
@@ -54,13 +57,14 @@ export async function requireAuth(): Promise<{ session: { user: { id: string } }
   } = await supabase.auth.getSession();
   if (!session?.user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const adminClient = createAdminClient();
+  const { data: profile, error: profileError } = await adminClient
     .from("profiles")
     .select("*")
     .eq("id", session.user.id)
     .single();
 
-  if (!profile || !(profile as Profile).is_active) {
+  if (profileError || !profile || !(profile as Profile).is_active) {
     await supabase.auth.signOut();
     redirect("/login?error=deactivated");
   }

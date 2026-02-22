@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 
 const DashboardSection = lazy(() => import("./InvoiceDashboard").then((m) => ({ default: m.InvoiceDashboard })));
 
@@ -41,7 +42,9 @@ type DisplayRow = {
   producer: string;
   paymentType: string;
   department: string;
+  departmentId: string;
   programme: string;
+  programmeId: string;
   topic: string;
   tx1: string;
   tx2: string;
@@ -53,6 +56,7 @@ type DisplayRow = {
   sortCode: string;
   accountNumber: string;
   lineManager: string;
+  lineManagerId: string;
   paymentDate: string;
   status: string;
   rejectionReason: string;
@@ -152,6 +156,8 @@ type EditDraft = {
   title: string;
   producer: string;
   paymentType: string;
+  departmentId: string;
+  programmeId: string;
   topic: string;
   tx1: string;
   tx2: string;
@@ -162,6 +168,7 @@ type EditDraft = {
   invNumber: string;
   sortCode: string;
   accountNumber: string;
+  lineManagerId: string;
 };
 
 function programmeBadgeClass(value: string): string {
@@ -289,6 +296,9 @@ function InvoiceTable({
   pageSize,
   currentPage,
   onPageChange,
+  departmentPairs,
+  programPairs,
+  profilePairs,
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -323,12 +333,24 @@ function InvoiceTable({
   pageSize: number;
   currentPage: number;
   onPageChange: (p: number) => void;
+  departmentPairs: [string, string][];
+  programPairs: [string, string][];
+  profilePairs: [string, string][];
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const colCount = visibleColumns.length;
 
   const isCol = (key: string) => visibleColumns.includes(key);
+
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleRowClick = useCallback((id: string) => {
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = setTimeout(() => { onToggleExpand(id); clickTimerRef.current = null; }, 250);
+  }, [onToggleExpand]);
+  const handleRowDblClick = useCallback(() => {
+    if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
+  }, []);
 
   return (
     <div className="overflow-x-auto rounded-2xl border-2 border-slate-300 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
@@ -368,9 +390,12 @@ function InvoiceTable({
               const canApprove = currentRole === "admin" || (!isSubmitter && currentRole === "manager");
               const isDuplicate = duplicates.has(r.id);
               const pendingDays = (r.status === "pending_manager" || r.status === "submitted") ? daysSince(r.createdAt) : 0;
+              const canEditRow = currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status));
+              const editableTdClass = canEditRow && editingId !== r.id ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
+              const startEditOnDblClick = (e: React.MouseEvent) => { if (canEditRow && editingId !== r.id) { e.stopPropagation(); e.preventDefault(); handleRowDblClick(); onStartEdit(r); } };
               return (
               <React.Fragment key={r.id}>
-              <tr className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => onToggleExpand(r.id)}>
+              <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : editingId === r.id ? "bg-blue-50 dark:bg-blue-950/30 ring-2 ring-blue-400 ring-inset" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => { if (editingId !== r.id) handleRowClick(r.id); }} onDoubleClick={handleRowDblClick}>
               {isCol("checkbox") && (
               <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                 <input
@@ -443,9 +468,9 @@ function InvoiceTable({
               </td>
               )}
               {isCol("guest") && (
-              <td className="px-4 py-3 text-sm font-medium text-gray-900">
+              <td className={`px-4 py-3 text-sm font-medium text-gray-900${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>
                 {editingId === r.id ? (
-                  <input value={editDraft?.guest ?? ""} onChange={(e) => onChangeDraft("guest", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" />
+                  <input autoFocus value={editDraft?.guest ?? ""} onChange={(e) => onChangeDraft("guest", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" />
                 ) : (
                   <div>
                     <span>{r.guest}</span>
@@ -458,16 +483,16 @@ function InvoiceTable({
                 )}
               </td>
               )}
-              {isCol("title") && <td className="px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.title ?? ""} onChange={(e) => onChangeDraft("title", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.title}</td>}
-              {isCol("producer") && <td className="px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.producer ?? ""} onChange={(e) => onChangeDraft("producer", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : <div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColor(r.producer)}`}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div>}</td>}
-              {isCol("paymentType") && <td className="px-4 py-3">{editingId === r.id ? <select value={editDraft?.paymentType ?? "paid guest"} onChange={(e) => onChangeDraft("paymentType", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"><option value="paid guest">Paid Guest</option><option value="unpaid guest">Unpaid Guest</option></select> : <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span>}</td>}
-              {isCol("department") && <td className="px-4 py-3"><span className="inline-flex rounded-full bg-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-900 border-2 border-emerald-400 dark:bg-emerald-800 dark:text-emerald-100 dark:border-emerald-600">{r.department}</span></td>}
-              {isCol("programme") && <td className="px-4 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${programmeBadgeClass(r.programme)}`}>{r.programme}</span></td>}
-              {isCol("topic") && <td className="max-w-[220px] truncate px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.topic ?? ""} onChange={(e) => onChangeDraft("topic", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.topic}</td>}
-              {isCol("tx1") && <td className="px-4 py-3 text-sm text-gray-600">{editingId === r.id ? <input type="date" value={editDraft?.tx1 ?? ""} onChange={(e) => onChangeDraft("tx1", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx1}</td>}
-              {isCol("tx2") && <td className="px-4 py-3 text-sm text-gray-600">{editingId === r.id ? <input type="date" value={editDraft?.tx2 ?? ""} onChange={(e) => onChangeDraft("tx2", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx2}</td>}
-              {isCol("tx3") && <td className="px-4 py-3 text-sm text-gray-600">{editingId === r.id ? <input type="date" value={editDraft?.tx3 ?? ""} onChange={(e) => onChangeDraft("tx3", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx3}</td>}
-              {isCol("invoiceDate") && <td className="px-4 py-3 text-sm text-gray-600">{editingId === r.id ? <input type="date" value={editDraft?.invoiceDate ?? ""} onChange={(e) => onChangeDraft("invoiceDate", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.invoiceDate}</td>}
+              {isCol("title") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.title ?? ""} onChange={(e) => onChangeDraft("title", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.title}</td>}
+              {isCol("producer") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.producer ?? ""} onChange={(e) => onChangeDraft("producer", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : <div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColor(r.producer)}`}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div>}</td>}
+              {isCol("paymentType") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.paymentType ?? "paid guest"} onChange={(e) => onChangeDraft("paymentType", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"><option value="paid guest">Paid Guest</option><option value="unpaid guest">Unpaid Guest</option></select> : <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span>}</td>}
+              {isCol("department") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.departmentId ?? ""} onChange={(e) => { onChangeDraft("departmentId", e.target.value); onChangeDraft("programmeId", ""); }} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className="inline-flex rounded-full bg-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-900 border-2 border-emerald-400 dark:bg-emerald-800 dark:text-emerald-100 dark:border-emerald-600">{r.department}</span>}</td>}
+              {isCol("programme") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.programmeId ?? ""} onChange={(e) => onChangeDraft("programmeId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{programPairs.filter(([, ]) => true).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${programmeBadgeClass(r.programme)}`}>{r.programme}</span>}</td>}
+              {isCol("topic") && <td className={`max-w-[220px] truncate px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.topic ?? ""} onChange={(e) => onChangeDraft("topic", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.topic}</td>}
+              {isCol("tx1") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx1 ?? ""} onChange={(e) => onChangeDraft("tx1", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx1}</td>}
+              {isCol("tx2") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx2 ?? ""} onChange={(e) => onChangeDraft("tx2", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx2}</td>}
+              {isCol("tx3") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx3 ?? ""} onChange={(e) => onChangeDraft("tx3", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx3}</td>}
+              {isCol("invoiceDate") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.invoiceDate ?? ""} onChange={(e) => onChangeDraft("invoiceDate", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.invoiceDate}</td>}
               {isCol("file") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1">
                 <button onClick={() => void openPdf(r.id)} className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"><svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4zM6 10h8v2H6v-2zm0 4h5v2H6v-2z"/></svg>Open</button>
@@ -479,77 +504,85 @@ function InvoiceTable({
                 )}
                 </div>
               </td>}
-              {isCol("accountName") && <td className="px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.accountName ?? ""} onChange={(e) => onChangeDraft("accountName", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.accountName}</td>}
-              {isCol("amount") && <td className="px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.amount ?? ""} onChange={(e) => onChangeDraft("amount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.amount}</td>}
-              {isCol("invNumber") && <td className="px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.invNumber ?? ""} onChange={(e) => onChangeDraft("invNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.invNumber}</td>}
-              {isCol("sortCode") && <td className="px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.sortCode ?? ""} onChange={(e) => onChangeDraft("sortCode", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.sortCode}</td>}
-              {isCol("accountNumber") && <td className="px-4 py-3 text-sm text-gray-700">{editingId === r.id ? <input value={editDraft?.accountNumber ?? ""} onChange={(e) => onChangeDraft("accountNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.accountNumber}</td>}
-              {isCol("lineManager") && <td className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>}
+              {isCol("accountName") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.accountName ?? ""} onChange={(e) => onChangeDraft("accountName", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.accountName}</td>}
+              {isCol("amount") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.amount ?? ""} onChange={(e) => onChangeDraft("amount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.amount}</td>}
+              {isCol("invNumber") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.invNumber ?? ""} onChange={(e) => onChangeDraft("invNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.invNumber}</td>}
+              {isCol("sortCode") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.sortCode ?? ""} onChange={(e) => onChangeDraft("sortCode", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.sortCode}</td>}
+              {isCol("accountNumber") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.accountNumber ?? ""} onChange={(e) => onChangeDraft("accountNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.accountNumber}</td>}
+              {isCol("lineManager") && <td className={`px-4 py-3 text-sm text-gray-600${currentRole === "admin" ? editableTdClass : ""}`} onDoubleClick={currentRole === "admin" && editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id && currentRole === "admin" ? <select value={editDraft?.lineManagerId ?? ""} onChange={(e) => onChangeDraft("lineManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{profilePairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : r.lineManager}</td>}
               {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
               {isCol("actions") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                {editingId === r.id ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => void onSaveEdit(r.id)}
-                      disabled={actionLoadingId === r.id}
-                      className="rounded-lg bg-[#5034FF] px-3 py-1 text-xs font-medium text-white hover:bg-[#4030dd] disabled:opacity-50 shadow-sm transition-colors"
-                    >
-                      {actionLoadingId === r.id ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      onClick={onCancelEdit}
-                      className="rounded bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-300 shadow-sm"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (currentRole === "manager" || currentRole === "admin") ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => onStartEdit(r)}
-                      className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
-                    >
-                      Edit
-                    </button>
-                    {r.status === "rejected" && (
-                      <button
-                        onClick={() => void onResubmit(r.id)}
-                        disabled={actionLoadingId === r.id}
-                        className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 shadow-sm"
-                      >
-                        {actionLoadingId === r.id ? "..." : "Resubmit"}
-                      </button>
-                    )}
-                    {currentRole === "admin" && (
-                      <button
-                        onClick={() => void onDeleteInvoice(r.id)}
-                        disabled={actionLoadingId === r.id}
-                        className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm"
-                      >
-                        {actionLoadingId === r.id ? "Deleting..." : "Delete"}
-                      </button>
-                    )}
-                  </div>
-                ) : r.status === "rejected" ? (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-red-700" title={r.rejectionReason}>
-                      Rejected: {r.rejectionReason || "—"}
+                {(() => {
+                  const submitterCanEdit = isSubmitter && (r.status === "pending_manager" || r.status === "submitted");
+                  const submitterCanResubmit = isSubmitter && r.status === "rejected";
+                  const managerOrAdmin = currentRole === "manager" || currentRole === "admin";
+
+                  if (editingId === r.id) {
+                    return (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                          <svg className="h-3.5 w-3.5 animate-pulse" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                          Editing
+                        </span>
+                        <button onClick={onCancelEdit} className="rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300" title="Discard changes (Esc)">✕</button>
+                      </div>
+                    );
+                  }
+
+                  if (managerOrAdmin) {
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
+                        {r.status === "rejected" && (
+                          <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 shadow-sm">
+                            {actionLoadingId === r.id ? "..." : "Resubmit"}
+                          </button>
+                        )}
+                        {currentRole === "admin" && (
+                          <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
+                            {actionLoadingId === r.id ? "Deleting..." : "Delete"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (submitterCanEdit) {
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
+                      </div>
+                    );
+                  }
+
+                  if (submitterCanResubmit) {
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
+                        <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 shadow-sm">
+                          {actionLoadingId === r.id ? "Resubmitting..." : "Resubmit"}
+                        </button>
+                        <span className="text-xs font-medium text-red-600" title={r.rejectionReason}>
+                          {r.rejectionReason || "Rejected"}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  if (r.status === "rejected") {
+                    return (
+                      <span className="text-xs font-medium text-red-600" title={r.rejectionReason}>
+                        Rejected: {r.rejectionReason || "—"}
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <span className="text-xs text-gray-400">
+                      {r.status === "pending_manager" ? "Pending" : r.status === "paid" ? "Paid" : r.status === "ready_for_payment" ? "Ready" : "Approved"}
                     </span>
-                    {(r.submitterId === currentUserId || currentRole === "admin") && (
-                      <button
-                        onClick={() => void onResubmit(r.id)}
-                        disabled={actionLoadingId === r.id}
-                        className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 shadow-sm"
-                      >
-                        {actionLoadingId === r.id ? "Resubmitting..." : "Resubmit"}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-xs text-gray-400">
-                    {r.status === "pending_manager" ? "Pending" : "Approved"}
-                  </span>
-                )}
+                  );
+                })()}
               </td>}
               </tr>
               {/* Expanded Detail Row */}
@@ -567,10 +600,26 @@ function InvoiceTable({
                             <p className="text-xs text-gray-400">No events yet.</p>
                           ) : (
                             <div className="space-y-2 max-h-60 overflow-y-auto">
-                              {timelineData.map((ev) => (
+                              {timelineData.map((ev) => {
+                                const changes = (ev.payload as Record<string, unknown>)?.changes as Record<string, { from: string; to: string }> | undefined;
+                                const hasChanges = changes && Object.keys(changes).length > 0;
+                                const eventIcon = ev.event_type === "invoice_updated" ? "bg-amber-400" : ev.event_type.includes("reject") ? "bg-red-400" : ev.event_type.includes("approv") ? "bg-green-400" : ev.event_type.includes("paid") ? "bg-purple-400" : "bg-blue-400";
+
+                                const deptMap = Object.fromEntries(departmentPairs);
+                                const progMap = Object.fromEntries(programPairs);
+                                const profMap = Object.fromEntries(profilePairs);
+                                const resolveName = (field: string, val: string) => {
+                                  if (!val || val === "—" || val === "Unassigned") return val;
+                                  if (field === "department_id") return deptMap[val] ?? val;
+                                  if (field === "program_id") return progMap[val] ?? val;
+                                  if (field === "manager") return profMap[val] ?? val;
+                                  return val;
+                                };
+
+                                return (
                                 <div key={ev.id} className="flex items-start gap-2 text-xs">
-                                  <div className="mt-0.5 h-2 w-2 rounded-full bg-blue-400 flex-shrink-0" />
-                                  <div>
+                                  <div className={`mt-0.5 h-2 w-2 rounded-full ${eventIcon} flex-shrink-0`} />
+                                  <div className="flex-1 min-w-0">
                                     <span className="font-medium text-gray-700">{ev.actor_name}</span>
                                     <span className="text-gray-500"> — {ev.event_type.replace(/_/g, " ")}</span>
                                     {ev.from_status && ev.to_status && (
@@ -579,10 +628,23 @@ function InvoiceTable({
                                     {ev.payload && typeof ev.payload === "object" && typeof (ev.payload as Record<string, string>).rejection_reason === "string" && (
                                       <span className="text-red-600"> — {(ev.payload as Record<string, string>).rejection_reason}</span>
                                     )}
-                                    <div className="text-gray-400">{new Date(ev.created_at).toLocaleString("en-GB")}</div>
+                                    {hasChanges && (
+                                      <div className="mt-1 space-y-0.5 rounded bg-gray-50 border border-gray-200 px-2 py-1.5">
+                                        {Object.entries(changes!).map(([field, { from, to }]) => (
+                                          <div key={field} className="flex items-center gap-1 text-[11px]">
+                                            <span className="font-medium text-gray-600 capitalize">{field.replace(/_/g, " ")}:</span>
+                                            <span className="text-red-500 line-through">{resolveName(field, from) || "—"}</span>
+                                            <span className="text-gray-400">→</span>
+                                            <span className="text-green-600 font-medium">{resolveName(field, to) || "—"}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="text-gray-400 mt-0.5">{new Date(ev.created_at).toLocaleString("en-GB")}</div>
                                   </div>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -813,6 +875,7 @@ export function InvoicesBoard({
         ext?.account_number ??
         (typeof raw.account_number === "string" ? raw.account_number : null) ??
         "—";
+      const lineManagerId = wf?.manager_user_id ?? "";
       const lineManager = wf?.manager_user_id
         ? profileMap.get(wf.manager_user_id) ?? wf.manager_user_id
         : "—";
@@ -827,7 +890,9 @@ export function InvoicesBoard({
         producer,
         paymentType,
         department,
+        departmentId: inv.department_id ?? "",
         programme,
+        programmeId: inv.program_id ?? "",
         topic,
         tx1,
         tx2,
@@ -839,6 +904,7 @@ export function InvoicesBoard({
         sortCode,
         accountNumber,
         lineManager,
+        lineManagerId,
         paymentDate,
         status,
         rejectionReason: wf?.rejection_reason ?? "",
@@ -1321,13 +1387,68 @@ export function InvoicesBoard({
     XLSX.writeFile(wb, `invoices-${new Date().toISOString().split("T")[0]}.xlsx`);
   }, []);
 
-  const onStartEdit = (row: DisplayRow) => {
+  const editingIdRef = useRef<string | null>(null);
+  const editDraftRef = useRef<EditDraft | null>(null);
+  editingIdRef.current = editingId;
+  editDraftRef.current = editDraft;
+
+  const saveDraft = useCallback(async (invoiceId: string, draft: EditDraft) => {
+    try {
+      await fetch(`/api/invoices/${invoiceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guest_name: draft.guest,
+          title: draft.title,
+          producer: draft.producer,
+          payment_type: draft.paymentType.replace(/\s+/g, "_"),
+          department_id: draft.departmentId || null,
+          program_id: draft.programmeId || null,
+          topic: draft.topic,
+          invoice_date: draft.invoiceDate,
+          tx_date_1: draft.tx1,
+          tx_date_2: draft.tx2,
+          tx_date_3: draft.tx3,
+          beneficiary_name: draft.accountName,
+          gross_amount: draft.amount,
+          invoice_number: draft.invNumber,
+          sort_code: draft.sortCode,
+          account_number: draft.accountNumber,
+          extracted_currency: "GBP",
+          manager_user_id: draft.lineManagerId || null,
+        }),
+      });
+    } catch { /* silent */ }
+  }, []);
+
+  const finishEdit = useCallback(async () => {
+    const id = editingIdRef.current;
+    const draft = editDraftRef.current;
+    if (id && draft) {
+      setEditingId(null);
+      setEditDraft(null);
+      await saveDraft(id, draft);
+      window.location.reload();
+    } else {
+      setEditingId(null);
+      setEditDraft(null);
+    }
+  }, [saveDraft]);
+
+  const onStartEdit = useCallback((row: DisplayRow) => {
+    const prevId = editingIdRef.current;
+    const prevDraft = editDraftRef.current;
+    if (prevId && prevDraft && prevId !== row.id) {
+      void saveDraft(prevId, prevDraft);
+    }
     setEditingId(row.id);
     setEditDraft({
       guest: row.guest === "—" ? "" : row.guest,
       title: row.title === "—" ? "" : row.title,
       producer: row.producer === "—" ? "" : row.producer,
       paymentType: row.paymentType === "—" ? "paid guest" : row.paymentType,
+      departmentId: row.departmentId,
+      programmeId: row.programmeId,
       topic: row.topic === "—" ? "" : row.topic,
       tx1: row.tx1 === "—" ? "" : row.tx1,
       tx2: row.tx2 === "—" ? "" : row.tx2,
@@ -1338,50 +1459,66 @@ export function InvoicesBoard({
       invNumber: row.invNumber === "—" ? "" : row.invNumber,
       sortCode: row.sortCode === "—" ? "" : row.sortCode,
       accountNumber: row.accountNumber === "—" ? "" : row.accountNumber,
+      lineManagerId: row.lineManagerId,
     });
-  };
+  }, [saveDraft]);
 
-  const onCancelEdit = () => {
+  const onCancelEdit = useCallback(() => {
     setEditingId(null);
     setEditDraft(null);
-  };
+  }, []);
 
-  const onChangeDraft = (key: keyof EditDraft, value: string) => {
+  const onChangeDraft = useCallback((key: keyof EditDraft, value: string) => {
     setEditDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
-  };
+  }, []);
 
-  const onSaveEdit = async (invoiceId: string) => {
-    if (!editDraft) return;
+  const onSaveEdit = useCallback(async (invoiceId: string) => {
+    if (!editDraftRef.current) return;
     setActionLoadingId(invoiceId);
     try {
-      const res = await fetch(`/api/invoices/${invoiceId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guest_name: editDraft.guest,
-          title: editDraft.title,
-          producer: editDraft.producer,
-          payment_type: editDraft.paymentType.replace(/\s+/g, "_"),
-          topic: editDraft.topic,
-          invoice_date: editDraft.invoiceDate,
-          tx_date_1: editDraft.tx1,
-          tx_date_2: editDraft.tx2,
-          tx_date_3: editDraft.tx3,
-          beneficiary_name: editDraft.accountName,
-          gross_amount: editDraft.amount,
-          invoice_number: editDraft.invNumber,
-          sort_code: editDraft.sortCode,
-          account_number: editDraft.accountNumber,
-          extracted_currency: "GBP",
-        }),
-      });
-      if (res.ok) {
-        window.location.reload();
-      }
+      await saveDraft(invoiceId, editDraftRef.current);
+      window.location.reload();
     } finally {
       setActionLoadingId(null);
     }
-  };
+  }, [saveDraft]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && editingIdRef.current) {
+        onCancelEdit();
+      }
+    };
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!editingIdRef.current) return;
+      const target = e.target as HTMLElement;
+      const editingRow = document.querySelector(`[data-row-id="${editingIdRef.current}"]`);
+      if (editingRow && editingRow.contains(target)) return;
+      void finishEdit();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside, true);
+    };
+  }, [onCancelEdit, finishEdit]);
+
+  useEffect(() => {
+    let disposed = false;
+    let sub: { unsubscribe: () => void } | null = null;
+    (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        if (disposed) return;
+        const supabase = createClient();
+        sub = supabase.channel("guest-rt").on("postgres_changes", { event: "*", schema: "public", table: "invoice_workflows" }, () => {
+          if (!disposed) window.location.reload();
+        }).subscribe();
+      } catch { /* realtime not critical */ }
+    })();
+    return () => { disposed = true; sub?.unsubscribe(); };
+  }, []);
 
   return (
     <div className="space-y-6 text-slate-800 dark:text-slate-100">
@@ -1389,6 +1526,13 @@ export function InvoicesBoard({
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Guest Invoice Submission</h1>
         <div className="flex items-center gap-2">
+          <Link
+            href="/submit"
+            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-500 transition-all flex items-center gap-1.5"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            New Invoice
+          </Link>
           <button onClick={() => setShowDashboard((v) => !v)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm ${showDashboard ? "bg-[#5034FF] text-white shadow-[#5034FF]/25" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"}`}>
             {showDashboard ? "Hide Dashboard" : "Dashboard"}
           </button>
@@ -1716,6 +1860,9 @@ export function InvoicesBoard({
               pageSize={pageSize}
               currentPage={currentPage}
               onPageChange={setCurrentPage}
+              departmentPairs={departmentPairs}
+              programPairs={programPairs}
+              profilePairs={profilePairs}
             />
           </section>
         );

@@ -1,4 +1,4 @@
-import { InvoicesBoard } from "@/components/InvoicesBoard";
+import { FreelancerBoard } from "@/components/FreelancerBoard";
 import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -42,7 +42,7 @@ function canUserSeeInvoice(
   return false;
 }
 
-export default async function InvoicesPage() {
+export default async function FreelancerInvoicesPage() {
   const { session, profile } = await requireAuth();
   const supabase = createAdminClient();
 
@@ -57,12 +57,13 @@ export default async function InvoicesPage() {
       service_date_to,
       department_id,
       program_id,
-      previous_invoice_id,
       submitter_user_id,
+      invoice_type,
       invoice_workflows(status, rejection_reason, manager_user_id, paid_date),
-      invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency, raw_json)
+      invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency),
+      freelancer_invoice_fields(contractor_name, company_name, service_description, service_days_count, service_days, service_rate_per_day, service_month, additional_cost, additional_cost_reason, booked_by, department_2, istanbul_team)
     `)
-    .neq("invoice_type", "freelancer")
+    .eq("invoice_type", "freelancer")
     .order("created_at", { ascending: false });
 
   const visibleInvoices = (invoicesRaw ?? []).filter((inv) =>
@@ -75,17 +76,15 @@ export default async function InvoicesPage() {
     )
   );
 
-  const [{ data: departments }, { data: programs }, { data: profiles }] = await Promise.all([
+  const [{ data: departments }, { data: profiles }] = await Promise.all([
     supabase.from("departments").select("id,name"),
-    supabase.from("programs").select("id,name"),
     supabase.from("profiles").select("id,full_name"),
   ]);
 
   return (
-    <InvoicesBoard
+    <FreelancerBoard
       invoices={visibleInvoices as never[]}
       departmentPairs={(departments ?? []).map((d: { id: string; name: string }) => [d.id, d.name])}
-      programPairs={(programs ?? []).map((p: { id: string; name: string }) => [p.id, p.name])}
       profilePairs={(profiles ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name || p.id])}
       currentRole={profile.role}
       currentUserId={session.user.id}

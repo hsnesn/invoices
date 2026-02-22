@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
       service_date_to: service_date_to || null,
       currency,
       storage_path: storagePath,
+      invoice_type: "guest",
     });
 
     if (invError) {

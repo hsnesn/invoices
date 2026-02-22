@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 
 export async function GET() {
   try {
-    if (process.env.DEV_BYPASS_AUTH !== "true") {
-      await requireAuth();
-    }
-    const supabase =
-      process.env.DEV_BYPASS_AUTH === "true"
-        ? createAdminClient()
-        : await createClient();
+    await requireAuth();
+    const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("departments")
       .select("*")

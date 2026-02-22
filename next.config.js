@@ -7,9 +7,7 @@ const nextConfig = {
   },
   webpack: (config) => {
     config.watchOptions = {
-      ignored: /node_modules/,
-      poll: 1000,
-      aggregateTimeout: 300,
+      ignored: ["**/node_modules/**", "**/.git/**"],
     };
     return config;
   },

@@ -5,7 +5,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "Invoice System <noreply@example.com>";
 const APP_NAME = "Invoice Approval Workflow";
 
-async function sendEmail(params: {
+export async function sendEmail(params: {
   to: string | string[];
   subject: string;
   html: string;

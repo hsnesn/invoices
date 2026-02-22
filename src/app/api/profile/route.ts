@@ -8,14 +8,10 @@ export async function GET() {
 
     let fullName = profile.full_name;
 
-    if (process.env.DEV_BYPASS_AUTH === "true" && (!fullName || fullName === "Dev Admin")) {
+    if (!fullName) {
       const supabase = createAdminClient();
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", session.user.id)
-        .single();
-      if (data?.full_name) fullName = data.full_name;
+      const { data: authUser } = await supabase.auth.admin.getUserById(session.user.id);
+      fullName = authUser?.user?.email?.split("@")[0] ?? null;
     }
 
     return NextResponse.json({

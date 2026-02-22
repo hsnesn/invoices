@@ -1,7 +1,7 @@
 import { AdminUsersClient } from "./AdminUsersClient";
-import { requireDevAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export default async function AdminUsersPage() {
-  const { profile } = await requireDevAdmin();
+  const { profile } = await requireAdmin();
   return <AdminUsersClient currentUserId={profile.id} />;
 }

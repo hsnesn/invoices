@@ -37,7 +37,7 @@ function LoginPageContent() {
       setMessage({ type: "error", text: error.message });
       return;
     }
-    router.push("/invoices");
+    router.push("/dashboard");
     router.refresh();
   };
 

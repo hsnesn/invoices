@@ -10,12 +10,25 @@ export type InvoiceStatus =
   | "paid"
   | "archived";
 
+export const ALL_PAGES = [
+  { key: "guest_invoices", label: "Guest Invoices" },
+  { key: "submit_invoice", label: "Submit Invoice" },
+  { key: "freelancer_invoices", label: "Freelancer Invoices" },
+  { key: "salaries", label: "Salaries" },
+  { key: "setup", label: "Setup" },
+  { key: "reports", label: "Reports" },
+  { key: "user_management", label: "User Management" },
+] as const;
+
+export type PageKey = (typeof ALL_PAGES)[number]["key"];
+
 export interface Profile {
   id: string;
   full_name: string | null;
   role: AppRole;
   department_id: string | null;
   program_ids: string[] | null;
+  allowed_pages: PageKey[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

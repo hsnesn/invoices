@@ -20,27 +20,9 @@ export function Nav({ profile }: { profile: Profile }) {
   return (
     <nav className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-6">
-        <Link href="/invoices" className="text-lg font-bold text-gray-900 dark:text-white">
+        <Link href="/dashboard" className="text-lg font-bold text-gray-900 dark:text-white">
           Invoice Approval
         </Link>
-        <Link href="/invoices" className="text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-          Invoices
-        </Link>
-        <Link href="/submit" className="text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-          Submit
-        </Link>
-        {profile.role === "admin" && (
-          <>
-            {profile.full_name === "Dev Admin" && (
-              <Link href="/admin/users" className="text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-                Users
-              </Link>
-            )}
-            <Link href="/admin/setup" className="text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-              Setup
-            </Link>
-          </>
-        )}
       </div>
       <div className="flex items-center gap-4">
         {themeContext && (

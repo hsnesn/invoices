@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireDevAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit";
 
 export async function GET() {
   try {
-    await requireDevAdmin();
+    await requireAdmin();
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("profiles")
@@ -30,9 +30,9 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { profile } = await requireDevAdmin();
+    const { profile } = await requireAdmin();
     const body = await request.json();
-    const { user_id, role, is_active, department_id, program_ids } = body;
+    const { user_id, role, is_active, department_id, program_ids, allowed_pages } = body;
 
     if (!user_id) {
       return NextResponse.json(
@@ -54,6 +54,7 @@ export async function PATCH(request: NextRequest) {
     if (is_active !== undefined) updates.is_active = is_active;
     if (department_id !== undefined) updates.department_id = department_id;
     if (program_ids !== undefined) updates.program_ids = program_ids;
+    if (allowed_pages !== undefined) updates.allowed_pages = allowed_pages;
 
     const { data, error } = await supabase
       .from("profiles")

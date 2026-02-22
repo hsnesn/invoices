@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import type { Profile } from "@/lib/types";
+import type { Profile, PageKey } from "@/lib/types";
+import { ALL_PAGES } from "@/lib/types";
 
 type UserRow = Profile & { email?: string };
 
@@ -15,7 +16,7 @@ const ROLE_COLORS: Record<string, string> = {
 export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [invitations, setInvitations] = useState<
-    { id: string; email: string; full_name: string | null; role: string; accepted: boolean }[]
+    { id: string; email: string; full_name: string | null; role: string; accepted: boolean; invited_at?: string; invited_by?: string }[]
   >([]);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
@@ -28,6 +29,8 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
   const [editingRole, setEditingRole] = useState<string | null>(null);
+  const [editingPermissions, setEditingPermissions] = useState<string | null>(null);
+  const [permPages, setPermPages] = useState<PageKey[]>([]);
 
   useEffect(() => {
     fetch("/api/admin/users")
@@ -90,6 +93,25 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
     }
   };
 
+  const handleResendInvite = async (email: string) => {
+    const res = await fetch("/api/invite", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    const data = await res.json();
+    if (res.ok) setMessage({ type: "success", text: `Invitation resent to ${email}` });
+    else setMessage({ type: "error", text: data.error || "Failed to resend" });
+  };
+
+  const handleRevokeInvite = async (email: string) => {
+    if (!confirm(`Revoke invitation for ${email}?`)) return;
+    const res = await fetch("/api/invite", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    if (res.ok) {
+      setInvitations(prev => prev.filter(i => i.email !== email));
+      setMessage({ type: "success", text: `Invitation for ${email} revoked` });
+    } else {
+      const data = await res.json();
+      setMessage({ type: "error", text: data.error || "Failed to revoke" });
+    }
+  };
+
   const handleToggleActive = async (userId: string, isActive: boolean) => {
     const res = await fetch("/api/admin/users", {
       method: "PATCH",
@@ -118,6 +140,34 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       );
     }
     setEditingRole(null);
+  };
+
+  const openPermissions = (user: UserRow) => {
+    setEditingPermissions(user.id);
+    setPermPages(user.allowed_pages ?? ALL_PAGES.map((p) => p.key));
+  };
+
+  const togglePage = (key: PageKey) => {
+    setPermPages((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const savePermissions = async () => {
+    if (!editingPermissions) return;
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: editingPermissions, allowed_pages: permPages }),
+    });
+    if (res.ok) {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === editingPermissions ? { ...u, allowed_pages: permPages } : u
+        )
+      );
+    }
+    setEditingPermissions(null);
   };
 
   const exportUsers = async () => {
@@ -228,12 +278,14 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Role</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Sent</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {invitations.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No invitations</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No invitations sent yet</td></tr>
               ) : (
                 invitations.map((inv) => (
                   <tr key={inv.id} className="bg-white hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800/50 transition-colors">
@@ -244,10 +296,43 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
                         {inv.role}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                      {inv.invited_at ? new Date(inv.invited_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    </td>
                     <td className="px-4 py-3">
-                      <span className={inv.accepted ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-amber-600 dark:text-amber-400 font-medium"}>
-                        {inv.accepted ? "Accepted" : "Pending"}
-                      </span>
+                      {inv.accepted ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                          Accepted
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                          <svg className="h-3 w-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="5"/></svg>
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {!inv.accepted && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => void handleResendInvite(inv.email)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors dark:bg-blue-950/30 dark:text-blue-400 dark:hover:bg-blue-900/50"
+                            title="Resend invitation email"
+                          >
+                            <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"/></svg>
+                            Resend
+                          </button>
+                          <button
+                            onClick={() => void handleRevokeInvite(inv.email)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                            title="Revoke invitation"
+                          >
+                            <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            Revoke
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -300,6 +385,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Role</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Department</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Programs</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Pages</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Actions</th>
               </tr>
@@ -341,6 +427,15 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
                     {programNames(u.program_ids ?? [])}
                   </td>
                   <td className="px-4 py-3">
+                    <button
+                      onClick={() => openPermissions(u)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors dark:bg-violet-950/30 dark:text-violet-400 dark:hover:bg-violet-900/50"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/></svg>
+                      {u.allowed_pages ? `${u.allowed_pages.length}/${ALL_PAGES.length}` : "All"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
                     <span className={u.is_active ? "font-medium text-emerald-600 dark:text-emerald-400" : "font-medium text-red-600 dark:text-red-400"}>
                       {u.is_active ? "Active" : "Inactive"}
                     </span>
@@ -367,6 +462,83 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
           </table>
         </div>
       </div>
+      {/* Page Permissions Modal */}
+      {editingPermissions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Page Permissions
+              </h3>
+              <button
+                onClick={() => setEditingPermissions(null)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              {users.find((u) => u.id === editingPermissions)?.full_name || "User"} &mdash; Select which pages this user can access.
+            </p>
+            <div className="space-y-2">
+              {ALL_PAGES.map((page) => {
+                const checked = permPages.includes(page.key);
+                return (
+                  <label
+                    key={page.key}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-all ${
+                      checked
+                        ? "border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/30"
+                        : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-gray-600"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => togglePage(page.key)}
+                      className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800"
+                    />
+                    <span className={`text-sm font-medium ${checked ? "text-violet-700 dark:text-violet-300" : "text-gray-700 dark:text-gray-300"}`}>
+                      {page.label}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-6 flex items-center justify-between">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPermPages(ALL_PAGES.map((p) => p.key))}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Select All
+                </button>
+                <span className="text-gray-300 dark:text-gray-600">|</span>
+                <button
+                  onClick={() => setPermPages([])}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                >
+                  Clear All
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditingPermissions(null)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={savePermissions}
+                  className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors shadow-sm"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,21 +4,19 @@ import { requireAdmin } from "@/lib/auth";
 
 const DEFAULT_DEPARTMENTS = [
   "Programmes",
-  "TRT World News",
+  "News Output",
+  "News Input",
+  "Studio-Galery",
+  "Digital",
   "TRT Haber",
   "TRT Arabi",
-  "Digital",
 ];
 
 const DEFAULT_PROGRAMS: [string, string][] = [
   ["Programmes", "Roundtable"],
   ["Programmes", "Nexus"],
-  ["Programmes", "The Newsmakers"],
-  ["Programmes", "Strait Talk"],
-  ["Programmes", "Bigger Than Five"],
-  ["Programmes", "Beyond Borders"],
-  ["TRT World News", "World News Bulletin"],
-  ["TRT World News", "Global Briefing"],
+  ["News Output", "World News Bulletin"],
+  ["News Input", "Global Briefing"],
   ["TRT Haber", "Gunun Ozeti"],
   ["TRT Haber", "Aksam Bulteni"],
   ["TRT Arabi", "Al Youm"],
