@@ -1,0 +1,83 @@
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import type { Profile } from "@/lib/types";
+
+export async function getSession() {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session;
+}
+
+export async function getProfile(): Promise<Profile | null> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .single();
+
+  return data as Profile | null;
+}
+
+/** Require auth + active profile. Redirects to /login if not. */
+export async function requireAuth(): Promise<{ session: { user: { id: string } }; profile: Profile }> {
+  if (process.env.DEV_BYPASS_AUTH === "true") {
+    const now = new Date().toISOString();
+    const bypassUserId =
+      process.env.DEV_BYPASS_USER_ID ??
+      "54cc311f-9a5f-4e19-a94b-1ef7ed9c2266";
+    return {
+      session: { user: { id: bypassUserId } },
+      profile: {
+        id: bypassUserId,
+        full_name: "Dev Admin",
+        role: "admin",
+        department_id: null,
+        program_ids: [],
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      },
+    };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user) redirect("/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .single();
+
+  if (!profile || !(profile as Profile).is_active) {
+    await supabase.auth.signOut();
+    redirect("/login?error=deactivated");
+  }
+
+  return { session, profile: profile as Profile };
+}
+
+/** Require admin role. Redirects if not admin. */
+export async function requireAdmin() {
+  const { profile } = await requireAuth();
+  if (profile.role !== "admin") redirect("/invoices");
+  return { profile };
+}
+
+/** Require Dev Admin (full_name "Dev Admin") - for Users page only. Redirects if not. */
+export async function requireDevAdmin() {
+  const { profile } = await requireAuth();
+  if (profile.role !== "admin" || profile.full_name !== "Dev Admin") redirect("/invoices");
+  return { profile };
+}

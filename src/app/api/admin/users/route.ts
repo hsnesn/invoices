@@ -1,0 +1,81 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireDevAdmin } from "@/lib/auth";
+import { createAuditEvent } from "@/lib/audit";
+
+export async function GET() {
+  try {
+    await requireDevAdmin();
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    const withEmails = await Promise.all(
+      (data ?? []).map(async (p) => {
+        const { data: authUser } = await supabase.auth.admin.getUserById(p.id);
+        return { ...p, email: authUser?.user?.email ?? null };
+      })
+    );
+    return NextResponse.json(withEmails);
+  } catch (e) {
+    if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
+    return NextResponse.json(
+      { error: (e as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { profile } = await requireDevAdmin();
+    const body = await request.json();
+    const { user_id, role, is_active, department_id, program_ids } = body;
+
+    if (!user_id) {
+      return NextResponse.json(
+        { error: "user_id is required" },
+        { status: 400 }
+      );
+    }
+
+    if (user_id === profile.id && (role !== profile.role || is_active === false)) {
+      return NextResponse.json(
+        { error: "Cannot change your own role or deactivate yourself" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createAdminClient();
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (role !== undefined) updates.role = role;
+    if (is_active !== undefined) updates.is_active = is_active;
+    if (department_id !== undefined) updates.department_id = department_id;
+    if (program_ids !== undefined) updates.program_ids = program_ids;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", user_id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await createAuditEvent({
+      actor_user_id: profile.id,
+      event_type: "user_updated",
+      payload: { user_id, updates },
+    });
+
+    return NextResponse.json(data);
+  } catch (e) {
+    if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
+    return NextResponse.json(
+      { error: (e as Error).message },
+      { status: 500 }
+    );
+  }
+}
