@@ -127,6 +127,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">
+      {/* Logo */}
+      <div className="flex justify-center">
+        <img src="/trt-logo.png" alt="TRT" className="h-12 object-contain" />
+      </div>
+
       {/* Welcome Header */}
       <div className="flex items-center gap-5">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-xl font-bold text-white shadow-lg shadow-sky-500/25">
@@ -188,6 +193,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
           Navigate to Invoices to see the full dashboard with statistics, filters and reports.
         </p>
+      </div>
+
+      {/* Footer */}
+      <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+        By Hasan Esen
       </div>
     </div>
   );
