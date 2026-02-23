@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { validatePassword, getPasswordStrength, PASSWORD } from "@/lib/password-utils";
 
 export default function AcceptInvitePage() {
   const [password, setPassword] = useState("");
@@ -37,8 +38,9 @@ export default function AcceptInvitePage() {
     e.preventDefault();
     setMessage(null);
 
-    if (password.length < 8) {
-      setMessage({ type: "error", text: "Password must be at least 8 characters." });
+    const check = validatePassword(password);
+    if (!check.ok) {
+      setMessage({ type: "error", text: check.message });
       return;
     }
     if (password !== confirmPassword) {
@@ -107,10 +109,13 @@ export default function AcceptInvitePage() {
               New Password
             </label>
             <input
-              id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
+              id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={PASSWORD.minLength}
               className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-              placeholder="Minimum 8 characters"
+              placeholder="Enter a strong password"
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Min {PASSWORD.minLength} characters, uppercase, lowercase, number, symbol (!@#$%^&*)
+            </p>
           </div>
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-300">
@@ -122,14 +127,18 @@ export default function AcceptInvitePage() {
               placeholder="Re-enter your password"
             />
           </div>
-          {password.length > 0 && (
-            <div className="flex items-center gap-2">
-              <div className={`h-1.5 flex-1 rounded-full ${password.length >= 8 ? "bg-emerald-500" : "bg-red-500"}`} />
-              <span className={`text-xs ${password.length >= 8 ? "text-emerald-400" : "text-red-400"}`}>
-                {password.length >= 8 ? "Strong enough" : `${8 - password.length} more chars needed`}
-              </span>
-            </div>
-          )}
+          {password.length > 0 && (() => {
+            const { ok } = validatePassword(password);
+            const { label, color } = getPasswordStrength(password);
+            return (
+              <div className="flex items-center gap-2">
+                <div className={`h-1.5 flex-1 rounded-full ${ok ? "bg-emerald-500" : "bg-amber-500"}`} />
+                <span className={`text-xs ${ok ? "text-emerald-400" : color}`}>
+                  {ok ? "Strong enough" : label}
+                </span>
+              </div>
+            );
+          })()}
           <button type="submit" disabled={loading} className="w-full rounded-lg bg-sky-600 px-4 py-2.5 font-medium text-white hover:bg-sky-500 disabled:opacity-50 transition-colors shadow-sm shadow-sky-500/20">
             {loading ? "Setting up..." : "Set Password & Get Started"}
           </button>

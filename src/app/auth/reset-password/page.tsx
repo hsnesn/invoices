@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { validatePassword, getPasswordStrength, PASSWORD } from "@/lib/password-utils";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -15,8 +16,9 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setMessage(null);
 
-    if (password.length < 8) {
-      setMessage({ type: "error", text: "Password must be at least 8 characters." });
+    const check = validatePassword(password);
+    if (!check.ok) {
+      setMessage({ type: "error", text: check.message });
       return;
     }
     if (password !== confirmPassword) {
@@ -56,8 +58,13 @@ export default function ResetPasswordPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={PASSWORD.minLength}
               className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              placeholder="Enter a strong password"
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Min {PASSWORD.minLength} chars, uppercase, lowercase, number, symbol
+            </p>
           </div>
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-300">
@@ -72,6 +79,16 @@ export default function ResetPasswordPage() {
               className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />
           </div>
+          {password.length > 0 && (() => {
+            const { ok } = validatePassword(password);
+            const { label } = getPasswordStrength(password);
+            return (
+              <div className="flex items-center gap-2 text-xs">
+                <div className={`h-1.5 flex-1 rounded-full ${ok ? "bg-emerald-500" : "bg-amber-500"}`} />
+                <span className={ok ? "text-emerald-400" : "text-amber-400"}>{ok ? "Strong enough" : label}</span>
+              </div>
+            );
+          })()}
 
           <button
             type="submit"
