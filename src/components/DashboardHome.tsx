@@ -126,79 +126,76 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   });
 
   return (
-    <div className="mx-auto max-w-5xl space-y-10">
-      {/* Logo */}
-      <div className="flex justify-center">
-        <img src="/trt-logo.png" alt="TRT" className="h-12 object-contain" />
-      </div>
-
-      {/* Welcome Header */}
-      <div className="flex items-center gap-5">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-xl font-bold text-white shadow-lg shadow-sky-500/25">
-          {getInitials(profile.full_name)}
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {getGreeting()}, {profile.full_name || "User"}
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Welcome to Invoice Approval Workflow &middot;{" "}
-            <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-              {profile.role}
-            </span>
-          </p>
+    <div className="mx-auto max-w-5xl pb-16">
+      {/* Hero Header */}
+      <div className="mb-12 flex flex-col items-center gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-center gap-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white shadow-md ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
+            <img src="/trt-logo.png" alt="TRT" className="h-8 object-contain" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-3xl">
+              {getGreeting()}, {profile.full_name || "User"}
+            </h1>
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+              Invoice Approval Workflow
+              <span className="mx-2 text-gray-300 dark:text-gray-600">·</span>
+              <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                {profile.role}
+              </span>
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Page Cards */}
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visiblePages.map((page) => (
           <Link
             key={page.href}
             href={page.href}
-            className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5 dark:border-gray-700/60 dark:bg-gray-900/80 dark:hover:border-gray-600"
+            className="group flex flex-col rounded-xl border border-gray-200/80 bg-white p-6 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md hover:shadow-gray-200/50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:border-gray-600 dark:hover:shadow-gray-900/50"
           >
-            <div className={`absolute inset-0 bg-gradient-to-br ${page.gradient} opacity-0 transition-opacity duration-200 group-hover:opacity-100`} />
-            <div className="relative">
-              <div className="flex items-start justify-between">
-                <div className={`rounded-xl bg-gray-100 p-3 ${page.color} dark:bg-gray-800`}>
-                  {page.icon}
-                </div>
-                <svg
-                  className="h-5 w-5 text-gray-300 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
+            <div className="flex items-start justify-between">
+              <div className={`flex h-11 w-11 items-center justify-center rounded-lg bg-gray-50 ${page.color} dark:bg-gray-800/80`}>
+                {page.icon}
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
-                {page.title}
-              </h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                {page.description}
-              </p>
+              <svg
+                className="h-5 w-5 shrink-0 text-gray-300 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
             </div>
+            <h3 className="mt-4 font-semibold text-gray-900 dark:text-white">
+              {page.title}
+            </h3>
+            <p className="mt-1.5 flex-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+              {page.description}
+            </p>
           </Link>
         ))}
       </div>
 
-      {/* Quick Stats Placeholder */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/80">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+      {/* Quick Overview */}
+      <div className="mt-8 rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
           Quick Overview
         </h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Navigate to Invoices to see the full dashboard with statistics, filters and reports.
+          Navigate to Invoices to view statistics, apply filters and generate reports.
         </p>
       </div>
 
       {/* Footer */}
-      <div className="text-center text-sm text-gray-500 dark:text-gray-400">
-        By Hasan Esen
-      </div>
+      <footer className="mt-16 border-t border-gray-200/60 pt-6 dark:border-gray-700/40">
+        <p className="text-center text-xs text-gray-400 dark:text-gray-500">
+          By Hasan Esen
+        </p>
+      </footer>
     </div>
   );
 }

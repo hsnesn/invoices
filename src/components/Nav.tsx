@@ -18,17 +18,20 @@ export function Nav({ profile }: { profile: Profile }) {
   };
 
   return (
-    <nav className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-center gap-6">
-        <Link href="/dashboard" className="text-lg font-bold text-gray-900 dark:text-white">
-          Invoice Approval
+    <nav className="flex items-center justify-between border-b border-gray-200/80 bg-white px-6 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard" className="flex items-center gap-3">
+          <img src="/trt-logo.png" alt="TRT" className="h-8 object-contain" />
+          <span className="text-base font-semibold text-gray-800 dark:text-white">
+            Invoice Approval
+          </span>
         </Link>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {themeContext && (
           <button
             onClick={themeContext.toggleTheme}
-            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+            className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
             title={themeContext.theme === "dark" ? "Light mode" : "Dark mode"}
           >
             {themeContext.theme === "dark" ? (
@@ -38,12 +41,13 @@ export function Nav({ profile }: { profile: Profile }) {
             )}
           </button>
         )}
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {profile.full_name || profile.role} ({profile.role})
+        <span className="hidden text-sm text-gray-500 dark:text-gray-400 sm:inline">
+          {profile.full_name || profile.role}
+          <span className="ml-1 text-gray-400 dark:text-gray-500">({profile.role})</span>
         </span>
         <button
           onClick={handleSignOut}
-          className="text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
         >
           Sign out
         </button>

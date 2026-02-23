@@ -8,7 +8,7 @@ export default async function AuthenticatedLayout({
 }) {
   const { profile } = await requireAuth();
   return (
-    <div className="min-h-screen bg-slate-200 dark:bg-slate-950">
+    <div className="min-h-screen bg-gray-100 dark:bg-slate-950">
       <Nav profile={profile} />
       <main className="p-6">{children}</main>
     </div>
