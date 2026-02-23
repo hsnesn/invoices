@@ -78,15 +78,22 @@ export default async function InvoicesPage() {
   const [{ data: departments }, { data: programs }, { data: profiles }] = await Promise.all([
     supabase.from("departments").select("id,name"),
     supabase.from("programs").select("id,name"),
-    supabase.from("profiles").select("id,full_name"),
+    supabase.from("profiles").select("id,full_name,role"),
   ]);
+
+  const allProfiles = (profiles ?? []) as { id: string; full_name: string | null; role?: string }[];
+  const profilePairs = allProfiles.map((p) => [p.id, p.full_name || p.id] as [string, string]);
+  const managerProfilePairs = allProfiles
+    .filter((p) => p.role === "manager" || p.role === "admin")
+    .map((p) => [p.id, p.full_name || p.id] as [string, string]);
 
   return (
     <InvoicesBoard
       invoices={visibleInvoices as never[]}
       departmentPairs={(departments ?? []).map((d: { id: string; name: string }) => [d.id, d.name])}
       programPairs={(programs ?? []).map((p: { id: string; name: string }) => [p.id, p.name])}
-      profilePairs={(profiles ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name || p.id])}
+      profilePairs={profilePairs}
+      managerProfilePairs={managerProfilePairs}
       currentRole={profile.role}
       currentUserId={session.user.id}
     />

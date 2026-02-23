@@ -120,10 +120,14 @@ function daysSince(d: string) { return Math.floor((Date.now() - new Date(d).getT
 /* ------------------------------------------------------------------ */
 
 export function FreelancerBoard({
-  invoices, departmentPairs, profilePairs, currentRole, currentUserId,
+  invoices, departmentPairs, profilePairs, managerProfilePairs, currentRole, currentUserId,
 }: {
-  invoices: FreelancerInvoiceRow[]; departmentPairs: [string, string][]; profilePairs: [string, string][];
-  currentRole: string; currentUserId: string;
+  invoices: FreelancerInvoiceRow[];
+  departmentPairs: [string, string][];
+  profilePairs: [string, string][];
+  managerProfilePairs?: [string, string][];
+  currentRole: string;
+  currentUserId: string;
 }) {
   const deptMap = useMemo(() => Object.fromEntries(departmentPairs), [departmentPairs]);
   const profMap = useMemo(() => Object.fromEntries(profilePairs), [profilePairs]);
@@ -317,7 +321,15 @@ export function FreelancerBoard({
   const onManagerApprove = useCallback((id: string) => statusAction(id, { to_status: "approved_by_manager", manager_confirmed: true }), [statusAction]);
   const onAdminApprove = useCallback((id: string) => statusAction(id, { to_status: "ready_for_payment" }), [statusAction]);
   const onResubmit = useCallback((id: string) => statusAction(id, { to_status: "pending_manager" }), [statusAction]);
-  const onMarkPaid = useCallback((id: string) => statusAction(id, { to_status: "paid", paid_date: new Date().toISOString().split("T")[0] }), [statusAction]);
+  const onMarkPaid = useCallback((id: string) => {
+    const paymentRef = window.prompt("Payment reference (required):");
+    if (paymentRef === null) return;
+    if (!paymentRef.trim()) {
+      alert("Payment reference is required when marking as paid.");
+      return;
+    }
+    statusAction(id, { to_status: "paid", payment_reference: paymentRef.trim(), paid_date: new Date().toISOString().split("T")[0] });
+  }, [statusAction]);
 
   const submitReject = useCallback(async () => {
     if (!rejectModalId || !rejectReason.trim()) return;
@@ -592,7 +604,7 @@ export function FreelancerBoard({
       case "bookedBy": return isEditing ? inp("bookedBy") : r.bookedBy;
       case "serviceDescription": return isEditing ? inp("serviceDescription") : <span className="max-w-[180px] truncate block" title={r.serviceDescription}>{r.serviceDescription}</span>;
       case "additionalCostReason": return isEditing ? inp("additionalCostReason") : r.additionalCostReason;
-      case "deptManager": return isEditing && currentRole === "admin" ? <select value={editDraft?.deptManagerId ?? ""} onChange={e => onChangeDraft("deptManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : r.deptManager;
+      case "deptManager": return isEditing && currentRole === "admin" ? <select value={editDraft?.deptManagerId ?? ""} onChange={e => onChangeDraft("deptManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{(managerProfilePairs ?? profilePairs).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : r.deptManager;
       case "actions": {
         if (editingId === r.id) return <div className="flex items-center gap-1"><span className="text-xs text-blue-600">Editing{r.status === "rejected" ? " (will resubmit)" : ""}</span><button onClick={e => { e.stopPropagation(); onCancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600">✕</button></div>;
         const canRS = r.status === "rejected" && (isSubmitter || currentRole === "admin");

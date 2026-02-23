@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createAuditEvent } from "@/lib/audit";
+import { sendManagerAssignedEmail } from "@/lib/email";
 
 export async function PATCH(
   request: Request,
@@ -84,7 +85,21 @@ export async function PATCH(
     }
 
     if (body.deptManagerId !== undefined && profile.role === "admin") {
-      await supabase.from("invoice_workflows").update({ manager_user_id: body.deptManagerId || null, updated_at: new Date().toISOString() }).eq("invoice_id", invoiceId);
+      const newManagerId = (body.deptManagerId as string) || null;
+      const prevManagerId = (wf as Record<string, unknown> | null)?.manager_user_id as string | null;
+      await supabase.from("invoice_workflows").update({ manager_user_id: newManagerId, updated_at: new Date().toISOString() }).eq("invoice_id", invoiceId);
+      if (newManagerId && newManagerId !== prevManagerId) {
+        const { data: mUser } = await supabase.auth.admin.getUserById(newManagerId);
+        const { data: extracted } = await supabase.from("invoice_extracted_fields").select("invoice_number").eq("invoice_id", invoiceId).single();
+        if (mUser?.user?.email) {
+          await sendManagerAssignedEmail({
+            managerEmail: mUser.user.email,
+            invoiceId,
+            invoiceNumber: extracted?.invoice_number ?? undefined,
+            assignedByName: profile.full_name ?? undefined,
+          });
+        }
+      }
     }
 
     await createAuditEvent({

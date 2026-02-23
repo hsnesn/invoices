@@ -299,6 +299,7 @@ function InvoiceTable({
   departmentPairs,
   programPairs,
   profilePairs,
+  managerProfilePairs,
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -336,6 +337,7 @@ function InvoiceTable({
   departmentPairs: [string, string][];
   programPairs: [string, string][];
   profilePairs: [string, string][];
+  managerProfilePairs?: [string, string][];
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -509,7 +511,7 @@ function InvoiceTable({
               {isCol("invNumber") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.invNumber ?? ""} onChange={(e) => onChangeDraft("invNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.invNumber}</td>}
               {isCol("sortCode") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.sortCode ?? ""} onChange={(e) => onChangeDraft("sortCode", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.sortCode}</td>}
               {isCol("accountNumber") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.accountNumber ?? ""} onChange={(e) => onChangeDraft("accountNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.accountNumber}</td>}
-              {isCol("lineManager") && <td className={`px-4 py-3 text-sm text-gray-600${currentRole === "admin" ? editableTdClass : ""}`} onDoubleClick={currentRole === "admin" && editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id && currentRole === "admin" ? <select value={editDraft?.lineManagerId ?? ""} onChange={(e) => onChangeDraft("lineManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{profilePairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : r.lineManager}</td>}
+              {isCol("lineManager") && <td className={`px-4 py-3 text-sm text-gray-600${currentRole === "admin" ? editableTdClass : ""}`} onDoubleClick={currentRole === "admin" && editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id && currentRole === "admin" ? <select value={editDraft?.lineManagerId ?? ""} onChange={(e) => onChangeDraft("lineManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{(managerProfilePairs ?? profilePairs).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : r.lineManager}</td>}
               {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
               {isCol("actions") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 {(() => {
@@ -717,6 +719,7 @@ export function InvoicesBoard({
   departmentPairs,
   programPairs,
   profilePairs,
+  managerProfilePairs,
   currentRole,
   currentUserId,
 }: {
@@ -724,6 +727,7 @@ export function InvoicesBoard({
   departmentPairs: [string, string][];
   programPairs: [string, string][];
   profilePairs: [string, string][];
+  managerProfilePairs?: [string, string][];
   currentRole: string;
   currentUserId: string;
 }) {
@@ -1012,7 +1016,13 @@ export function InvoicesBoard({
   }, [rejectModalId, rejectReason]);
 
   const onMarkPaid = async (invoiceId: string) => {
-    const ok = window.confirm("Mark this invoice as paid?");
+    const paymentRef = window.prompt("Payment reference (required):");
+    if (paymentRef === null) return;
+    if (!paymentRef.trim()) {
+      alert("Payment reference is required when marking as paid.");
+      return;
+    }
+    const ok = window.confirm(`Mark as paid with reference: ${paymentRef.trim()}?`);
     if (!ok) return;
 
     setActionLoadingId(invoiceId);
@@ -1022,11 +1032,15 @@ export function InvoicesBoard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to_status: "paid",
+          payment_reference: paymentRef.trim(),
           paid_date: new Date().toISOString().split("T")[0],
         }),
       });
       if (res.ok) {
         window.location.reload();
+      } else {
+        const data = await res.json().catch(() => null);
+        alert(data?.error ?? "Failed to mark as paid");
       }
     } finally {
       setActionLoadingId(null);
@@ -1863,6 +1877,7 @@ export function InvoicesBoard({
               departmentPairs={departmentPairs}
               programPairs={programPairs}
               profilePairs={profilePairs}
+              managerProfilePairs={managerProfilePairs}
             />
           </section>
         );

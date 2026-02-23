@@ -55,6 +55,40 @@ export async function sendEmail(params: { to: string | string[]; subject: string
   return { success: true, data };
 }
 
+export async function sendEmailWithAttachment(params: {
+  to: string | string[];
+  subject: string;
+  html: string;
+  attachments: { filename: string; content: Buffer | ArrayBuffer }[];
+  idempotencyKey?: string;
+}) {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("RESEND_API_KEY not set - skipping email");
+    return { success: false, error: "Email not configured", data: null };
+  }
+  const to = Array.isArray(params.to) ? params.to : [params.to];
+  const resend = getResend();
+  if (!resend) return { success: false, error: "Email not configured", data: null };
+  const headers: Record<string, string> = {};
+  if (params.idempotencyKey) headers["Idempotency-Key"] = params.idempotencyKey;
+  const { data, error } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: params.subject,
+    html: params.html,
+    attachments: params.attachments.map((a) => ({
+      filename: a.filename,
+      content: Buffer.isBuffer(a.content) ? a.content : Buffer.from(a.content),
+    })),
+    headers: Object.keys(headers).length ? headers : undefined,
+  });
+  if (error) {
+    console.error("Resend error:", error);
+    return { success: false, error, data: null };
+  }
+  return { success: true, data, error: null };
+}
+
 /* ------------------------------------------------------------------ */
 /* Invoice submitted                                                   */
 /* ------------------------------------------------------------------ */
@@ -162,6 +196,30 @@ export async function sendPaidEmail(params: {
       ${params.paymentReference ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Payment Ref:</strong> ${params.paymentReference}</p>` : ""}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Paid", "#d1fae5", "#065f46")}</p>
       ${btn(link, "View Invoice", "#059669")}
+    `),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Manager assigned to invoice                                         */
+/* ------------------------------------------------------------------ */
+
+export async function sendManagerAssignedEmail(params: {
+  managerEmail: string;
+  invoiceId: string;
+  invoiceNumber?: string;
+  assignedByName?: string;
+}) {
+  const link = `${APP_URL}/invoices/${params.invoiceId}`;
+  const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Invoice";
+  return sendEmail({
+    to: params.managerEmail,
+    subject: `${invLabel} — Assigned to you for review`,
+    html: wrap("Invoice Assigned to You", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">You have been assigned as line manager${params.assignedByName ? ` by <strong>${params.assignedByName}</strong>` : ""} to review this invoice.</p>
+      ${params.invoiceNumber ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
+      ${btn(link, "Review Invoice", "#f59e0b")}
     `),
   });
 }

@@ -10,6 +10,7 @@ import {
   sendResubmittedEmail,
   sendAdminApprovedEmail,
 } from "@/lib/email";
+import { triggerBookingFormWorkflow } from "@/lib/booking-form/approval-trigger";
 import type { InvoiceStatus } from "@/lib/types";
 import { notifyWebhooks } from "@/lib/webhook";
 
@@ -49,7 +50,7 @@ export async function POST(
 
     const { data: inv } = await supabase
       .from("invoices")
-      .select("submitter_user_id, department_id, program_id")
+      .select("submitter_user_id, department_id, program_id, invoice_type")
       .eq("id", invoiceId)
       .single();
     if (!inv) {
@@ -146,6 +147,21 @@ export async function POST(
             invoiceNumber: extracted?.invoice_number ?? undefined,
           });
         }
+
+        if ((inv as { invoice_type?: string }).invoice_type === "freelancer") {
+          const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
+          const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
+          const approvedAt = new Date();
+          void triggerBookingFormWorkflow(supabase, {
+            invoiceId,
+            approverUserId: session.user.id,
+            approverName: approverProfile.data?.full_name ?? "Line Manager",
+            approverEmail: approverUser?.email ?? "",
+            approvedAt,
+          }).then((r) => {
+            if (!r.ok && !r.skipped) console.error("[BookingForm] Workflow failed:", r.error);
+          });
+        }
       } else if (to_status === "rejected") {
         if (!rejection_reason?.trim()) {
           return NextResponse.json(
@@ -201,6 +217,21 @@ export async function POST(
             manager_user_id: session.user.id,
           })
           .eq("invoice_id", invoiceId);
+
+        if ((inv as { invoice_type?: string }).invoice_type === "freelancer") {
+          const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
+          const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
+          const approvedAt = new Date();
+          void triggerBookingFormWorkflow(supabase, {
+            invoiceId,
+            approverUserId: session.user.id,
+            approverName: approverProfile.data?.full_name ?? "Line Manager",
+            approverEmail: approverUser?.email ?? "",
+            approvedAt,
+          }).then((r) => {
+            if (!r.ok && !r.skipped) console.error("[BookingForm] Workflow failed:", r.error);
+          });
+        }
       } else if (to_status === "ready_for_payment") {
         const validFrom = ["pending_manager", "approved_by_manager", "pending_admin"];
         if (!validFrom.includes(fromStatus)) {
@@ -280,6 +311,12 @@ export async function POST(
         if (fromStatus !== "ready_for_payment") {
           return NextResponse.json(
             { error: "Invalid transition" },
+            { status: 400 }
+          );
+        }
+        if (!payment_reference?.trim()) {
+          return NextResponse.json(
+            { error: "Payment reference is required when marking as paid" },
             { status: 400 }
           );
         }

@@ -385,6 +385,35 @@ export function InvoiceDetail({
                   </button>
                 </>
               )}
+              {status === "ready_for_payment" && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Payment reference (required)"
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+                  />
+                  <input
+                    type="date"
+                    value={paidDate}
+                    onChange={(e) => setPaidDate(e.target.value)}
+                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+                  />
+                  <button
+                    onClick={() =>
+                      transitionStatus("paid", {
+                        payment_reference: paymentRef.trim() || undefined,
+                        paid_date: paidDate,
+                      })
+                    }
+                    disabled={loading || !paymentRef.trim()}
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    Mark paid
+                  </button>
+                </>
+              )}
               {(status === "paid" || status === "ready_for_payment") && (
                 <button
                   onClick={() => transitionStatus("archived")}
@@ -408,7 +437,7 @@ export function InvoiceDetail({
                 <>
                   <input
                     type="text"
-                    placeholder="Payment reference"
+                    placeholder="Payment reference (required)"
                     value={paymentRef}
                     onChange={(e) => setPaymentRef(e.target.value)}
                     className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
@@ -422,11 +451,11 @@ export function InvoiceDetail({
                   <button
                     onClick={() =>
                       transitionStatus("paid", {
-                        payment_reference: paymentRef || undefined,
+                        payment_reference: paymentRef.trim() || undefined,
                         paid_date: paidDate,
                       })
                     }
-                    disabled={loading}
+                    disabled={loading || !paymentRef.trim()}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     Mark paid
