@@ -1,13 +1,14 @@
 /**
  * Approval trigger: runs when Line Manager approves a freelancer invoice.
  * 1. Generate Booking Form PDF
- * 2. Send Email A to approver (with PDF)
- * 3. Send Email B to london.operations@trtworld.com (with PDF)
- * 4. Log both sends with idempotency
+ * 2. Save form to storage (form is "created" first)
+ * 3. Send Email A to approver (with PDF)
+ * 4. Send Email B to london.operations@trtworld.com (with PDF)
+ * 5. Log both sends with idempotency
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { generateBookingFormPdf } from "./pdf-generator";
+import { generateBookingFormPdf, sanitizeFilenamePart } from "./pdf-generator";
 import { sendBookingFormEmailA, sendBookingFormEmailB } from "./email-sender";
 import {
   buildIdempotencyKey,
@@ -100,9 +101,20 @@ async function loadBookingFormData(
   };
 }
 
+function isTableNotFoundError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("booking_form_email_audit") ||
+    msg.includes("schema cache") ||
+    msg.includes("does not exist") ||
+    msg.includes("relation") ||
+    msg.includes("not find")
+  );
+}
+
 /**
  * Trigger the Booking Form email workflow when a freelancer invoice is approved by Line Manager.
- * Idempotent: same invoice_id + approved_at will not send duplicates.
+ * Idempotent: same invoice_id + approved_at will not send duplicates (when audit table exists).
  */
 export async function triggerBookingFormWorkflow(
   supabase: SupabaseClient,
@@ -115,8 +127,15 @@ export async function triggerBookingFormWorkflow(
   }
 ): Promise<TriggerResult> {
   const idempotencyKey = buildIdempotencyKey(params.invoiceId, params.approvedAt);
+  let auditId: string | null = null;
+  let useAudit = true;
 
-  const existing = await checkIdempotency(supabase, idempotencyKey);
+  let existing: Awaited<ReturnType<typeof checkIdempotency>> = null;
+  try {
+    existing = await checkIdempotency(supabase, idempotencyKey);
+  } catch {
+    existing = null;
+  }
   if (existing) {
     return { ok: true, skipped: true };
   }
@@ -132,19 +151,26 @@ export async function triggerBookingFormWorkflow(
     return { ok: false, error: "Could not load freelancer invoice data" };
   }
 
-  const createResult = await createAuditRecord(supabase, {
-    invoiceId: params.invoiceId,
-    approverUserId: params.approverUserId,
-    approvedAt: params.approvedAt,
-    idempotencyKey,
-  });
+  if (useAudit) {
+    const createResult = await createAuditRecord(supabase, {
+      invoiceId: params.invoiceId,
+      approverUserId: params.approverUserId,
+      approvedAt: params.approvedAt,
+      idempotencyKey,
+    });
 
-  if ("error" in createResult) {
-    if (createResult.error === "duplicate") return { ok: true, skipped: true };
-    return { ok: false, error: createResult.error };
+    if ("error" in createResult) {
+      if (createResult.error === "duplicate") return { ok: true, skipped: true };
+      if (isTableNotFoundError(createResult.error)) {
+        useAudit = false;
+      } else {
+        return { ok: false, error: createResult.error };
+      }
+    } else {
+      auditId = createResult.id;
+    }
   }
 
-  const auditId = createResult.id;
   const ctx: ApprovalContext = {
     invoiceId: params.invoiceId,
     approverUserId: params.approverUserId,
@@ -154,10 +180,28 @@ export async function triggerBookingFormWorkflow(
   };
 
   const errors: string[] = [];
+  const BUCKET = "invoices";
 
   try {
+    // 1. Generate form (PDF) first
     const pdfBuffer = generateBookingFormPdf(formData);
 
+    // 2. Save form to storage before sending emails
+    const filename = `BookingForm_${sanitizeFilenamePart(formData.name)}_${sanitizeFilenamePart(formData.month)}.pdf`;
+    const storagePath = `booking-forms/${params.invoiceId}/${filename}`;
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(storagePath, Buffer.from(pdfBuffer), {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    if (uploadError) {
+      console.error("[BookingForm] Storage upload failed:", uploadError);
+      errors.push(`Form save: ${uploadError.message}`);
+      // Continue to send emails even if storage fails (PDF is in memory)
+    }
+
+    // 3. Send emails (after form is created)
     const resultA = await sendBookingFormEmailA(formData, ctx, pdfBuffer, idempotencyKey);
     const emailASentAt = resultA.success ? new Date() : null;
     if (!resultA.success) {
@@ -170,13 +214,18 @@ export async function triggerBookingFormWorkflow(
       errors.push(`Email B: ${String(resultB.error)}`);
     }
 
-    const status = errors.length === 0 ? "completed" : "failed";
-    await updateAuditRecord(supabase, auditId, {
-      emailASentAt,
-      emailBSentAt,
-      status,
-      errors: errors.length ? errors.join("; ") : null,
-    });
+    if (useAudit && auditId) {
+      try {
+        await updateAuditRecord(supabase, auditId, {
+          emailASentAt,
+          emailBSentAt,
+          status: errors.length === 0 ? "completed" : "failed",
+          errors: errors.length ? errors.join("; ") : null,
+        });
+      } catch {
+        /* audit table may not exist */
+      }
+    }
 
     if (errors.length > 0) {
       return { ok: false, error: errors.join("; ") };
@@ -184,10 +233,16 @@ export async function triggerBookingFormWorkflow(
     return { ok: true };
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
-    await updateAuditRecord(supabase, auditId, {
-      status: "failed",
-      errors: errMsg,
-    });
+    if (useAudit && auditId) {
+      try {
+        await updateAuditRecord(supabase, auditId, {
+          status: "failed",
+          errors: errMsg,
+        });
+      } catch {
+        /* audit table may not exist */
+      }
+    }
     return { ok: false, error: errMsg };
   }
 }

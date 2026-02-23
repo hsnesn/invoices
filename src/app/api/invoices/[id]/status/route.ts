@@ -451,6 +451,24 @@ export async function POST(
           .from("invoice_workflows")
           .update({ status: "archived" })
           .eq("invoice_id", invoiceId);
+      } else if (to_status === "pending_admin") {
+        const validFrom = ["ready_for_payment"];
+        if (!validFrom.includes(fromStatus)) {
+          return NextResponse.json(
+            { error: "Invalid transition to pending_admin" },
+            { status: 400 }
+          );
+        }
+        if ((inv as { invoice_type?: string }).invoice_type !== "freelancer") {
+          return NextResponse.json(
+            { error: "pending_admin is only for freelancer invoices" },
+            { status: 400 }
+          );
+        }
+        await supabase
+          .from("invoice_workflows")
+          .update({ status: "pending_admin" })
+          .eq("invoice_id", invoiceId);
       } else if (to_status === "pending_manager") {
         const validFromForResubmit = ["rejected"];
         const validFromForMoveBack = ["ready_for_payment", "approved_by_manager", "pending_admin"];

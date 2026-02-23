@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 
 const FreelancerDashboard = lazy(() => import("./FreelancerDashboard").then(m => ({ default: m.FreelancerDashboard })));
+import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                               */
@@ -54,6 +55,14 @@ const GROUPS: { key: GroupKey; label: string; color: string; headerBg: string; t
   { key: "admin_approvals", label: "The Operations Room Approvals", color: "border-orange-500", headerBg: "bg-orange-50 dark:bg-orange-950/30", textColor: "text-orange-700 dark:text-orange-400" },
   { key: "ready_for_payment", label: "Ready for Payment", color: "border-sky-500", headerBg: "bg-sky-50 dark:bg-sky-950/30", textColor: "text-sky-700 dark:text-sky-400" },
   { key: "paid", label: "Paid Invoices", color: "border-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", textColor: "text-emerald-700 dark:text-emerald-400" },
+];
+
+const FL_MOVE_GROUPS: MoveGroup[] = [
+  { key: "submitted", label: "Submitted Invoices", color: "bg-amber-500" },
+  { key: "rejected", label: "Rejected Invoices", color: "bg-rose-500" },
+  { key: "admin_approvals", label: "The Operations Room Approvals", color: "bg-orange-500" },
+  { key: "ready_for_payment", label: "Ready for Payment", color: "bg-sky-500" },
+  { key: "paid", label: "Paid Invoices", color: "bg-emerald-500" },
 ];
 
 const ALL_COLUMNS = [
@@ -247,6 +256,7 @@ export function FreelancerBoard({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [showMoveModal, setShowMoveModal] = useState(false);
 
   const editingIdRef = useRef<string | null>(null);
   const editDraftRef = useRef<EditDraft | null>(null);
@@ -477,6 +487,63 @@ export function FreelancerBoard({
       if (!res.ok) { alert("Download failed"); return; }
       const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `freelancer-invoices-${new Date().toISOString().split("T")[0]}.zip`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } finally { setBulkDownloading(false); }
+  }, [selectedIds]);
+
+  const bulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} invoice(s)? This cannot be undone.`)) return;
+    setActionLoadingId("bulk");
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+      }
+      window.location.reload();
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [selectedIds]);
+
+  const bulkMoveToGroup = useCallback(async (groupKey: string) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setShowMoveModal(false);
+
+    let toStatus: string;
+    let payload: Record<string, unknown> = {};
+
+    if (groupKey === "submitted") {
+      toStatus = "pending_manager";
+    } else if (groupKey === "rejected") {
+      const reason = window.prompt(`Rejection reason for ${ids.length} invoice(s):`);
+      if (!reason?.trim()) return;
+      toStatus = "rejected";
+      payload = { rejection_reason: reason.trim() };
+    } else if (groupKey === "admin_approvals") {
+      toStatus = "pending_admin";
+    } else if (groupKey === "ready_for_payment") {
+      toStatus = "ready_for_payment";
+    } else if (groupKey === "paid") {
+      const ref = window.prompt(`Payment reference for ${ids.length} invoice(s):`);
+      if (!ref?.trim()) return;
+      toStatus = "paid";
+      payload = { payment_reference: ref.trim(), paid_date: new Date().toISOString().split("T")[0] };
+    } else {
+      return;
+    }
+
+    setActionLoadingId("bulk");
+    try {
+      for (const id of ids) {
+        await fetch(`/api/invoices/${id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to_status: toStatus, ...payload }),
+        });
+      }
+      window.location.reload();
+    } finally {
+      setActionLoadingId(null);
+    }
   }, [selectedIds]);
 
   /* ---------- Duplicate detection ---------- */
@@ -726,28 +793,37 @@ export function FreelancerBoard({
         </div>
       </div>
 
-      {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 shadow-sm dark:border-blue-800 dark:bg-blue-950/30">
-          <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{selectedIds.size} selected</span>
-          {selectedIds.size === 2 && (
-            <button onClick={() => setCompareIds(Array.from(selectedIds))} className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 transition-colors shadow-sm flex items-center gap-1">
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
-              Compare
-            </button>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            {(currentRole === "admin" || currentRole === "manager") && <>
-              <button onClick={() => void bulkApprove()} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 shadow-sm">Bulk Approve</button>
-              <button onClick={() => void bulkReject()} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 shadow-sm">Bulk Reject</button>
-            </>}
-            <button onClick={() => void bulkDownload()} disabled={bulkDownloading} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50 shadow-sm flex items-center gap-1">
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-              {bulkDownloading ? "Downloading..." : `Download Files (${selectedIds.size})`}
-            </button>
-            <button onClick={() => setSelectedIds(new Set())} className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 shadow-sm">Clear</button>
-          </div>
+      {/* Bulk action bar - Admin only */}
+      {selectedIds.size > 0 && currentRole === "admin" && (
+        <div className="sticky bottom-4 z-40 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50">
+          <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
+            Freelancer selected
+          </span>
+          <button onClick={() => void bulkDelete()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            Delete
+          </button>
+          <button onClick={() => void exportToExcel(filteredRows.filter((r) => selectedIds.has(r.id)))} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+            Excel Export
+          </button>
+          <button onClick={() => setShowMoveModal(true)} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            Move
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+            ✕ Close
+          </button>
         </div>
+      )}
+
+      {showMoveModal && (
+        <BulkMoveModal
+          groups={FL_MOVE_GROUPS}
+          onSelect={(key) => void bulkMoveToGroup(key)}
+          onClose={() => setShowMoveModal(false)}
+        />
       )}
 
       {/* Groups */}
@@ -773,11 +849,11 @@ export function FreelancerBoard({
               <div className="overflow-x-auto">
                 <table className="min-w-[2600px] w-full divide-y divide-slate-200 dark:divide-slate-600">
                   <thead className="bg-slate-50 dark:bg-slate-700/50"><tr>
-                    <th className="px-2 py-2 w-8"><input type="checkbox" checked={gRows.length > 0 && gRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(gRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600" /></th>
+                    {currentRole === "admin" && <th className="px-2 py-2 w-8"><input type="checkbox" checked={gRows.length > 0 && gRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(gRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" /></th>}
                     {COLUMNS.map(c => <th key={c.key} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.label}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {gRows.length === 0 && <tr><td colSpan={COLUMNS.length + 1} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
+                    {gRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
                     {gRows.map(r => {
                       const isEditing = editingId === r.id;
                       const editable = canEditRow(r);
@@ -786,12 +862,12 @@ export function FreelancerBoard({
                       return (
                         <React.Fragment key={r.id}>
                           <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : isEditing ? "bg-blue-50 ring-2 ring-blue-400 ring-inset dark:bg-blue-950/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => { if (!isEditing) handleRowClick(r.id); }} onDoubleClick={handleRowDblClick}>
-                            <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
+                            {currentRole === "admin" && <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
-                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600" />
+                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" />
                                 {isDuplicate && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[9px] font-bold text-yellow-900" title="Possible duplicate (same contractor + amount)">!</span>}
                               </div>
-                            </td>
+                            </td>}
                             {COLUMNS.map(c => {
                               const noEdit = ["status", "files", "submittedBy", "submissionDate", "invoiceAmount", "amount", "actions", "bookingForm"].includes(c.key);
                               return (
@@ -802,7 +878,7 @@ export function FreelancerBoard({
                             })}
                           </tr>
                           {expandedRowId === r.id && (
-                            <tr><td colSpan={COLUMNS.length + 1} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
+                            <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
                               {detailLoading ? <div className="flex items-center gap-2 text-sm text-gray-500"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>Loading...</div> : (
                                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                   <div>
@@ -822,7 +898,7 @@ export function FreelancerBoard({
                       );
                     })}
                   </tbody>
-                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50"><td className="px-2 py-2"></td>{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(sums.additional) : c.key === "amount" ? fmtCurrency(sums.amount) : c.key === "invoiceAmount" ? fmtCurrency(sums.invoiceAmount) : ""}</td>)}</tr></tfoot>
+                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{currentRole === "admin" && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(sums.additional) : c.key === "amount" ? fmtCurrency(sums.amount) : c.key === "invoiceAmount" ? fmtCurrency(sums.invoiceAmount) : ""}</td>)}</tr></tfoot>
                 </table>
               </div>
             )}
