@@ -8,9 +8,14 @@ export default async function AuthenticatedLayout({
 }) {
   const { profile } = await requireAuth();
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-slate-950">
+    <div className="flex min-h-screen flex-col bg-gray-100 dark:bg-slate-950">
       <Nav profile={profile} />
-      <main className="p-6">{children}</main>
+      <main className="flex-1 p-6">{children}</main>
+      <footer className="border-t border-gray-200/60 py-3 dark:border-gray-700/40">
+        <p className="text-center text-xs text-gray-400 dark:text-gray-500">
+          By Hasan Esen
+        </p>
+      </footer>
     </div>
   );
 }

@@ -77,13 +77,18 @@ export async function POST(request: NextRequest) {
 
     if (invError) return NextResponse.json({ error: invError.message }, { status: 500 });
 
-    const { data: linkData } = await supabase.auth.admin.generateLink({
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "invite", email: email.toLowerCase().trim(),
       options: { redirectTo: `${APP_URL}/auth/accept-invite` },
     });
 
+    if (linkError) {
+      console.error("generateLink error:", linkError);
+      return NextResponse.json({ error: `Link failed: ${linkError.message}` }, { status: 500 });
+    }
+
     const magicLink = linkData?.properties?.action_link;
-    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
+    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link (no action_link)" }, { status: 500 });
 
     const resend = getResend();
     if (!resend) return NextResponse.json({ error: "Email not configured. Set RESEND_API_KEY in environment variables." }, { status: 500 });

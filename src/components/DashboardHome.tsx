@@ -190,12 +190,6 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </p>
       </div>
 
-      {/* Footer */}
-      <footer className="mt-16 border-t border-gray-200/60 pt-6 dark:border-gray-700/40">
-        <p className="text-center text-xs text-gray-400 dark:text-gray-500">
-          By Hasan Esen
-        </p>
-      </footer>
     </div>
   );
 }
