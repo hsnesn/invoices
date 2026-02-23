@@ -87,16 +87,29 @@ export async function POST(request: NextRequest) {
     }
 
     const supabaseAdmin = createAdminClient();
-    const { data: managerProfiles } = await supabaseAdmin
-      .from("profiles")
-      .select("id,department_id,program_ids")
-      .eq("role", "manager")
-      .eq("is_active", true);
-    const managerUserId = pickManager(
-      (managerProfiles ?? []) as ManagerProfile[],
-      safeDepartmentId,
-      safeProgramId
-    );
+    let managerUserId: string | null = null;
+    if (safeDepartmentId) {
+      const { data: dm } = await supabaseAdmin
+        .from("department_managers")
+        .select("manager_user_id")
+        .eq("department_id", safeDepartmentId)
+        .order("sort_order")
+        .limit(1)
+        .maybeSingle();
+      managerUserId = dm?.manager_user_id ?? null;
+    }
+    if (!managerUserId) {
+      const { data: managerProfiles } = await supabaseAdmin
+        .from("profiles")
+        .select("id,department_id,program_ids")
+        .eq("role", "manager")
+        .eq("is_active", true);
+      managerUserId = pickManager(
+        (managerProfiles ?? []) as ManagerProfile[],
+        safeDepartmentId,
+        safeProgramId
+      );
+    }
 
     const invoiceId = crypto.randomUUID();
     const ext = file.name.split(".").pop() ?? "pdf";
