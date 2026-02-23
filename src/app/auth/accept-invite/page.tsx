@@ -15,10 +15,22 @@ export default function AcceptInvitePage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const code = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("code") : null;
+
+    const init = async () => {
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setMessage({ type: "error", text: "Link expired or invalid. Please request a new invitation." });
+          setChecking(false);
+          return;
+        }
+      }
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.email) setUserEmail(session.user.email);
       setChecking(false);
-    });
+    };
+    init();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,6 +67,20 @@ export default function AcceptInvitePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!userEmail && !message) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+        <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-700 bg-slate-900/60 p-8 text-center">
+          <h1 className="text-xl font-bold text-slate-100">No active session</h1>
+          <p className="text-sm text-slate-400">
+            Please click the invitation link in your email to set your password. If the link has expired, ask your administrator to resend the invitation.
+          </p>
+          <a href="/login" className="inline-block text-sky-400 hover:text-sky-300 text-sm">Go to login</a>
+        </div>
       </div>
     );
   }

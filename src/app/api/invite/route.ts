@@ -77,26 +77,24 @@ export async function POST(request: NextRequest) {
 
     if (invError) return NextResponse.json({ error: invError.message }, { status: 500 });
 
-    // Try invite first; if user already exists in auth, fall back to magiclink
+    // Use hashed_token to build our own callback URL (Supabase action_link redirect can fail)
+    const emailNorm = email.toLowerCase().trim();
+    const nextPath = "/auth/accept-invite";
     let magicLink: string | undefined;
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: "invite", email: email.toLowerCase().trim(),
-      options: { redirectTo: `${APP_URL}/auth/accept-invite` },
-    });
 
-    if (linkError) {
-      console.warn("invite link failed, trying magiclink:", linkError.message);
-      const { data: mlData, error: mlError } = await supabase.auth.admin.generateLink({
-        type: "magiclink", email: email.toLowerCase().trim(),
-        options: { redirectTo: `${APP_URL}/auth/accept-invite` },
+    for (const { type, linkType } of [{ type: "invite" as const, linkType: "invite" }, { type: "magiclink" as const, linkType: "magiclink" }]) {
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type, email: emailNorm,
+        options: { redirectTo: `${APP_URL}/auth/callback` },
       });
-      if (mlError) {
-        console.error("magiclink also failed:", mlError);
-        return NextResponse.json({ error: `Link failed: ${mlError.message}` }, { status: 500 });
+      const hash = linkData?.properties?.hashed_token;
+      if (hash) {
+        magicLink = `${APP_URL}/auth/callback?token_hash=${encodeURIComponent(hash)}&next=${encodeURIComponent(nextPath)}`;
+        break;
       }
-      magicLink = mlData?.properties?.action_link;
-    } else {
-      magicLink = linkData?.properties?.action_link;
+      if (linkError && type === "invite") {
+        console.warn("invite link failed, trying magiclink:", linkError.message);
+      }
     }
 
     if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
@@ -147,15 +145,23 @@ export async function PATCH(request: NextRequest) {
     if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
 
     const supabase = createAdminClient();
-    const { data: inv } = await supabase.from("user_invitations").select("*").eq("email", email.toLowerCase().trim()).eq("accepted", false).single();
+    const emailNorm = email.toLowerCase().trim();
+    const { data: inv } = await supabase.from("user_invitations").select("*").eq("email", emailNorm).eq("accepted", false).single();
     if (!inv) return NextResponse.json({ error: "Invitation not found or already accepted" }, { status: 404 });
 
-    const { data: linkData } = await supabase.auth.admin.generateLink({
-      type: "invite", email: email.toLowerCase().trim(),
-      options: { redirectTo: `${APP_URL}/auth/accept-invite` },
-    });
-
-    const magicLink = linkData?.properties?.action_link;
+    const nextPath = "/auth/accept-invite";
+    let magicLink: string | undefined;
+    for (const type of ["invite", "magiclink"] as const) {
+      const { data } = await supabase.auth.admin.generateLink({
+        type, email: emailNorm,
+        options: { redirectTo: `${APP_URL}/auth/callback` },
+      });
+      const hash = data?.properties?.hashed_token;
+      if (hash) {
+        magicLink = `${APP_URL}/auth/callback?token_hash=${encodeURIComponent(hash)}&next=${encodeURIComponent(nextPath)}`;
+        break;
+      }
+    }
     if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
 
     const resend = getResend();
