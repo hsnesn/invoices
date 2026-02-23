@@ -7,6 +7,8 @@ import {
   sendManagerRejectedEmail,
   sendReadyForPaymentEmail,
   sendPaidEmail,
+  sendResubmittedEmail,
+  sendAdminApprovedEmail,
 } from "@/lib/email";
 import type { InvoiceStatus } from "@/lib/types";
 import { notifyWebhooks } from "@/lib/webhook";
@@ -262,6 +264,18 @@ export async function POST(
             admin_comment: admin_comment ?? wf.admin_comment,
           })
           .eq("invoice_id", invoiceId);
+
+        const submitterEmail = (await supabase.auth.admin.getUserById(inv.submitter_user_id))
+          .data?.user?.email;
+        if (submitterEmail) {
+          await sendManagerRejectedEmail({
+            submitterEmail,
+            invoiceId,
+            reason: rejection_reason!,
+            invoiceNumber: extracted?.invoice_number ?? undefined,
+            managerName: profile.full_name ?? undefined,
+          });
+        }
       } else if (to_status === "paid") {
         if (fromStatus !== "ready_for_payment") {
           return NextResponse.json(
@@ -277,6 +291,14 @@ export async function POST(
             paid_date: paid_date ?? new Date().toISOString().split("T")[0],
           })
           .eq("invoice_id", invoiceId);
+
+        const paidSubEmail = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user?.email;
+        const paidAdminProfiles = await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true);
+        const paidAdminEmails: string[] = [];
+        for (const p of paidAdminProfiles.data ?? []) { const u = (await supabase.auth.admin.getUserById(p.id)).data?.user; if (u?.email) paidAdminEmails.push(u.email); }
+        if (paidSubEmail) {
+          await sendPaidEmail({ submitterEmail: paidSubEmail, adminEmails: paidAdminEmails, invoiceId, paymentReference: payment_reference, invoiceNumber: extracted?.invoice_number ?? undefined });
+        }
       } else if (to_status === "archived") {
         await supabase
           .from("invoice_workflows")
@@ -290,6 +312,12 @@ export async function POST(
             rejection_reason: null,
           })
           .eq("invoice_id", invoiceId);
+
+        const managerProfiles = await supabase.from("profiles").select("id").eq("role", "manager").eq("is_active", true);
+        const managerEmails: string[] = [];
+        for (const p of managerProfiles.data ?? []) { const u = (await supabase.auth.admin.getUserById(p.id)).data?.user; if (u?.email) managerEmails.push(u.email); }
+        if (wf.manager_user_id) { const mUser = (await supabase.auth.admin.getUserById(wf.manager_user_id)).data?.user; if (mUser?.email) managerEmails.push(mUser.email); }
+        await sendResubmittedEmail({ managerEmails: Array.from(new Set(managerEmails)), invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined });
       } else {
         return NextResponse.json({ error: "Invalid admin action" }, { status: 400 });
       }
@@ -354,6 +382,12 @@ export async function POST(
             rejection_reason: null,
           })
           .eq("invoice_id", invoiceId);
+
+        const resubManagerEmails: string[] = [];
+        if (wf.manager_user_id) { const mUser = (await supabase.auth.admin.getUserById(wf.manager_user_id)).data?.user; if (mUser?.email) resubManagerEmails.push(mUser.email); }
+        const mgrProfiles = await supabase.from("profiles").select("id").eq("role", "manager").eq("is_active", true);
+        for (const p of mgrProfiles.data ?? []) { const u = (await supabase.auth.admin.getUserById(p.id)).data?.user; if (u?.email) resubManagerEmails.push(u.email); }
+        await sendResubmittedEmail({ managerEmails: Array.from(new Set(resubManagerEmails)), invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined });
       } else {
         return NextResponse.json({ error: "Invalid submitter action" }, { status: 400 });
       }
