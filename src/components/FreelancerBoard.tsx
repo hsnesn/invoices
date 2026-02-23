@@ -533,12 +533,19 @@ export function FreelancerBoard({
 
     setActionLoadingId("bulk");
     try {
+      const errors: string[] = [];
       for (const id of ids) {
-        await fetch(`/api/invoices/${id}/status`, {
+        const res = await fetch(`/api/invoices/${id}/status`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ to_status: toStatus, ...payload }),
         });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) errors.push(`Invoice ${id}: ${data.error ?? res.statusText}`);
+      }
+      if (errors.length > 0) {
+        alert(errors.join("\n"));
+        return;
       }
       window.location.reload();
     } finally {
@@ -793,9 +800,17 @@ export function FreelancerBoard({
         </div>
       </div>
 
-      {/* Bulk action bar - Admin only */}
+      {/* Click-outside overlay: clears selection when clicking empty space */}
       {selectedIds.size > 0 && currentRole === "admin" && (
-        <div className="sticky bottom-4 z-40 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50">
+        <div
+          className="fixed inset-0 z-30 cursor-default"
+          onClick={() => setSelectedIds(new Set())}
+          aria-hidden
+        />
+      )}
+      {/* Bulk action bar - Fixed at bottom, Admin only */}
+      {selectedIds.size > 0 && currentRole === "admin" && (
+        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
             Freelancer selected

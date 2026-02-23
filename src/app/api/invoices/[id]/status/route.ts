@@ -328,7 +328,8 @@ export async function POST(
         }
       } else if (to_status === "ready_for_payment") {
         const validFrom = ["pending_manager", "approved_by_manager", "pending_admin"];
-        if (!validFrom.includes(fromStatus)) {
+        const adminCanForce = profile.role === "admin";
+        if (!adminCanForce && !validFrom.includes(fromStatus)) {
           return NextResponse.json(
             { error: "Invalid transition" },
             { status: 400 }
@@ -418,7 +419,8 @@ export async function POST(
           });
         }
       } else if (to_status === "paid") {
-        if (fromStatus !== "ready_for_payment") {
+        const adminCanForce = profile.role === "admin";
+        if (!adminCanForce && fromStatus !== "ready_for_payment") {
           return NextResponse.json(
             { error: "Invalid transition" },
             { status: 400 }
@@ -453,7 +455,8 @@ export async function POST(
           .eq("invoice_id", invoiceId);
       } else if (to_status === "pending_admin") {
         const validFrom = ["ready_for_payment"];
-        if (!validFrom.includes(fromStatus)) {
+        const adminCanForce = profile.role === "admin";
+        if (!adminCanForce && !validFrom.includes(fromStatus)) {
           return NextResponse.json(
             { error: "Invalid transition to pending_admin" },
             { status: 400 }
@@ -471,8 +474,10 @@ export async function POST(
           .eq("invoice_id", invoiceId);
       } else if (to_status === "pending_manager") {
         const validFromForResubmit = ["rejected"];
-        const validFromForMoveBack = ["ready_for_payment", "approved_by_manager", "pending_admin"];
-        if (!validFromForResubmit.includes(fromStatus) && !validFromForMoveBack.includes(fromStatus)) {
+        const validFromForMoveBack = ["ready_for_payment", "approved_by_manager", "pending_admin", "paid", "archived", "submitted"];
+        const adminCanForce = profile.role === "admin";
+        const isValid = validFromForResubmit.includes(fromStatus) || validFromForMoveBack.includes(fromStatus);
+        if (!adminCanForce && !isValid) {
           return NextResponse.json(
             { error: "Invalid transition to pending_manager" },
             { status: 400 }
