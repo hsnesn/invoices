@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createAuditEvent } from "@/lib/audit";
 import { Resend } from "resend";
 
@@ -55,6 +56,13 @@ function invitationEmailHtml(inviterName: string, recipientName: string, role: s
 
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(request.headers);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: rl.retryAfter ? { "Retry-After": String(rl.retryAfter) } : undefined }
+      );
+    }
     const { profile } = await requireAdmin();
     const body = await request.json();
     const { email, full_name, role, department_id, program_ids } = body as {

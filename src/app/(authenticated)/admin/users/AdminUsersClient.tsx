@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import useSWR from "swr";
 import type { Profile, PageKey } from "@/lib/types";
 import { ALL_PAGES } from "@/lib/types";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json()).then((d) => (Array.isArray(d) ? d : []));
 
 type UserRow = Profile & { email?: string };
 
@@ -19,8 +22,8 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
   const [invitations, setInvitations] = useState<
     { id: string; email: string; full_name: string | null; role: string; accepted: boolean; invited_at?: string; invited_by?: string }[]
   >([]);
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
-  const [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
+  const { data: departments = [] } = useSWR<{ id: string; name: string }[]>("/api/departments", fetcher);
+  const { data: programs = [] } = useSWR<{ id: string; name: string }[]>("/api/programs", fetcher);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<"submitter" | "manager" | "admin" | "finance" | "viewer">("submitter");
@@ -42,14 +45,6 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       .then((r) => r.json())
       .then((d) => setInvitations(Array.isArray(d) ? d : []))
       .catch(() => setInvitations([]));
-    fetch("/api/departments")
-      .then((r) => r.json())
-      .then((d) => setDepartments(Array.isArray(d) ? d : []))
-      .catch(() => {});
-    fetch("/api/programs")
-      .then((r) => r.json())
-      .then((d) => setPrograms(Array.isArray(d) ? d : []))
-      .catch(() => {});
   }, []);
 
   const filteredUsers = useMemo(() => {

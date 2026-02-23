@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 
@@ -35,9 +36,18 @@ function pickManager(managers: ManagerProfile[], departmentId: string | null, pr
 
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(request.headers);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: rl.retryAfter ? { "Retry-After": String(rl.retryAfter) } : undefined }
+      );
+    }
     const { session } = await requireAuth();
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const filesRaw = formData.getAll("file");
+    const files = (Array.isArray(filesRaw) ? filesRaw : [filesRaw]).filter((f): f is File => f instanceof File);
+    const file = files[0] ?? (formData.get("file") as File | null);
     const department_id = formData.get("department_id") as string | null;
     const program_id = formData.get("program_id") as string | null;
     const currency = (formData.get("currency") as string) || "GBP";
@@ -121,6 +131,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Workflow insert failed: " + wfError.message }, { status: 500 });
     }
 
+    await supabase.from("invoice_files").insert({ invoice_id: invoiceId, storage_path: storagePath, file_name: file.name, sort_order: 0 });
+
     await supabase.from("invoice_extracted_fields").upsert(
       { invoice_id: invoiceId, invoice_number: file.name.replace(/\.[^.]+$/, ""), extracted_currency: currency, needs_review: true, manager_confirmed: false, raw_json: { source_file_name: file.name }, updated_at: new Date().toISOString() },
       { onConflict: "invoice_id" }
@@ -162,13 +174,24 @@ export async function POST(request: NextRequest) {
       }
     } catch { /* keep upload successful */ }
 
+    for (let i = 1; i < files.length; i++) {
+      const f = files[i];
+      const ext = f.name.split(".").pop()?.toLowerCase() ?? "pdf";
+      if (!["pdf", "docx", "doc", "xlsx", "xls"].includes(ext)) continue;
+      const stem = f.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "file";
+      const p = `${session.user.id}/${invoiceId}-${stem}-${Date.now()}-${i}.${ext}`;
+      const buf = Buffer.from(await f.arrayBuffer());
+      const { error: ue } = await supabase.storage.from(BUCKET).upload(p, buf, { contentType: f.type || "application/octet-stream", upsert: false });
+      if (!ue) await supabase.from("invoice_files").insert({ invoice_id: invoiceId, storage_path: p, file_name: f.name, sort_order: i });
+    }
+
     await createAuditEvent({
       invoice_id: invoiceId,
       actor_user_id: session.user.id,
       event_type: "invoice_submitted",
       from_status: null,
       to_status: "pending_manager",
-      payload: { storage_path: storagePath, invoice_type: "freelancer" },
+      payload: { storage_path: storagePath, invoice_type: "freelancer", file_count: files.length },
     });
 
     return NextResponse.json({ success: true, invoice_id: invoiceId });

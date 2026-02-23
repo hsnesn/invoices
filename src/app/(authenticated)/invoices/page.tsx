@@ -63,7 +63,8 @@ export default async function InvoicesPage() {
       invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency, raw_json)
     `)
     .neq("invoice_type", "freelancer")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(500);
 
   const visibleInvoices = (invoicesRaw ?? []).filter((inv) =>
     canUserSeeInvoice(

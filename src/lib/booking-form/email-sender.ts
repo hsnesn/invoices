@@ -3,6 +3,7 @@ import type { BookingFormData, ApprovalContext } from "./types";
 import { sanitizeFilenamePart } from "./pdf-generator";
 
 const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const fmtCurrency = (v: number) =>
   `£${v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
@@ -34,12 +35,13 @@ function escapeHtml(s: string): string {
 function wrapEmail(body: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;color:#334155;line-height:1.6">
+<div style="text-align:center;margin-bottom:20px"><img src="${APP_URL}/logo.png" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
 ${body}
 <p style="margin-top:24px;font-size:12px;color:#64748b">TRT World London Operations</p>
 </body></html>`;
 }
 
-/** Email A: To approving Line Manager - final confirmation */
+/** Email A: To approver - final confirmation */
 export async function sendBookingFormEmailA(
   data: BookingFormData,
   ctx: ApprovalContext,
@@ -78,17 +80,24 @@ ${details}
   };
 }
 
-/** Email B: To London Operations - record / filing */
+/** Email B: To London Operations + approver - record / filing */
 export async function sendBookingFormEmailB(
   data: BookingFormData,
   ctx: ApprovalContext,
   pdfBuffer: ArrayBuffer,
   idempotencyKey: string
 ): Promise<{ success: boolean; messageId?: string; error?: unknown }> {
+  const approverEmail = (ctx.approverEmail || "").trim();
+  const to = [LONDON_OPS_EMAIL, ...(approverEmail ? [approverEmail] : [])].filter((e, i, arr) => arr.indexOf(e) === i);
   const subject = `${data.name} – ${data.month}`;
   const approvalDateTime = ctx.approvedAt.toLocaleString("en-GB", {
-    dateStyle: "full",
-    timeStyle: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
   });
   const details = buildDetailsSection(data);
   const body = `
@@ -106,7 +115,7 @@ ${details}
 
   const filename = `BookingForm_${sanitizeFilenamePart(data.name)}_${sanitizeFilenamePart(data.month)}.pdf`;
   const result = await sendEmailWithAttachment({
-    to: LONDON_OPS_EMAIL,
+    to,
     subject,
     html: wrapEmail(body),
     attachments: [{ filename, content: pdfBuffer }],

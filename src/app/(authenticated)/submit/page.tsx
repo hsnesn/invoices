@@ -2,6 +2,14 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import useSWR from "swr";
+
+const fetcher = (url: string) =>
+  fetch(url).then(async (r) => {
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.error ?? "Request failed");
+    return Array.isArray(d) ? d : [];
+  });
 
 export default function SubmitPage() {
   return (
@@ -17,14 +25,17 @@ function SubmitPageContent() {
   const searchParams = useSearchParams();
   const rejectedId = searchParams.get("rejected");
 
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
-  const [programs, setPrograms] = useState<{ id: string; name: string; department_id: string }[]>([]);
+  const [departmentId, setDepartmentId] = useState("");
+  const { data: departments = [], error: deptError } = useSWR<{ id: string; name: string }[]>("/api/departments", fetcher);
+  const { data: programs = [] } = useSWR<{ id: string; name: string; department_id: string }[]>(
+    departmentId ? `/api/programs?department_id=${departmentId}` : null,
+    fetcher
+  );
   const [guestName, setGuestName] = useState("");
   const [title, setTitle] = useState("");
   const [producer, setProducer] = useState("");
   const [producerLoaded, setProducerLoaded] = useState(false);
   const [topic, setTopic] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
   const [programId, setProgramId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(today);
   const [txDate1, setTxDate1] = useState(today);
@@ -38,18 +49,10 @@ function SubmitPageContent() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    fetch("/api/departments")
-      .then(async (r) => ({ ok: r.ok, body: await r.json() }))
-      .then(({ ok, body }) => {
-        if (!ok) {
-          setError(body?.error ?? "Failed to load departments");
-          setDepartments([]);
-          return;
-        }
-        setDepartments(Array.isArray(body) ? body : []);
-      })
-      .catch(console.error);
+    if (deptError) setError(deptError.message ?? "Failed to load departments");
+  }, [deptError]);
 
+  useEffect(() => {
     fetch("/api/profile")
       .then(async (r) => {
         if (!r.ok) return;
@@ -63,23 +66,7 @@ function SubmitPageContent() {
   }, [producerLoaded]);
 
   useEffect(() => {
-    if (departmentId) {
-      fetch(`/api/programs?department_id=${departmentId}`)
-        .then(async (r) => ({ ok: r.ok, body: await r.json() }))
-        .then(({ ok, body }) => {
-          if (!ok) {
-            setError(body?.error ?? "Failed to load programs");
-            setPrograms([]);
-            return;
-          }
-          setPrograms(Array.isArray(body) ? body : []);
-        })
-        .catch(console.error);
-      setProgramId("");
-    } else {
-      setPrograms([]);
-      setProgramId("");
-    }
+    if (departmentId) setProgramId("");
   }, [departmentId]);
 
   const handleSubmit = async (e: React.FormEvent) => {

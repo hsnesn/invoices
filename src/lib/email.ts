@@ -14,10 +14,13 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 /* Branded email wrapper                                               */
 /* ------------------------------------------------------------------ */
 
+const LOGO_URL = `${APP_URL}/logo.png`;
+
 function wrap(title: string, body: string) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
 <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+<div style="padding:16px 32px;text-align:center;border-bottom:1px solid #e2e8f0"><img src="${LOGO_URL}" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
 <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);padding:24px 32px;text-align:center">
 <h1 style="margin:0;font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.3px">${APP_NAME}</h1>
 </div>
@@ -116,23 +119,22 @@ export async function sendSubmissionEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendManagerApprovedEmail(params: {
-  submitterEmail?: string; adminEmails: string[]; operationsRoomEmails?: string[]; invoiceId: string; invoiceNumber?: string; managerName?: string;
+  submitterEmail: string; adminEmails: string[]; operationsRoomEmails?: string[]; invoiceId: string; invoiceNumber?: string; managerName?: string;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Your invoice";
   const to = [
-    ...(params.submitterEmail ? [params.submitterEmail] : []),
+    params.submitterEmail,
     ...params.adminEmails,
     ...(params.operationsRoomEmails ?? []),
-  ].filter((e, i, arr) => arr.indexOf(e) === i);
-  if (to.length === 0) return { success: false, error: "No recipients" };
+  ].filter((e): e is string => !!e && e.trim().length > 0).filter((e, i, arr) => arr.indexOf(e) === i);
   return sendEmail({
     to,
-    subject: `${invLabel} — Approved by manager`,
+    subject: params.managerName ? `${invLabel} — Approved by ${params.managerName}` : `${invLabel} — Approved`,
     html: wrap("Invoice Approved", `
-      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Great news! The invoice has been approved by the line manager${params.managerName ? ` (<strong>${params.managerName}</strong>)` : ""} and is now pending admin review.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Great news! The invoice has been approved${params.managerName ? ` by <strong>${params.managerName}</strong>` : ""} and is now pending admin review.</p>
       ${params.invoiceNumber ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
-      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Approved by Manager", "#d1fae5", "#065f46")}</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge(params.managerName ? `Approved by ${params.managerName}` : "Approved", "#d1fae5", "#065f46")}</p>
       ${btn(link, "View Invoice", "#059669")}
     `),
   });
@@ -222,7 +224,7 @@ export async function sendManagerAssignedEmail(params: {
     to: params.managerEmail,
     subject: `${invLabel} — Assigned to you for review`,
     html: wrap("Invoice Assigned to You", `
-      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">You have been assigned as line manager${params.assignedByName ? ` by <strong>${params.assignedByName}</strong>` : ""} to review this invoice.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">You have been assigned${params.assignedByName ? ` by <strong>${params.assignedByName}</strong>` : ""} to review this invoice.</p>
       ${params.invoiceNumber ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
       ${btn(link, "Review Invoice", "#f59e0b")}

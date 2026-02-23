@@ -3,9 +3,12 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import useSWR from "swr";
 
 const FreelancerDashboard = lazy(() => import("./FreelancerDashboard").then(m => ({ default: m.FreelancerDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                               */
@@ -253,6 +256,7 @@ export function FreelancerBoard({
   const [previewName, setPreviewName] = useState("");
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewDownloadUrl, setPreviewDownloadUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -357,12 +361,15 @@ export function FreelancerBoard({
 
   const closePreview = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null); setPreviewHtml(null); setPreviewDownloadUrl(null); setPreviewName("");
+    setPreviewUrl(null); setPreviewHtml(null); setPreviewDownloadUrl(null); setPreviewName(""); setPreviewLoading(false);
   }, [previewUrl]);
 
-  const openFile = useCallback(async (id: string) => {
+  const openFile = useCallback(async (id: string, path?: string) => {
+    setPreviewLoading(true);
+    setPreviewUrl(null); setPreviewHtml(null);
     try {
-      const res = await fetch(`/api/invoices/${id}/pdf`);
+      const url = path ? `/api/invoices/${id}/pdf?path=${encodeURIComponent(path)}` : `/api/invoices/${id}/pdf`;
+      const res = await fetch(url);
       const data = await res.json();
       if (!data.url) return;
       const row = rows.find(r => r.id === id);
@@ -372,19 +379,19 @@ export function FreelancerBoard({
       const fileRes = await fetch(data.url);
       const blob = await fileRes.blob();
       const mime = blob.type.toLowerCase();
-      const url = data.url.toLowerCase();
+      const fileUrl = data.url.toLowerCase();
 
-      if (mime.includes("pdf") || url.includes(".pdf")) {
+      if (mime.includes("pdf") || fileUrl.includes(".pdf")) {
         const blobUrl = URL.createObjectURL(blob);
         setPreviewHtml(null);
         setPreviewUrl(blobUrl);
-      } else if (mime.includes("word") || mime.includes("docx") || url.includes(".docx") || url.includes(".doc")) {
+      } else if (mime.includes("word") || mime.includes("docx") || fileUrl.includes(".docx") || fileUrl.includes(".doc")) {
         const mammoth = await import("mammoth");
         const arrayBuf = await blob.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuf });
         setPreviewUrl(null);
         setPreviewHtml(result.value);
-      } else if (mime.includes("sheet") || mime.includes("excel") || url.includes(".xlsx") || url.includes(".xls")) {
+      } else if (mime.includes("sheet") || mime.includes("excel") || fileUrl.includes(".xlsx") || fileUrl.includes(".xls")) {
         const XLSX = await import("xlsx");
         const arrayBuf = await blob.arrayBuffer();
         const wb = XLSX.read(arrayBuf, { type: "array" });
@@ -402,6 +409,7 @@ export function FreelancerBoard({
         setPreviewUrl(blobUrl);
       }
     } catch { /* */ }
+    finally { setPreviewLoading(false); }
   }, [rows]);
 
   const downloadFile = useCallback(async (url: string, name: string) => {
@@ -409,12 +417,22 @@ export function FreelancerBoard({
     catch { window.open(url, "_blank"); }
   }, []);
 
-  const onReplaceFile = useCallback(async (invoiceId: string, file: File) => {
+  const onReplaceFile = useCallback(async (invoiceId: string, file: File, onSuccess?: () => void) => {
     setActionLoadingId(invoiceId);
     try {
       const fd = new FormData(); fd.append("file", file);
       const res = await fetch(`/api/invoices/${invoiceId}/replace-file`, { method: "POST", body: fd });
-      if (res.ok) { window.location.reload(); } else { const d = await res.json().catch(() => null); alert(d?.error ?? "File replacement failed"); }
+      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); alert(d?.error ?? "File replacement failed"); }
+    } catch (err) { alert(err instanceof Error ? err.message : "Upload failed"); }
+    finally { setActionLoadingId(null); }
+  }, []);
+
+  const onAddFile = useCallback(async (invoiceId: string, file: File, onSuccess?: () => void) => {
+    setActionLoadingId(invoiceId);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch(`/api/invoices/${invoiceId}/add-file`, { method: "POST", body: fd });
+      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); alert(d?.error ?? "Add file failed"); }
     } catch (err) { alert(err instanceof Error ? err.message : "Upload failed"); }
     finally { setActionLoadingId(null); }
   }, []);
@@ -674,15 +692,15 @@ export function FreelancerBoard({
       case "companyName": return isEditing ? inp("companyName") : r.companyName;
       case "submissionDate": return r.submissionDate;
       case "files": return (
-        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-          <button onClick={() => void openFile(r.id)} className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors dark:bg-sky-900/40 dark:text-sky-300"><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4zM6 10h8v2H6v-2zm0 4h5v2H6v-2z"/></svg>Open</button>
-          {(isSubmitter || currentRole === "admin" || currentRole === "manager") && (
-            <label className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer dark:bg-amber-900/30 dark:text-amber-300">
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>Replace
-              <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" onChange={e => { const f = e.target.files?.[0]; if (f) void onReplaceFile(r.id, f); e.target.value = ""; }} />
-            </label>
-          )}
-        </div>
+        <FreelancerFilesCell
+          invoiceId={r.id}
+          canEdit={!!(isSubmitter || currentRole === "admin" || currentRole === "manager")}
+          openFile={openFile}
+          onReplaceFile={onReplaceFile}
+          onAddFile={onAddFile}
+          actionLoadingId={actionLoadingId}
+          contractorName={r.contractor}
+        />
       );
       case "additionalCost": return isEditing ? inp("additionalCost") : r.additionalCost;
       case "amount": {
@@ -732,6 +750,11 @@ export function FreelancerBoard({
   /* ---------- RENDER ---------- */
   return (
     <div className="space-y-4">
+      {actionLoadingId && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 overflow-hidden bg-slate-200 dark:bg-slate-700">
+          <div className="h-full w-1/3 bg-blue-500 animate-loading-bar" />
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Freelancer Invoices</h1>
@@ -936,11 +959,11 @@ export function FreelancerBoard({
         </div>
       )}
 
-      {(previewUrl || previewHtml) && (
+      {(previewUrl || previewHtml || previewLoading) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closePreview}>
           <div className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-800 truncate dark:text-white">{previewName}</h3>
+              <h3 className="text-sm font-semibold text-gray-800 truncate dark:text-white">{previewName || (previewLoading ? "Loading..." : "")}</h3>
               <div className="flex items-center gap-2">
                 {previewDownloadUrl && (
                   <button onClick={() => void downloadFile(previewDownloadUrl, previewName || "invoice")} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 transition-colors shadow-sm">
@@ -951,9 +974,15 @@ export function FreelancerBoard({
                 <button onClick={closePreview} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors">✕</button>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden">
-              {previewUrl && <iframe src={previewUrl} className="h-full w-full border-0" title="File preview" />}
-              {previewHtml && <div className="h-full w-full overflow-auto p-6 prose prose-sm max-w-none dark:prose-invert [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-1.5 [&_td]:text-sm [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-3 [&_th]:py-2 [&_th]:text-sm [&_th]:font-semibold dark:[&_td]:border-gray-600 dark:[&_th]:border-gray-600 dark:[&_th]:bg-gray-800" dangerouslySetInnerHTML={{ __html: previewHtml }} />}
+            <div className="flex-1 overflow-hidden flex items-center justify-center">
+              {previewLoading && !previewUrl && !previewHtml && (
+                <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
+                  <svg className="h-12 w-12 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>
+                  <span className="text-sm">Loading file...</span>
+                </div>
+              )}
+              {previewUrl && !previewLoading && <iframe src={previewUrl} className="h-full w-full border-0" title="File preview" />}
+              {previewHtml && !previewLoading && <div className="h-full w-full overflow-auto p-6 prose prose-sm max-w-none dark:prose-invert [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-1.5 [&_td]:text-sm [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-3 [&_th]:py-2 [&_th]:text-sm [&_th]:font-semibold dark:[&_td]:border-gray-600 dark:[&_th]:border-gray-600 dark:[&_th]:bg-gray-800" dangerouslySetInnerHTML={{ __html: previewHtml }} />}
             </div>
           </div>
         </div>
@@ -986,6 +1015,71 @@ function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
   if (Array.isArray(v)) return v[0] ?? null;
   return v;
+}
+
+function FreelancerFilesCell({
+  invoiceId,
+  canEdit,
+  openFile,
+  onReplaceFile,
+  onAddFile,
+  actionLoadingId,
+  contractorName,
+}: {
+  invoiceId: string;
+  canEdit: boolean;
+  openFile: (id: string, path?: string) => void;
+  onReplaceFile: (id: string, file: File, onSuccess?: () => void) => void;
+  onAddFile: (id: string, file: File, onSuccess?: () => void) => void;
+  actionLoadingId: string | null;
+  contractorName: string;
+}) {
+  const { data: files, isLoading, mutate } = useSWR<{ storage_path: string; file_name: string }[]>(
+    `/api/invoices/${invoiceId}/files`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const loading = actionLoadingId === invoiceId;
+  const list = files ?? [];
+
+  return (
+    <div className="flex flex-col gap-1 max-w-[180px]" onClick={e => e.stopPropagation()}>
+      {isLoading && list.length === 0 ? (
+        <span className="text-xs text-gray-400">Loading...</span>
+      ) : list.length === 0 ? (
+        <span className="text-xs text-gray-400">—</span>
+      ) : (
+        <div className="space-y-1">
+          {list.map((f, i) => (
+            <div key={i} className="flex items-center gap-1 flex-wrap">
+              <button
+                onClick={() => void openFile(invoiceId, f.storage_path)}
+                className="inline-flex items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 truncate max-w-[100px]"
+                title={f.file_name}
+              >
+                <svg className="h-3 w-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+                <span className="truncate">{f.file_name}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {canEdit && (
+        <div className="flex items-center gap-1 mt-0.5">
+          <label className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 cursor-pointer dark:bg-amber-900/30 dark:text-amber-300 disabled:opacity-50">
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            Add
+            <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" onChange={e => { const f = e.target.files?.[0]; if (f) void onAddFile(invoiceId, f, () => void mutate()); e.target.value = ""; }} disabled={loading} />
+          </label>
+          <label className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 cursor-pointer dark:bg-amber-900/30 dark:text-amber-300 disabled:opacity-50">
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+            Replace
+            <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" onChange={e => { const f = e.target.files?.[0]; if (f) void onReplaceFile(invoiceId, f, () => void mutate()); e.target.value = ""; }} disabled={loading} />
+          </label>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function StatusCell({ r, canApprove, isSubmitter, currentRole, isOperationsRoomMember, actionLoadingId, onManagerApprove, onAdminApprove, onResubmit, onMarkPaid, openRejectModal }: {

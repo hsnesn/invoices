@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rl = checkRateLimit(request.headers);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: rl.retryAfter ? { "Retry-After": String(rl.retryAfter) } : undefined }
+      );
+    }
     const { session } = await requireAuth();
     const { id: invoiceId } = await params;
 

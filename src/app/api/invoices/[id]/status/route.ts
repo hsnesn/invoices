@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createAuditEvent } from "@/lib/audit";
 import {
   sendManagerApprovedEmail,
@@ -19,6 +20,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rl = checkRateLimit(request.headers);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: rl.retryAfter ? { "Retry-After": String(rl.retryAfter) } : undefined }
+      );
+    }
     const { session, profile } = await requireAuth();
     const { id: invoiceId } = await params;
 
@@ -179,20 +187,23 @@ export async function POST(
             const u = (await supabase.auth.admin.getUserById(m.user_id)).data?.user;
             if (u?.email) operationsRoomEmails.push(u.email);
           }
-          await sendManagerApprovedEmail({
-            submitterEmail: submitterUser?.email,
-            adminEmails,
-            operationsRoomEmails,
-            invoiceId,
-            invoiceNumber: extracted?.invoice_number ?? undefined,
-            managerName: approverProfile.data?.full_name ?? undefined,
-          });
+          if (submitterUser?.email) {
+            const emailResult = await sendManagerApprovedEmail({
+              submitterEmail: submitterUser.email,
+              adminEmails,
+              operationsRoomEmails,
+              invoiceId,
+              invoiceNumber: extracted?.invoice_number ?? undefined,
+              managerName: approverProfile.data?.full_name ?? undefined,
+            });
+            if (!emailResult.success) console.error("[ManagerApproved] Email failed:", emailResult.error);
+          }
 
           // Form created first, then booking form emails (A + B) sent by workflow
           void triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
-            approverName: approverProfile.data?.full_name ?? "Line Manager",
+            approverName: approverProfile.data?.full_name ?? "Approver",
             approverEmail: approverUser?.email ?? "",
             approvedAt,
           }).then((r) => {
@@ -317,19 +328,22 @@ export async function POST(
             const u = (await supabase.auth.admin.getUserById(m.user_id)).data?.user;
             if (u?.email) operationsRoomEmails.push(u.email);
           }
-          await sendManagerApprovedEmail({
-            submitterEmail: submitterUser?.email,
-            adminEmails,
-            operationsRoomEmails,
-            invoiceId,
-            invoiceNumber: extracted?.invoice_number ?? undefined,
-            managerName: approverProfile.data?.full_name ?? undefined,
-          });
+          if (submitterUser?.email) {
+            const emailResult = await sendManagerApprovedEmail({
+              submitterEmail: submitterUser.email,
+              adminEmails,
+              operationsRoomEmails,
+              invoiceId,
+              invoiceNumber: extracted?.invoice_number ?? undefined,
+              managerName: approverProfile.data?.full_name ?? undefined,
+            });
+            if (!emailResult.success) console.error("[ManagerApproved] Email failed:", emailResult.error);
+          }
 
           void triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
-            approverName: approverProfile.data?.full_name ?? "Line Manager",
+            approverName: approverProfile.data?.full_name ?? "Approver",
             approverEmail: approverUser?.email ?? "",
             approvedAt,
           }).then((r) => {

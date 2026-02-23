@@ -1674,6 +1674,11 @@ export function InvoicesBoard({
 
   return (
     <div className="space-y-6 text-slate-800 dark:text-slate-100">
+      {actionLoadingId && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 overflow-hidden bg-slate-200 dark:bg-slate-700">
+          <div className="h-full w-1/3 bg-blue-500 animate-loading-bar" />
+        </div>
+      )}
       {/* Top Action Bar */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Guest Invoice Submission</h1>

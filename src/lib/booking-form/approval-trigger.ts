@@ -1,5 +1,5 @@
 /**
- * Approval trigger: runs when Line Manager approves a freelancer invoice.
+ * Approval trigger: runs when a manager/admin approves a freelancer invoice.
  * 1. Generate Booking Form PDF
  * 2. Save form to storage (form is "created" first)
  * 3. Send Email A to approver (with PDF)
@@ -77,10 +77,14 @@ async function loadBookingFormData(
     serviceMonth = `${serviceMonth} ${approvedAt.getFullYear()}`;
   }
 
-  const approvalDate = approvedAt.toLocaleDateString("en-GB", {
+  const approvalDate = approvedAt.toLocaleString("en-GB", {
     day: "numeric",
     month: "numeric",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
   });
 
   return {
@@ -113,7 +117,7 @@ function isTableNotFoundError(err: unknown): boolean {
 }
 
 /**
- * Trigger the Booking Form email workflow when a freelancer invoice is approved by Line Manager.
+ * Trigger the Booking Form email workflow when a freelancer invoice is approved.
  * Idempotent: same invoice_id + approved_at will not send duplicates (when audit table exists).
  */
 export async function triggerBookingFormWorkflow(

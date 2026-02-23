@@ -66,7 +66,8 @@ export default async function FreelancerInvoicesPage() {
       freelancer_invoice_fields(contractor_name, company_name, service_description, service_days_count, service_days, service_rate_per_day, service_month, additional_cost, additional_cost_reason, booked_by, department_2, istanbul_team)
     `)
     .eq("invoice_type", "freelancer")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(500);
 
   const [{ data: departments }, { data: profiles }, { data: orMembers }] = await Promise.all([
     supabase.from("departments").select("id,name"),

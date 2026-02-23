@@ -62,15 +62,26 @@ export async function GET(
   try {
     const { session } = await requireAuth();
     const { id: invoiceId } = await params;
+    const pathParam = request.nextUrl.searchParams.get("path"); // optional: specific file path when multiple files
 
     const supabaseAdmin = createAdminClient();
-    const { data: invoice } = await supabaseAdmin
-      .from("invoices")
-      .select("storage_path")
-      .eq("id", invoiceId)
-      .single();
+    let storagePath: string | null = pathParam;
 
-    if (!invoice?.storage_path) {
+    if (!storagePath) {
+      const { data: files } = await supabaseAdmin
+        .from("invoice_files")
+        .select("storage_path")
+        .eq("invoice_id", invoiceId)
+        .order("sort_order", { ascending: true })
+        .limit(1);
+      if (files?.[0]) storagePath = files[0].storage_path;
+    }
+    if (!storagePath) {
+      const { data: invoice } = await supabaseAdmin.from("invoices").select("storage_path").eq("id", invoiceId).single();
+      storagePath = invoice?.storage_path ?? null;
+    }
+
+    if (!storagePath) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -87,7 +98,7 @@ export async function GET(
 
     const { data, error } = await supabaseAdmin.storage
       .from(BUCKET)
-      .createSignedUrl(invoice.storage_path, 3600); // 1 hour
+      .createSignedUrl(storagePath, 3600); // 1 hour
 
     if (error || !data?.signedUrl) {
       return NextResponse.json(

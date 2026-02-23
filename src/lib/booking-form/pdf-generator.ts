@@ -114,7 +114,7 @@ export function generateBookingFormPdf(data: BookingFormData): ArrayBuffer {
   const internalFields: [string, string][] = [
     ["Booked by", data.bookedBy !== "—" ? data.bookedBy : ""],
     ["Approved by", data.approverName],
-    ["Date of approval", data.approvalDate],
+    ["Date and time of approval", data.approvalDate],
   ];
 
   for (const [label, value] of internalFields) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { sendSubmissionEmail } from "@/lib/email";
 import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
@@ -44,6 +45,13 @@ function pickManager(
 
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(request.headers);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: rl.retryAfter ? { "Retry-After": String(rl.retryAfter) } : undefined }
+      );
+    }
     const { session } = await requireAuth();
 
     const formData = await request.formData();
