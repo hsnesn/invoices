@@ -75,7 +75,14 @@ export async function POST(
     const inDept = profile.role === "manager" && profile.department_id != null && inv.department_id === profile.department_id;
     const inProg = profile.role === "manager" && (profile.program_ids ?? []).length > 0 && inv.program_id != null && (profile.program_ids ?? []).includes(inv.program_id);
 
-    if (!isOwner && !isAssigned && !isAdmin && !isFinance && !inDept && !inProg) {
+    const { data: orMember } = await supabase
+      .from("operations_room_members")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    const isOperationsRoom = !!orMember;
+
+    if (!isOwner && !isAssigned && !isAdmin && !isFinance && !inDept && !inProg && !isOperationsRoom) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -109,46 +116,51 @@ export async function POST(
             { status: 400 }
           );
         }
+        const isFreelancer = (inv as { invoice_type?: string }).invoice_type === "freelancer";
+        const newStatus = isFreelancer ? "pending_admin" : "ready_for_payment";
+
         await supabase
           .from("invoice_workflows")
           .update({
-            status: "ready_for_payment",
+            status: newStatus,
             manager_user_id: session.user.id,
           })
           .eq("invoice_id", invoiceId);
 
-        const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id))
-          .data?.user;
-        const financeProfiles = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("role", "finance")
-          .eq("is_active", true);
-        const financeEmails: string[] = [];
-        for (const p of financeProfiles.data ?? []) {
-          const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
-          if (u?.email) financeEmails.push(u.email);
-        }
-        const adminProfiles = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("role", "admin")
-          .eq("is_active", true);
-        const adminEmails: string[] = [];
-        for (const p of adminProfiles.data ?? []) {
-          const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
-          if (u?.email) adminEmails.push(u.email);
-        }
-        if (submitterUser?.email) {
-          await sendReadyForPaymentEmail({
-            submitterEmail: submitterUser.email,
-            financeEmails,
-            invoiceId,
-            invoiceNumber: extracted?.invoice_number ?? undefined,
-          });
+        if (!isFreelancer) {
+          const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id))
+            .data?.user;
+          const financeProfiles = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("role", "finance")
+            .eq("is_active", true);
+          const financeEmails: string[] = [];
+          for (const p of financeProfiles.data ?? []) {
+            const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
+            if (u?.email) financeEmails.push(u.email);
+          }
+          const adminProfiles = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("role", "admin")
+            .eq("is_active", true);
+          const adminEmails: string[] = [];
+          for (const p of adminProfiles.data ?? []) {
+            const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
+            if (u?.email) adminEmails.push(u.email);
+          }
+          if (submitterUser?.email) {
+            await sendReadyForPaymentEmail({
+              submitterEmail: submitterUser.email,
+              financeEmails,
+              invoiceId,
+              invoiceNumber: extracted?.invoice_number ?? undefined,
+            });
+          }
         }
 
-        if ((inv as { invoice_type?: string }).invoice_type === "freelancer") {
+        if (isFreelancer) {
           const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
           const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
           const approvedAt = new Date();
@@ -202,6 +214,49 @@ export async function POST(
       } else {
         return NextResponse.json({ error: "Invalid manager action" }, { status: 400 });
       }
+    } else if (isOperationsRoom && (inv as { invoice_type?: string }).invoice_type === "freelancer") {
+      if (to_status === "ready_for_payment" && fromStatus === "pending_admin") {
+        await supabase
+          .from("invoice_workflows")
+          .update({
+            status: "ready_for_payment",
+            admin_comment: admin_comment ?? wf.admin_comment,
+          })
+          .eq("invoice_id", invoiceId);
+
+        const financeProfiles = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("role", "finance")
+          .eq("is_active", true);
+        const financeEmails: string[] = [];
+        for (const p of financeProfiles.data ?? []) {
+          const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
+          if (u?.email) financeEmails.push(u.email);
+        }
+        const adminProfiles = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("role", "admin")
+          .eq("is_active", true);
+        const adminEmails: string[] = [];
+        for (const p of adminProfiles.data ?? []) {
+          const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
+          if (u?.email) adminEmails.push(u.email);
+        }
+        const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id))
+          .data?.user;
+        if (submitterUser?.email) {
+          await sendReadyForPaymentEmail({
+            submitterEmail: submitterUser.email,
+            financeEmails,
+            invoiceId,
+            invoiceNumber: extracted?.invoice_number ?? undefined,
+          });
+        }
+      } else {
+        return NextResponse.json({ error: "Operations Room can only approve invoices in The Operations Room stage" }, { status: 400 });
+      }
     } else if (profile.role === "admin") {
       if (to_status === "approved_by_manager") {
         if (fromStatus !== "pending_manager") {
@@ -210,15 +265,16 @@ export async function POST(
             { status: 400 }
           );
         }
+        const invIsFreelancer = (inv as { invoice_type?: string }).invoice_type === "freelancer";
         await supabase
           .from("invoice_workflows")
           .update({
-            status: "ready_for_payment",
+            status: invIsFreelancer ? "pending_admin" : "ready_for_payment",
             manager_user_id: session.user.id,
           })
           .eq("invoice_id", invoiceId);
 
-        if ((inv as { invoice_type?: string }).invoice_type === "freelancer") {
+        if (invIsFreelancer) {
           const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
           const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
           const approvedAt = new Date();
@@ -278,6 +334,22 @@ export async function POST(
             financeEmails,
             invoiceId,
             invoiceNumber: extracted?.invoice_number ?? undefined,
+          });
+        }
+
+        // Booking form: when admin approves freelancer directly from pending_manager (skips manager step)
+        if ((inv as { invoice_type?: string }).invoice_type === "freelancer" && fromStatus === "pending_manager") {
+          const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
+          const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
+          const approvedAt = new Date();
+          void triggerBookingFormWorkflow(supabase, {
+            invoiceId,
+            approverUserId: session.user.id,
+            approverName: approverProfile.data?.full_name ?? "Admin",
+            approverEmail: approverUser?.email ?? "",
+            approvedAt,
+          }).then((r) => {
+            if (!r.ok && !r.skipped) console.error("[BookingForm] Workflow failed:", r.error);
           });
         }
       } else if (to_status === "rejected") {

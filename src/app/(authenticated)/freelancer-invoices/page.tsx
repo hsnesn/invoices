@@ -18,9 +18,11 @@ function canUserSeeInvoice(
   userId: string,
   role: string,
   userDepartmentId: string | null,
-  userProgramIds: string[] | null
+  userProgramIds: string[] | null,
+  isOperationsRoomMember: boolean
 ): boolean {
   if (role === "admin") return true;
+  if (isOperationsRoomMember) return true;
   if (inv.submitter_user_id === userId) return true;
 
   const wfRaw = inv.invoice_workflows;
@@ -66,20 +68,24 @@ export default async function FreelancerInvoicesPage() {
     .eq("invoice_type", "freelancer")
     .order("created_at", { ascending: false });
 
-  const visibleInvoices = (invoicesRaw ?? []).filter((inv) =>
+  const [{ data: departments }, { data: profiles }, { data: orMembers }] = await Promise.all([
+    supabase.from("departments").select("id,name"),
+    supabase.from("profiles").select("id,full_name,role"),
+    supabase.from("operations_room_members").select("user_id").eq("user_id", session.user.id).maybeSingle(),
+  ]);
+
+  const isOperationsRoomMember = !!orMembers;
+
+  const visibleInvoicesFiltered = (invoicesRaw ?? []).filter((inv) =>
     canUserSeeInvoice(
       inv as never,
       session.user.id,
       profile.role,
       profile.department_id,
-      profile.program_ids
+      profile.program_ids,
+      isOperationsRoomMember
     )
   );
-
-  const [{ data: departments }, { data: profiles }] = await Promise.all([
-    supabase.from("departments").select("id,name"),
-    supabase.from("profiles").select("id,full_name,role"),
-  ]);
 
   const allProfiles = (profiles ?? []) as { id: string; full_name: string | null; role?: string }[];
   const profilePairs = allProfiles.map((p) => [p.id, p.full_name || p.id] as [string, string]);
@@ -89,12 +95,13 @@ export default async function FreelancerInvoicesPage() {
 
   return (
     <FreelancerBoard
-      invoices={visibleInvoices as never[]}
+      invoices={visibleInvoicesFiltered as never[]}
       departmentPairs={(departments ?? []).map((d: { id: string; name: string }) => [d.id, d.name])}
       profilePairs={profilePairs}
       managerProfilePairs={managerProfilePairs}
       currentRole={profile.role}
       currentUserId={session.user.id}
+      isOperationsRoomMember={isOperationsRoomMember}
     />
   );
 }

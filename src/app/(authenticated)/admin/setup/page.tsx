@@ -463,6 +463,8 @@ const FL_CATEGORIES = [
   { key: "istanbul_team", label: "Istanbul Team Options", placeholder: "e.g. Istanbul Team", borderColor: "border-l-emerald-500", dotColor: "bg-emerald-500", btnColor: "bg-emerald-600 hover:bg-emerald-500", focusColor: "focus:border-emerald-500 focus:ring-emerald-500" },
 ];
 
+type OrMember = { id: string; user_id: string; full_name: string; created_at: string };
+
 function FreelancerSetup() {
   const [items, setItems] = useState<SetupItem[]>([]);
   const [newValues, setNewValues] = useState<Record<string, string>>({});
@@ -476,6 +478,10 @@ function FreelancerSetup() {
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [deleteDeptId, setDeleteDeptId] = useState<string | null>(null);
 
+  const [orMembers, setOrMembers] = useState<OrMember[]>([]);
+  const [orNewUserId, setOrNewUserId] = useState("");
+  const [users, setUsers] = useState<UserOption[]>([]);
+
   const refresh = () => {
     fetch("/api/admin/freelancer-setup")
       .then((r) => r.json())
@@ -485,6 +491,14 @@ function FreelancerSetup() {
       .then((r) => r.json())
       .then((d) => setDepartments(Array.isArray(d) ? d : []))
       .catch(() => setDepartments([]));
+    fetch("/api/admin/operations-room")
+      .then((r) => r.json())
+      .then((d) => setOrMembers(Array.isArray(d) ? d : []))
+      .catch(() => setOrMembers([]));
+    fetch("/api/admin/users")
+      .then((r) => r.json())
+      .then((d) => setUsers(Array.isArray(d) ? d : []))
+      .catch(() => setUsers([]));
   };
 
   useEffect(() => { refresh(); }, []);
@@ -580,6 +594,31 @@ function FreelancerSetup() {
     finally { setDeleteDeptId(null); setLoading(false); }
   };
 
+  const addOrMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!orNewUserId.trim()) return;
+    setLoading(true); setMessage(null);
+    try {
+      const res = await fetch("/api/admin/operations-room", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: orNewUserId }) });
+      const data = await res.json();
+      if (res.ok) { refresh(); setOrNewUserId(""); setMessage({ type: "success", text: "Added to The Operations Room." }); }
+      else setMessage({ type: "error", text: data.error || "Failed." });
+    } catch { setMessage({ type: "error", text: "Connection error." }); }
+    finally { setLoading(false); }
+  };
+
+  const removeOrMember = async (id: string) => {
+    setLoading(true); setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/operations-room?id=${id}`, { method: "DELETE" });
+      if (res.ok) { refresh(); setMessage({ type: "success", text: "Removed from The Operations Room." }); }
+      else { const d = await res.json(); setMessage({ type: "error", text: d.error || "Failed." }); }
+    } catch { setMessage({ type: "error", text: "Connection error." }); }
+    finally { setLoading(false); }
+  };
+
+  const availableUsers = users.filter((u) => u.is_active !== false && !orMembers.some((m) => m.user_id === u.id));
+
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
@@ -634,6 +673,36 @@ function FreelancerSetup() {
       </div>
 
       <DepartmentManagersSection />
+
+      {/* The Operations Room */}
+      <div className="rounded-xl border border-gray-200 border-l-4 border-l-orange-500 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
+        <h2 className="mb-1 font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+          The Operations Room
+          <span className="text-xs font-normal text-gray-400">({orMembers.length})</span>
+        </h2>
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">Users assigned here can approve freelancer invoices when they are in The Operations Room stage. They see all freelancer invoices but can only act when the invoice is awaiting Operations Room approval.</p>
+        <form onSubmit={addOrMember} className="mb-4 flex gap-2">
+          <select value={orNewUserId} onChange={(e) => setOrNewUserId(e.target.value)} className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="">Select user to add</option>
+            {availableUsers.map((u) => (
+              <option key={u.id} value={u.id}>{u.full_name || u.id} {u.email ? `(${u.email})` : ""}</option>
+            ))}
+          </select>
+          <button type="submit" disabled={loading || !orNewUserId} className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50">Add</button>
+        </form>
+        <ul className="space-y-1 text-sm">
+          {orMembers.map((m) => (
+            <li key={m.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+              <span className="text-gray-800 dark:text-gray-200">{m.full_name}</span>
+              <button type="button" onClick={() => void removeOrMember(m.id)} className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-300" title="Remove">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </li>
+          ))}
+          {orMembers.length === 0 && <li className="text-gray-400 text-xs py-2">No members yet. Add users who will approve invoices at The Operations Room stage.</li>}
+        </ul>
+      </div>
 
       {FL_CATEGORIES.map((cat) => {
         const catItems = items.filter((i) => i.category === cat.key);

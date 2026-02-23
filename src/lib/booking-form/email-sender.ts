@@ -46,6 +46,10 @@ export async function sendBookingFormEmailA(
   pdfBuffer: ArrayBuffer,
   idempotencyKey: string
 ): Promise<{ success: boolean; messageId?: string; error?: unknown }> {
+  const to = (ctx.approverEmail || "").trim();
+  if (!to) {
+    return { success: false, error: "Approver email is empty - cannot send confirmation" };
+  }
   const subject = `${data.name} – ${data.month}`;
   const details = buildDetailsSection(data);
   const body = `
@@ -60,7 +64,7 @@ ${details}
 
   const filename = `BookingForm_${sanitizeFilenamePart(data.name)}_${sanitizeFilenamePart(data.month)}.pdf`;
   const result = await sendEmailWithAttachment({
-    to: ctx.approverEmail,
+    to,
     subject,
     html: wrapEmail(body),
     attachments: [{ filename, content: pdfBuffer }],

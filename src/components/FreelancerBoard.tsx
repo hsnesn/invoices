@@ -51,7 +51,7 @@ type NoteItem = { id: number; content: string; author_name: string; created_at: 
 const GROUPS: { key: GroupKey; label: string; color: string; headerBg: string; textColor: string }[] = [
   { key: "submitted", label: "Submitted Invoices", color: "border-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", textColor: "text-amber-700 dark:text-amber-400" },
   { key: "rejected", label: "Rejected Invoices", color: "border-rose-500", headerBg: "bg-rose-50 dark:bg-rose-950/30", textColor: "text-rose-700 dark:text-rose-400" },
-  { key: "admin_approvals", label: "Admin Approvals", color: "border-orange-500", headerBg: "bg-orange-50 dark:bg-orange-950/30", textColor: "text-orange-700 dark:text-orange-400" },
+  { key: "admin_approvals", label: "The Operations Room Approvals", color: "border-orange-500", headerBg: "bg-orange-50 dark:bg-orange-950/30", textColor: "text-orange-700 dark:text-orange-400" },
   { key: "ready_for_payment", label: "Ready for Payment", color: "border-sky-500", headerBg: "bg-sky-50 dark:bg-sky-950/30", textColor: "text-sky-700 dark:text-sky-400" },
   { key: "paid", label: "Paid Invoices", color: "border-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", textColor: "text-emerald-700 dark:text-emerald-400" },
 ];
@@ -81,6 +81,7 @@ const ALL_COLUMNS = [
   { key: "sortCode", label: "Sort Code" },
   { key: "istanbulTeam", label: "Istanbul Team" },
   { key: "deptManager", label: "Line Manager" },
+  { key: "bookingForm", label: "Booking Form" },
   { key: "actions", label: "" },
 ];
 
@@ -120,7 +121,7 @@ function daysSince(d: string) { return Math.floor((Date.now() - new Date(d).getT
 /* ------------------------------------------------------------------ */
 
 export function FreelancerBoard({
-  invoices, departmentPairs, profilePairs, managerProfilePairs, currentRole, currentUserId,
+  invoices, departmentPairs, profilePairs, managerProfilePairs, currentRole, currentUserId, isOperationsRoomMember = false,
 }: {
   invoices: FreelancerInvoiceRow[];
   departmentPairs: [string, string][];
@@ -128,6 +129,7 @@ export function FreelancerBoard({
   managerProfilePairs?: [string, string][];
   currentRole: string;
   currentUserId: string;
+  isOperationsRoomMember?: boolean;
 }) {
   const deptMap = useMemo(() => Object.fromEntries(departmentPairs), [departmentPairs]);
   const profMap = useMemo(() => Object.fromEntries(profilePairs), [profilePairs]);
@@ -408,6 +410,19 @@ export function FreelancerBoard({
     finally { setActionLoadingId(null); }
   }, []);
 
+  const viewBookingForm = useCallback(async (id: string, contractor: string, month: string) => {
+    try {
+      const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
+      if (!r.ok) { alert("Booking form could not be generated"); return; }
+      const blob = await r.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewUrl(blobUrl);
+      setPreviewHtml(null);
+      setPreviewName(`Booking_Form_${contractor.replace(/\s+/g, "_")}_${month}.pdf`);
+      setPreviewDownloadUrl(blobUrl);
+    } catch { alert("Error loading booking form"); }
+  }, []);
+
   const downloadBookingForm = useCallback(async (id: string, contractor: string, month: string) => {
     try {
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
@@ -422,6 +437,17 @@ export function FreelancerBoard({
       a.remove();
       URL.revokeObjectURL(url);
     } catch { alert("Error downloading booking form"); }
+  }, []);
+
+  const sendBookingFormEmails = useCallback(async (id: string) => {
+    setActionLoadingId(id);
+    try {
+      const r = await fetch(`/api/freelancer-invoices/${id}/booking-form/trigger`, { method: "POST" });
+      const d = await r.json().catch(() => null);
+      if (r.ok) alert(d?.skipped ? "Already sent (idempotent)" : "Booking form emails sent to Line Manager and London Operations.");
+      else alert(d?.error ?? "Failed to send booking form emails");
+    } catch { alert("Error sending booking form emails"); }
+    finally { setActionLoadingId(null); }
   }, []);
 
   /* ---------- Bulk operations ---------- */
@@ -550,8 +576,9 @@ export function FreelancerBoard({
     return false;
   };
   const canApprove = (r: DisplayRow) => {
-    if (r.submitterId === currentUserId && currentRole !== "admin") return false;
+    if (r.submitterId === currentUserId && currentRole !== "admin" && !isOperationsRoomMember) return false;
     if (currentRole === "admin") return true;
+    if (isOperationsRoomMember && (r.status === "approved_by_manager" || r.status === "pending_admin")) return true;
     if (currentRole === "manager" && r.deptManagerId === currentUserId) return true;
     return false;
   };
@@ -568,7 +595,7 @@ export function FreelancerBoard({
     const inp = (key: keyof EditDraft, type = "text") => <input type={type} value={editDraft?.[key] ?? ""} onChange={e => onChangeDraft(key, e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />;
     const isSubmitter = r.submitterId === currentUserId;
     switch (col) {
-      case "status": return <StatusCell r={r} canApprove={canApprove(r)} isSubmitter={isSubmitter} currentRole={currentRole} actionLoadingId={actionLoadingId} onManagerApprove={onManagerApprove} onAdminApprove={onAdminApprove} onResubmit={onResubmit} onMarkPaid={onMarkPaid} openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }} />;
+      case "status": return <StatusCell r={r} canApprove={canApprove(r)} isSubmitter={isSubmitter} currentRole={currentRole} isOperationsRoomMember={isOperationsRoomMember} actionLoadingId={actionLoadingId} onManagerApprove={onManagerApprove} onAdminApprove={onAdminApprove} onResubmit={onResubmit} onMarkPaid={onMarkPaid} openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }} />;
       case "contractor": return isEditing ? inp("contractor") : <span className="font-medium">{r.contractor}{r.status === "rejected" && r.rejectionReason && <div className="mt-1 rounded bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300"><span className="font-semibold">Rejection:</span> {r.rejectionReason}</div>}</span>;
       case "submittedBy": return <SubmitterBadge name={r.submittedBy} />;
       case "companyName": return isEditing ? inp("companyName") : r.companyName;
@@ -605,11 +632,26 @@ export function FreelancerBoard({
       case "serviceDescription": return isEditing ? inp("serviceDescription") : <span className="max-w-[180px] truncate block" title={r.serviceDescription}>{r.serviceDescription}</span>;
       case "additionalCostReason": return isEditing ? inp("additionalCostReason") : r.additionalCostReason;
       case "deptManager": return isEditing && currentRole === "admin" ? <select value={editDraft?.deptManagerId ?? ""} onChange={e => onChangeDraft("deptManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{(managerProfilePairs ?? profilePairs).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : r.deptManager;
+      case "bookingForm": {
+        const hasBookingForm = ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
+        if (!hasBookingForm) return <span className="text-gray-400">—</span>;
+        return (
+          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+            <button onClick={() => void viewBookingForm(r.id, r.contractor, r.month)} className="rounded bg-indigo-600 px-2 py-0.5 text-xs text-white hover:bg-indigo-500 flex items-center gap-1" title="View Booking Form">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              View
+            </button>
+            <button onClick={() => void downloadBookingForm(r.id, r.contractor, r.month)} className="rounded bg-slate-600 px-2 py-0.5 text-xs text-white hover:bg-slate-500" title="Download Booking Form">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+            </button>
+          </div>
+        );
+      }
       case "actions": {
         if (editingId === r.id) return <div className="flex items-center gap-1"><span className="text-xs text-blue-600">Editing{r.status === "rejected" ? " (will resubmit)" : ""}</span><button onClick={e => { e.stopPropagation(); onCancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600">✕</button></div>;
         const canRS = r.status === "rejected" && (isSubmitter || currentRole === "admin");
-        const hasBookingForm = ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
-        return <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>{canRS && <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50">{actionLoadingId === r.id ? "…" : "↻ Resubmit"}</button>}{hasBookingForm && <button onClick={() => void downloadBookingForm(r.id, r.contractor, r.month)} className="rounded bg-indigo-600 px-2 py-0.5 text-xs text-white hover:bg-indigo-500 flex items-center gap-1" title="Download Booking Form"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>Booking Form</button>}</div>;
+        const canSendEmails = currentRole === "admin" && ["ready_for_payment", "paid", "archived"].includes(r.status);
+        return <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>{canRS && <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50">{actionLoadingId === r.id ? "…" : "↻ Resubmit"}</button>}{canSendEmails && <button onClick={() => void sendBookingFormEmails(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-violet-600 px-2 py-0.5 text-xs text-white hover:bg-violet-500 disabled:opacity-50" title="Send Booking Form emails to Line Manager and London Operations">{actionLoadingId === r.id ? "…" : "📧 Send"}</button>}</div>;
       }
       default: return "—";
     }
@@ -751,7 +793,7 @@ export function FreelancerBoard({
                               </div>
                             </td>
                             {COLUMNS.map(c => {
-                              const noEdit = ["status", "files", "submittedBy", "submissionDate", "invoiceAmount", "amount", "actions"].includes(c.key);
+                              const noEdit = ["status", "files", "submittedBy", "submissionDate", "invoiceAmount", "amount", "actions", "bookingForm"].includes(c.key);
                               return (
                                 <td key={c.key} className={`px-3 py-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap${!noEdit ? editTdCls : ""}`} onDoubleClick={!noEdit && editable && !isEditing ? e => { e.stopPropagation(); e.preventDefault(); handleRowDblClick(); onStartEdit(r); } : undefined}>
                                   {renderCell(r, c.key, isEditing)}
@@ -855,16 +897,18 @@ function unwrap<T>(v: T[] | T | null | undefined): T | null {
   return v;
 }
 
-function StatusCell({ r, canApprove, isSubmitter, currentRole, actionLoadingId, onManagerApprove, onAdminApprove, onResubmit, onMarkPaid, openRejectModal }: {
-  r: DisplayRow; canApprove: boolean; isSubmitter: boolean; currentRole: string; actionLoadingId: string | null;
+function StatusCell({ r, canApprove, isSubmitter, currentRole, isOperationsRoomMember, actionLoadingId, onManagerApprove, onAdminApprove, onResubmit, onMarkPaid, openRejectModal }: {
+  r: DisplayRow; canApprove: boolean; isSubmitter: boolean; currentRole: string; isOperationsRoomMember: boolean; actionLoadingId: string | null;
   onManagerApprove: (id: string) => void; onAdminApprove: (id: string) => void; onResubmit: (id: string) => void; onMarkPaid: (id: string) => void; openRejectModal: (id: string) => void;
 }) {
   const loading = actionLoadingId === r.id;
   const btn = (fn: () => void, title: string, label: string, cls: string) => <button onClick={fn} disabled={loading} title={title} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-white disabled:opacity-50 transition-colors shadow-sm ${cls}`}>{loading ? "…" : label}</button>;
+  const canOpsRoomApprove = isOperationsRoomMember && (r.status === "approved_by_manager" || r.status === "pending_admin");
+  const canAdminApprove = currentRole === "admin" && (r.status === "approved_by_manager" || r.status === "pending_admin");
 
   if (r.status === "pending_manager" && canApprove) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onManagerApprove(r.id), "Approve", "✓", "bg-amber-400 hover:bg-emerald-500")}{btn(() => openRejectModal(r.id), "Reject", "✗", "bg-amber-400 hover:bg-red-500")}</div>;
-  if ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin") return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onAdminApprove(r.id), "Admin Approve", "✓", "bg-orange-400 hover:bg-emerald-500")}{btn(() => openRejectModal(r.id), "Reject", "✗", "bg-orange-400 hover:bg-red-500")}</div>;
-  if ((r.status === "approved_by_manager" || r.status === "pending_admin")) return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-orange-600 shadow-sm" title="Awaiting Admin">○</span>;
+  if ((canAdminApprove || canOpsRoomApprove) && canApprove) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onAdminApprove(r.id), canOpsRoomApprove ? "Approve" : "Admin Approve", "✓", "bg-orange-400 hover:bg-emerald-500")}{currentRole === "admin" && btn(() => openRejectModal(r.id), "Reject", "✗", "bg-orange-400 hover:bg-red-500")}</div>;
+  if ((r.status === "approved_by_manager" || r.status === "pending_admin")) return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-orange-600 shadow-sm" title="The Operations Room">○</span>;
   if (r.status === "rejected") return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}><span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title={r.rejectionReason || "Rejected"}>✗</span>{(isSubmitter || currentRole === "admin") && btn(() => onResubmit(r.id), "Resubmit", "↻", "bg-emerald-500 hover:bg-emerald-600 text-sm")}</div>;
   if (r.status === "ready_for_payment" && (currentRole === "admin" || currentRole === "finance")) return <div onClick={e => e.stopPropagation()}>{btn(() => onMarkPaid(r.id), "Mark Paid", "£", "bg-emerald-100 text-emerald-600 hover:bg-emerald-500 hover:text-white")}</div>;
   if (r.status === "paid" || r.status === "archived") return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm" title="Paid">✓</span>;
