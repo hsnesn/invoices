@@ -164,6 +164,26 @@ export async function POST(
           const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
           const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
           const approvedAt = new Date();
+
+          // Send manager-approved email to submitter + admin (before booking form workflow)
+          const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
+          const adminProfiles = await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true);
+          const adminEmails: string[] = [];
+          for (const p of adminProfiles.data ?? []) {
+            const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
+            if (u?.email) adminEmails.push(u.email);
+          }
+          if (submitterUser?.email) {
+            await sendManagerApprovedEmail({
+              submitterEmail: submitterUser.email,
+              adminEmails,
+              invoiceId,
+              invoiceNumber: extracted?.invoice_number ?? undefined,
+              managerName: approverProfile.data?.full_name ?? undefined,
+            });
+          }
+
+          // Form created first, then booking form emails (A + B) sent by workflow
           void triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
@@ -278,6 +298,24 @@ export async function POST(
           const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
           const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
           const approvedAt = new Date();
+
+          const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
+          const adminProfiles = await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true);
+          const adminEmails: string[] = [];
+          for (const p of adminProfiles.data ?? []) {
+            const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
+            if (u?.email) adminEmails.push(u.email);
+          }
+          if (submitterUser?.email) {
+            await sendManagerApprovedEmail({
+              submitterEmail: submitterUser.email,
+              adminEmails,
+              invoiceId,
+              invoiceNumber: extracted?.invoice_number ?? undefined,
+              managerName: approverProfile.data?.full_name ?? undefined,
+            });
+          }
+
           void triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
@@ -413,20 +451,30 @@ export async function POST(
           .from("invoice_workflows")
           .update({ status: "archived" })
           .eq("invoice_id", invoiceId);
-      } else if (to_status === "pending_manager" && fromStatus === "rejected") {
+      } else if (to_status === "pending_manager") {
+        const validFromForResubmit = ["rejected"];
+        const validFromForMoveBack = ["ready_for_payment", "approved_by_manager", "pending_admin"];
+        if (!validFromForResubmit.includes(fromStatus) && !validFromForMoveBack.includes(fromStatus)) {
+          return NextResponse.json(
+            { error: "Invalid transition to pending_manager" },
+            { status: 400 }
+          );
+        }
         await supabase
           .from("invoice_workflows")
           .update({
             status: "pending_manager",
-            rejection_reason: null,
+            ...(fromStatus === "rejected" ? { rejection_reason: null } : {}),
           })
           .eq("invoice_id", invoiceId);
 
-        const managerProfiles = await supabase.from("profiles").select("id").eq("role", "manager").eq("is_active", true);
-        const managerEmails: string[] = [];
-        for (const p of managerProfiles.data ?? []) { const u = (await supabase.auth.admin.getUserById(p.id)).data?.user; if (u?.email) managerEmails.push(u.email); }
-        if (wf.manager_user_id) { const mUser = (await supabase.auth.admin.getUserById(wf.manager_user_id)).data?.user; if (mUser?.email) managerEmails.push(mUser.email); }
-        await sendResubmittedEmail({ managerEmails: Array.from(new Set(managerEmails)), invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined });
+        if (fromStatus === "rejected") {
+          const managerProfiles = await supabase.from("profiles").select("id").eq("role", "manager").eq("is_active", true);
+          const managerEmails: string[] = [];
+          for (const p of managerProfiles.data ?? []) { const u = (await supabase.auth.admin.getUserById(p.id)).data?.user; if (u?.email) managerEmails.push(u.email); }
+          if (wf.manager_user_id) { const mUser = (await supabase.auth.admin.getUserById(wf.manager_user_id)).data?.user; if (mUser?.email) managerEmails.push(mUser.email); }
+          await sendResubmittedEmail({ managerEmails: Array.from(new Set(managerEmails)), invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined });
+        }
       } else {
         return NextResponse.json({ error: "Invalid admin action" }, { status: 400 });
       }

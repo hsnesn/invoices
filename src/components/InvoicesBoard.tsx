@@ -274,6 +274,8 @@ function InvoiceTable({
   onResubmit,
   onMarkPaid,
   onDeleteInvoice,
+  onMoveToLineManager,
+  onMoveToArchived,
   onReplaceFile,
   openPdf,
   editingId,
@@ -312,6 +314,8 @@ function InvoiceTable({
   onResubmit: (id: string) => Promise<void>;
   onMarkPaid: (id: string) => Promise<void>;
   onDeleteInvoice: (id: string) => Promise<void>;
+  onMoveToLineManager: (id: string) => Promise<void>;
+  onMoveToArchived: (id: string) => Promise<void>;
   onReplaceFile: (id: string, file: File) => Promise<void>;
   openPdf: (id: string) => Promise<void>;
   editingId: string | null;
@@ -532,6 +536,7 @@ function InvoiceTable({
                   }
 
                   if (managerOrAdmin) {
+                    const inPaymentStage = ["ready_for_payment", "approved_by_manager", "pending_admin"].includes(r.status);
                     return (
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
@@ -539,6 +544,19 @@ function InvoiceTable({
                           <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 shadow-sm">
                             {actionLoadingId === r.id ? "..." : "Resubmit"}
                           </button>
+                        )}
+                        {currentRole === "admin" && inPaymentStage && (
+                          <>
+                            <button onClick={() => void onRejectInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm" title="Reject (reason required)">
+                              Move to Rejected
+                            </button>
+                            <button onClick={() => void onMoveToLineManager(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 shadow-sm">
+                              Move to Line Manager
+                            </button>
+                            <button onClick={() => void onMoveToArchived(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 shadow-sm dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+                              Move to Archived
+                            </button>
+                          </>
                         )}
                         {currentRole === "admin" && (
                           <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
@@ -1090,6 +1108,48 @@ export function InvoicesBoard({
       });
       if (res.ok) {
         window.location.reload();
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const onMoveToLineManager = async (invoiceId: string) => {
+    const ok = window.confirm("Move this invoice back to Pending Line Manager for re-review?");
+    if (!ok) return;
+    setActionLoadingId(invoiceId);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to_status: "pending_manager" }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const data = await res.json().catch(() => null);
+        alert(data?.error ?? "Failed to move");
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const onMoveToArchived = async (invoiceId: string) => {
+    const ok = window.confirm("Move this invoice to Archived?");
+    if (!ok) return;
+    setActionLoadingId(invoiceId);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to_status: "archived" }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const data = await res.json().catch(() => null);
+        alert(data?.error ?? "Failed to move");
       }
     } finally {
       setActionLoadingId(null);
@@ -1854,6 +1914,8 @@ export function InvoicesBoard({
               onResubmit={onResubmit}
               onMarkPaid={onMarkPaid}
               onDeleteInvoice={onDeleteInvoice}
+              onMoveToLineManager={onMoveToLineManager}
+              onMoveToArchived={onMoveToArchived}
               onReplaceFile={onReplaceFile}
               openPdf={openPdf}
               editingId={editingId}
