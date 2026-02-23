@@ -83,18 +83,25 @@ export async function POST(request: NextRequest) {
     });
 
     const magicLink = linkData?.properties?.action_link;
+    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
+
     const resend = getResend();
-    if (magicLink && resend) {
-      const inviterName = profile.full_name || "An administrator";
-      await resend.emails.send({
-        from: FROM_EMAIL, to: email,
-        subject: `You're invited to ${APP_NAME}`,
-        html: invitationEmailHtml(inviterName, full_name || "", role, magicLink),
-      });
+    if (!resend) return NextResponse.json({ error: "Email not configured. Set RESEND_API_KEY in environment variables." }, { status: 500 });
+
+    const inviterName = profile.full_name || "An administrator";
+    const { data: emailData, error: emailError } = await resend.emails.send({
+      from: FROM_EMAIL, to: email,
+      subject: `You're invited to ${APP_NAME}`,
+      html: invitationEmailHtml(inviterName, full_name || "", role, magicLink),
+    });
+
+    if (emailError) {
+      console.error("Resend invite error:", emailError);
+      return NextResponse.json({ error: `Email failed: ${emailError.message}` }, { status: 500 });
     }
 
-    await createAuditEvent({ actor_user_id: profile.id, event_type: "user_invited", payload: { email, role, invitation_id: inv.id } });
-    return NextResponse.json({ success: true, invitation: inv });
+    await createAuditEvent({ actor_user_id: profile.id, event_type: "user_invited", payload: { email, role, invitation_id: inv.id, resend_id: emailData?.id } });
+    return NextResponse.json({ success: true, invitation: inv, resend_id: emailData?.id });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
@@ -133,14 +140,21 @@ export async function PATCH(request: NextRequest) {
     });
 
     const magicLink = linkData?.properties?.action_link;
+    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
+
     const resend = getResend();
-    if (magicLink && resend) {
-      const inviterName = profile.full_name || "An administrator";
-      await resend.emails.send({
-        from: FROM_EMAIL, to: email,
-        subject: `Reminder: You're invited to ${APP_NAME}`,
-        html: invitationEmailHtml(inviterName, inv.full_name || "", inv.role, magicLink),
-      });
+    if (!resend) return NextResponse.json({ error: "Email not configured. Set RESEND_API_KEY in environment variables." }, { status: 500 });
+
+    const inviterName = profile.full_name || "An administrator";
+    const { error: emailError } = await resend.emails.send({
+      from: FROM_EMAIL, to: email,
+      subject: `Reminder: You're invited to ${APP_NAME}`,
+      html: invitationEmailHtml(inviterName, inv.full_name || "", inv.role, magicLink),
+    });
+
+    if (emailError) {
+      console.error("Resend resend-invite error:", emailError);
+      return NextResponse.json({ error: `Email failed: ${emailError.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

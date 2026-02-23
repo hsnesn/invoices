@@ -84,7 +84,12 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
     const data = await res.json();
     setLoading(false);
     if (res.ok) {
-      setMessage({ type: "success", text: "Invitation sent." });
+      setMessage({
+        type: "success",
+        text: data.resend_id
+          ? "Invitation sent. If not received, check spam or Resend dashboard."
+          : "Invitation sent.",
+      });
       setInviteEmail("");
       setInviteName("");
       fetch("/api/invitations").then((r) => r.json()).then(setInvitations);
@@ -206,7 +211,23 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
 
       {/* Invite */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Invite User</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Invite User</h2>
+          <button
+            type="button"
+            onClick={async () => {
+              const res = await fetch("/api/email-status");
+              const d = await res.json();
+              setMessage({
+                type: d.hasResendKey && !d.fromEmail.includes("gmail") && !d.fromEmail.includes("example") ? "success" : "error",
+                text: `Key: ${d.hasResendKey ? "✓" : "✗"} | From: ${d.fromEmail} | ${d.hint}`,
+              });
+            }}
+            className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Check email config
+          </button>
+        </div>
         <form onSubmit={handleInvite} className="flex flex-wrap items-end gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
@@ -252,6 +273,31 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
             {loading ? "Sending…" : "Invite"}
           </button>
         </form>
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
+          <span className="text-sm text-gray-500 dark:text-gray-400">Test email:</span>
+          <input
+            type="email"
+            id="test-email"
+            placeholder="your@email.com"
+            className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              const el = document.getElementById("test-email") as HTMLInputElement;
+              const email = el?.value?.trim();
+              if (!email) { setMessage({ type: "error", text: "Enter an email to test" }); return; }
+              setMessage(null);
+              const res = await fetch(`/api/invite/test?email=${encodeURIComponent(email)}`);
+              const data = await res.json();
+              if (res.ok) setMessage({ type: "success", text: `Test email sent to ${email}. Check inbox and spam.` });
+              else setMessage({ type: "error", text: data.error || "Failed" });
+            }}
+            className="rounded bg-gray-600 px-3 py-1 text-xs font-medium text-white hover:bg-gray-500"
+          >
+            Send test
+          </button>
+        </div>
       </div>
 
       {message && (

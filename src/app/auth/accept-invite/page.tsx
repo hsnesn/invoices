@@ -37,13 +37,16 @@ export default function AcceptInvitePage() {
     setLoading(true);
     const supabase = createClient();
     const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       setMessage({ type: "error", text: error.message });
       return;
     }
 
+    // Mark invitation as accepted only after password is set
+    await fetch("/api/invite/accept", { method: "POST" });
+
+    setLoading(false);
     setMessage({ type: "success", text: "Welcome! Redirecting to your dashboard..." });
     setTimeout(() => router.push("/dashboard"), 1500);
   };
