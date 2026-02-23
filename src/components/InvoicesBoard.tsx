@@ -650,7 +650,7 @@ function InvoiceTable({
                               {timelineData.map((ev) => {
                                 const changes = (ev.payload as Record<string, unknown>)?.changes as Record<string, { from: string; to: string }> | undefined;
                                 const hasChanges = changes && Object.keys(changes).length > 0;
-                                const eventIcon = ev.event_type === "invoice_updated" ? "bg-amber-400" : ev.event_type.includes("reject") ? "bg-red-400" : ev.event_type.includes("approv") ? "bg-green-400" : ev.event_type.includes("paid") ? "bg-purple-400" : "bg-blue-400";
+                                const eventIcon = ev.event_type === "invoice_updated" ? "bg-amber-400" : ev.event_type === "invoice_extracted" ? "bg-cyan-400" : ev.event_type.includes("reject") ? "bg-red-400" : ev.event_type.includes("approv") ? "bg-green-400" : ev.event_type.includes("paid") ? "bg-purple-400" : "bg-blue-400";
 
                                 const deptMap = Object.fromEntries(departmentPairs);
                                 const progMap = Object.fromEntries(programPairs);

@@ -921,7 +921,45 @@ export function FreelancerBoard({
                                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                   <div>
                                     <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h4>
-                                    {timelineData.length === 0 ? <p className="text-xs text-gray-400">No events yet.</p> : <div className="space-y-2 max-h-60 overflow-y-auto">{timelineData.map(ev => { const ch = (ev.payload as Record<string, unknown>)?.changes as Record<string, { from: string; to: string }> | undefined; const hc = ch && Object.keys(ch).length > 0; const ic = ev.event_type === "invoice_updated" ? "bg-amber-400" : ev.event_type.includes("reject") ? "bg-red-400" : ev.event_type.includes("approv") ? "bg-green-400" : ev.event_type.includes("paid") ? "bg-purple-400" : "bg-blue-400"; return (<div key={ev.id} className="flex items-start gap-2 text-xs"><div className={`mt-0.5 h-2 w-2 rounded-full ${ic} flex-shrink-0`} /><div className="flex-1 min-w-0"><span className="font-medium text-gray-700 dark:text-gray-300">{ev.actor_name}</span><span className="text-gray-500"> — {ev.event_type.replace(/_/g, " ")}</span>{ev.from_status && ev.to_status && <span className="text-gray-400"> ({ev.from_status} → {ev.to_status})</span>}{ev.payload && typeof (ev.payload as Record<string, string>).rejection_reason === "string" && <span className="text-red-600"> — {(ev.payload as Record<string, string>).rejection_reason}</span>}{hc && <div className="mt-1 space-y-0.5 rounded bg-gray-50 border border-gray-200 px-2 py-1.5 dark:bg-gray-800 dark:border-gray-700">{Object.entries(ch!).map(([f, { from, to }]) => <div key={f} className="flex items-center gap-1 text-[11px]"><span className="font-medium text-gray-600 capitalize dark:text-gray-400">{f.replace(/_/g, " ")}:</span><span className="text-red-500 line-through">{from || "—"}</span><span className="text-gray-400">→</span><span className="text-green-600 font-medium">{to || "—"}</span></div>)}</div>}<div className="text-gray-400 mt-0.5">{new Date(ev.created_at).toLocaleString("en-GB")}</div></div></div>); })}</div>}
+                                    {timelineData.length === 0 ? <p className="text-xs text-gray-400">No events yet.</p> : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                                      {timelineData.map(ev => {
+                                        const ch = (ev.payload as Record<string, unknown>)?.changes as Record<string, { from: string; to: string }> | undefined;
+                                        const hc = ch && Object.keys(ch).length > 0;
+                                        const ic = ev.event_type === "invoice_updated" ? "bg-amber-400" : ev.event_type === "invoice_extracted" ? "bg-cyan-400" : ev.event_type.includes("reject") ? "bg-red-400" : ev.event_type.includes("approv") ? "bg-green-400" : ev.event_type.includes("paid") ? "bg-purple-400" : "bg-blue-400";
+                                        const resolveVal = (field: string, val: string) => {
+                                          if (!val || val === "—" || val === "Unassigned") return val;
+                                          if (field === "Department" || field === "department_id") return deptMap[val] ?? val;
+                                          if (field === "Manager" || field === "deptManagerId") return profMap[val] ?? val;
+                                          return val;
+                                        };
+                                        return (
+                                          <div key={ev.id} className="flex items-start gap-2 text-xs">
+                                            <div className={`mt-0.5 h-2 w-2 rounded-full ${ic} flex-shrink-0`} />
+                                            <div className="flex-1 min-w-0">
+                                              <span className="font-medium text-gray-700 dark:text-gray-300">{ev.actor_name}</span>
+                                              <span className="text-gray-500"> — {ev.event_type.replace(/_/g, " ")}</span>
+                                              {ev.from_status && ev.to_status && <span className="text-gray-400"> ({ev.from_status} → {ev.to_status})</span>}
+                                              {ev.payload && typeof (ev.payload as Record<string, string>).rejection_reason === "string" && <span className="text-red-600"> — {(ev.payload as Record<string, string>).rejection_reason}</span>}
+                                              {hc && (
+                                                <div className="mt-1 space-y-0.5 rounded bg-gray-50 border border-gray-200 px-2 py-1.5 dark:bg-gray-800 dark:border-gray-700">
+                                                  {Object.entries(ch!).map(([f, { from, to }]) => (
+                                                    <div key={f} className="flex items-center gap-1 text-[11px]">
+                                                      <span className="font-medium text-gray-600 capitalize dark:text-gray-400">{f.replace(/_/g, " ")}:</span>
+                                                      <span className="text-red-500 line-through">{resolveVal(f, from) || "—"}</span>
+                                                      <span className="text-gray-400">→</span>
+                                                      <span className="text-green-600 font-medium">{resolveVal(f, to) || "—"}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              <div className="text-gray-400 mt-0.5">{new Date(ev.created_at).toLocaleString("en-GB")}</div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    )}
                                   </div>
                                   <div>
                                     <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Notes</h4>

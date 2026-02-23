@@ -28,12 +28,12 @@ export default function FreelancerSubmitPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [department2, setDepartment2] = useState("");
   const [bookedBy, setBookedBy] = useState("");
-  const [serviceDaysCount, setServiceDaysCount] = useState("");
   const [serviceMonth, setServiceMonth] = useState("");
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set());
   const [serviceRatePerDay, setServiceRatePerDay] = useState("");
   const [additionalCost, setAdditionalCost] = useState("");
   const [additionalCostReason, setAdditionalCostReason] = useState("");
+  const [additionalCostReasonCustom, setAdditionalCostReasonCustom] = useState("");
   const [submissionDate] = useState(today);
   const [currency, setCurrency] = useState("GBP");
   const [files, setFiles] = useState<File[]>([]);
@@ -56,8 +56,10 @@ export default function FreelancerSubmitPage() {
     });
   };
 
+  const serviceDaysCountAuto = selectedDays.size;
+
   const computedAmount = (() => {
-    const days = parseFloat(serviceDaysCount) || 0;
+    const days = serviceDaysCountAuto;
     const rate = parseFloat(serviceRatePerDay) || 0;
     const add = parseFloat(additionalCost) || 0;
     return days * rate + add;
@@ -80,12 +82,12 @@ export default function FreelancerSubmitPage() {
     fd.append("department_2", department2);
     fd.append("istanbul_team", "");
     fd.append("service_description", serviceDescription);
-    fd.append("service_days_count", serviceDaysCount);
+    fd.append("service_days_count", String(serviceDaysCountAuto));
     fd.append("service_days", Array.from(selectedDays).sort((a, b) => a - b).join(", "));
     fd.append("service_rate_per_day", serviceRatePerDay);
     fd.append("service_month", serviceMonth);
     fd.append("additional_cost", additionalCost);
-    fd.append("additional_cost_reason", additionalCostReason);
+    fd.append("additional_cost_reason", additionalCostReasonCustom.trim() || additionalCostReason);
     fd.append("booked_by", bookedBy);
     fd.append("currency", currency);
 
@@ -164,7 +166,8 @@ export default function FreelancerSubmitPage() {
         {/* 6. Number of service delivery days */}
         <div>
           <label className={labelCls}>6. Number of service delivery days <span className="text-red-500">*</span></label>
-          <input type="number" min={0} value={serviceDaysCount} onChange={(e) => setServiceDaysCount(e.target.value)} className={inputCls} required />
+          <p className={hintCls}>Automatically calculated from selected days (section 8)</p>
+          <input type="number" min={0} value={serviceDaysCountAuto} readOnly className={inputCls + " bg-gray-50 dark:bg-gray-700 cursor-not-allowed"} tabIndex={-1} aria-readonly />
         </div>
 
         {/* 7. Month */}
@@ -223,6 +226,9 @@ export default function FreelancerSubmitPage() {
             <option value="">None</option>
             {costReasons.map((r) => <option key={r.id} value={r.value}>{r.value}</option>)}
           </select>
+          <p className={hintCls}>Or enter custom text (max 75 characters)</p>
+          <input value={additionalCostReasonCustom} onChange={(e) => setAdditionalCostReasonCustom(e.target.value.slice(0, 75))} placeholder="Custom reason..." maxLength={75} className={inputCls + " mt-1"} />
+          {additionalCostReasonCustom.length > 0 && <p className="text-right text-[11px] text-gray-400 mt-0.5">{additionalCostReasonCustom.length}/75</p>}
         </div>
 
         {/* Computed Amount */}
@@ -231,7 +237,7 @@ export default function FreelancerSubmitPage() {
             <span className="text-sm font-medium text-teal-700 dark:text-teal-400">Computed Amount</span>
             <span className="text-lg font-bold text-teal-800 dark:text-teal-300">£{computedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span>
           </div>
-          <p className="text-xs text-teal-600 dark:text-teal-500 mt-1">({serviceDaysCount || 0} days × £{serviceRatePerDay || 0}/day) + £{additionalCost || 0} additional</p>
+          <p className="text-xs text-teal-600 dark:text-teal-500 mt-1">({serviceDaysCountAuto} days × £{serviceRatePerDay || 0}/day) + £{additionalCost || 0} additional</p>
         </div>
 
         {/* 12. Submission Date */}

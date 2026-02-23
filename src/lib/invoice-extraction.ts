@@ -259,6 +259,28 @@ Rules:
   const invoiceNumberEmpty = !parsed.invoice_number?.trim();
   const needsReview = Boolean(extractionError) || !amountsOk || invoiceNumberEmpty;
 
+  const { data: oldExtracted } = await supabase
+    .from("invoice_extracted_fields")
+    .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, invoice_date")
+    .eq("invoice_id", invoiceId)
+    .single();
+
+  const toStr = (v: unknown): string => (v != null && v !== "" ? String(v).trim() : "");
+  const extFields: [string, string, (p: typeof parsed) => string | null, (o: typeof oldExtracted) => string][] = [
+    ["Account Name", "beneficiary_name", (p) => p.beneficiary_name ?? null, (o) => toStr(o?.beneficiary_name)],
+    ["Account Number", "account_number", (p) => p.account_number ?? null, (o) => toStr(o?.account_number)],
+    ["Sort Code", "sort_code", (p) => (p.sort_code ? (normalizeSortCode(p.sort_code) ?? p.sort_code) : null), (o) => toStr(o?.sort_code)],
+    ["Invoice Number", "invoice_number", (p) => p.invoice_number ?? null, (o) => toStr(o?.invoice_number)],
+    ["Amount", "gross_amount", (p) => (p.gross_amount != null ? String(p.gross_amount) : null), (o) => toStr(o?.gross_amount)],
+    ["Invoice Date", "invoice_date", (p) => p.invoice_date ?? null, (o) => toStr(o?.invoice_date)],
+  ];
+  const extractionChanges: Record<string, { from: string; to: string }> = {};
+  for (const [label, , getNew, getOld] of extFields) {
+    const oldVal = getOld(oldExtracted);
+    const newVal = toStr(getNew(parsed));
+    if (newVal && oldVal !== newVal) extractionChanges[label] = { from: oldVal || "—", to: newVal };
+  }
+
   const { error: upsertError } = await supabase.from("invoice_extracted_fields").upsert(
     {
       invoice_id: invoiceId,
@@ -290,7 +312,7 @@ Rules:
     invoice_id: invoiceId,
     actor_user_id: actorUserId,
     event_type: "invoice_extracted",
-    payload: { needs_review: needsReview },
+    payload: { needs_review: needsReview, changes: Object.keys(extractionChanges).length > 0 ? extractionChanges : undefined },
   });
 
   return { needs_review: needsReview, warning: extractionError ?? undefined };

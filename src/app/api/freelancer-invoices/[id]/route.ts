@@ -39,6 +39,84 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const { data: oldFl } = await supabase
+      .from("freelancer_invoice_fields")
+      .select("contractor_name, company_name, service_description, service_days_count, service_days, service_rate_per_day, service_month, additional_cost, additional_cost_reason, booked_by, department_2, istanbul_team")
+      .eq("invoice_id", invoiceId)
+      .single();
+    const { data: oldExt } = await supabase
+      .from("invoice_extracted_fields")
+      .select("invoice_number, beneficiary_name, account_number, sort_code, gross_amount")
+      .eq("invoice_id", invoiceId)
+      .single();
+
+    const toStr = (v: unknown): string => (v != null && v !== "" ? String(v).trim() : "—");
+    const flLabelMap: Record<string, string> = {
+      contractor: "Contractor",
+      companyName: "Company Name",
+      serviceDescription: "Service Description",
+      serviceDaysCount: "Service Days",
+      days: "Days",
+      serviceRate: "Rate/Day",
+      month: "Month",
+      additionalCost: "Additional Cost",
+      additionalCostReason: "Add. Cost Reason",
+      bookedBy: "Booked By",
+      department2: "Department 2",
+      istanbulTeam: "Istanbul Team",
+      departmentId: "Department",
+      invNumber: "Inv Number",
+      beneficiary: "Beneficiary",
+      accountNumber: "Account Number",
+      sortCode: "Sort Code",
+      amount: "Amount",
+      deptManagerId: "Manager",
+    };
+    const changes: Record<string, { from: string; to: string }> = {};
+
+    if (body.departmentId !== undefined) {
+      const o = toStr(existing.department_id);
+      const n = toStr(body.departmentId);
+      if (o !== n) changes["Department"] = { from: o, to: n };
+    }
+    for (const key of ["contractor", "companyName", "serviceDescription", "serviceDaysCount", "days", "serviceRate", "month", "additionalCost", "additionalCostReason", "bookedBy", "department2", "istanbulTeam"]) {
+      if (body[key] === undefined) continue;
+      const dbKey = key === "contractor" ? "contractor_name" : key === "companyName" ? "company_name" : key === "serviceDescription" ? "service_description" : key === "serviceDaysCount" ? "service_days_count" : key === "days" ? "service_days" : key === "serviceRate" ? "service_rate_per_day" : key === "month" ? "service_month" : key === "additionalCost" ? "additional_cost" : key === "additionalCostReason" ? "additional_cost_reason" : key === "bookedBy" ? "booked_by" : key === "department2" ? "department_2" : "istanbul_team";
+      const o = toStr((oldFl as Record<string, unknown>)?.[dbKey]);
+      const n = key === "serviceDaysCount" || key === "serviceRate" || key === "additionalCost" ? toStr(body[key] != null ? String(body[key]) : "") : toStr(body[key]);
+      if (o !== n) changes[flLabelMap[key]] = { from: o, to: n };
+    }
+    if (body.invNumber !== undefined) {
+      const o = toStr((oldExt as Record<string, unknown>)?.["invoice_number"]);
+      const n = toStr(body.invNumber);
+      if (o !== n) changes["Inv Number"] = { from: o, to: n };
+    }
+    if (body.beneficiary !== undefined) {
+      const o = toStr((oldExt as Record<string, unknown>)?.["beneficiary_name"]);
+      const n = toStr(body.beneficiary);
+      if (o !== n) changes["Beneficiary"] = { from: o, to: n };
+    }
+    if (body.accountNumber !== undefined) {
+      const o = toStr((oldExt as Record<string, unknown>)?.["account_number"]);
+      const n = toStr(body.accountNumber);
+      if (o !== n) changes["Account Number"] = { from: o, to: n };
+    }
+    if (body.sortCode !== undefined) {
+      const o = toStr((oldExt as Record<string, unknown>)?.["sort_code"]);
+      const n = toStr(body.sortCode);
+      if (o !== n) changes["Sort Code"] = { from: o, to: n };
+    }
+    if (body.amount !== undefined) {
+      const o = toStr((oldExt as Record<string, unknown>)?.["gross_amount"]);
+      const n = toStr(body.amount != null ? String(body.amount) : "");
+      if (o !== n) changes["Amount"] = { from: o, to: n };
+    }
+    if (body.deptManagerId !== undefined && profile.role === "admin") {
+      const o = toStr((wf as Record<string, unknown> | null)?.manager_user_id) === "—" ? "Unassigned" : toStr((wf as Record<string, unknown> | null)?.manager_user_id);
+      const n = toStr(body.deptManagerId) === "—" ? "Unassigned" : toStr(body.deptManagerId);
+      if (o !== n) changes["Manager"] = { from: o, to: n };
+    }
+
     const invoiceUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (body.departmentId !== undefined) invoiceUpdate.department_id = body.departmentId || null;
 
@@ -106,7 +184,7 @@ export async function PATCH(
       invoice_id: invoiceId,
       actor_user_id: session.user.id,
       event_type: "invoice_updated",
-      payload: { changes: body, invoice_type: "freelancer" },
+      payload: { changes: Object.keys(changes).length > 0 ? changes : undefined, invoice_type: "freelancer" },
     });
 
     return NextResponse.json({ success: true });
