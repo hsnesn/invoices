@@ -77,18 +77,29 @@ export async function POST(request: NextRequest) {
 
     if (invError) return NextResponse.json({ error: invError.message }, { status: 500 });
 
+    // Try invite first; if user already exists in auth, fall back to magiclink
+    let magicLink: string | undefined;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "invite", email: email.toLowerCase().trim(),
       options: { redirectTo: `${APP_URL}/auth/accept-invite` },
     });
 
     if (linkError) {
-      console.error("generateLink error:", linkError);
-      return NextResponse.json({ error: `Link failed: ${linkError.message}` }, { status: 500 });
+      console.warn("invite link failed, trying magiclink:", linkError.message);
+      const { data: mlData, error: mlError } = await supabase.auth.admin.generateLink({
+        type: "magiclink", email: email.toLowerCase().trim(),
+        options: { redirectTo: `${APP_URL}/auth/accept-invite` },
+      });
+      if (mlError) {
+        console.error("magiclink also failed:", mlError);
+        return NextResponse.json({ error: `Link failed: ${mlError.message}` }, { status: 500 });
+      }
+      magicLink = mlData?.properties?.action_link;
+    } else {
+      magicLink = linkData?.properties?.action_link;
     }
 
-    const magicLink = linkData?.properties?.action_link;
-    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link (no action_link)" }, { status: 500 });
+    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
 
     const resend = getResend();
     if (!resend) return NextResponse.json({ error: "Email not configured. Set RESEND_API_KEY in environment variables." }, { status: 500 });
