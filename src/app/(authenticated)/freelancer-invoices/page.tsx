@@ -21,7 +21,7 @@ function canUserSeeInvoice(
   userProgramIds: string[] | null,
   isOperationsRoomMember: boolean
 ): boolean {
-  if (role === "admin") return true;
+  if (role === "admin" || role === "viewer") return true;
   if (isOperationsRoomMember) return true;
   if (inv.submitter_user_id === userId) return true;
 

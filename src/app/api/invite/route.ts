@@ -14,7 +14,7 @@ const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Invoice Approval Workflow"
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? `${APP_NAME} <noreply@example.com>`;
 
 function invitationEmailHtml(inviterName: string, recipientName: string, role: string, magicLink: string) {
-  const roleBadgeColor = { admin: "#dc2626", manager: "#2563eb", finance: "#059669", submitter: "#6b7280" }[role] ?? "#6b7280";
+  const roleBadgeColor = { admin: "#dc2626", manager: "#2563eb", finance: "#059669", submitter: "#6b7280", viewer: "#64748b" }[role] ?? "#6b7280";
   return `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -58,12 +58,12 @@ export async function POST(request: NextRequest) {
     const { profile } = await requireAdmin();
     const body = await request.json();
     const { email, full_name, role, department_id, program_ids } = body as {
-      email: string; full_name?: string; role: "submitter" | "manager" | "admin" | "finance";
+      email: string; full_name?: string; role: "submitter" | "manager" | "admin" | "finance" | "viewer";
       department_id?: string | null; program_ids?: string[] | null;
     };
 
     if (!email || !role) return NextResponse.json({ error: "email and role are required" }, { status: 400 });
-    if (!["submitter", "manager", "admin", "finance"].includes(role)) return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    if (!["submitter", "manager", "admin", "finance", "viewer"].includes(role)) return NextResponse.json({ error: "Invalid role" }, { status: 400 });
 
     const supabase = createAdminClient();
     const { data: existing } = await supabase.from("user_invitations").select("accepted").eq("email", email.toLowerCase().trim()).single();

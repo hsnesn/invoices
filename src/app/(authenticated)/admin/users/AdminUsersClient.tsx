@@ -11,6 +11,7 @@ const ROLE_COLORS: Record<string, string> = {
   manager: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
   finance: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
   submitter: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600",
+  viewer: "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600",
 };
 
 export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
@@ -22,7 +23,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
   const [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
-  const [inviteRole, setInviteRole] = useState<"submitter" | "manager" | "admin" | "finance">("submitter");
+  const [inviteRole, setInviteRole] = useState<"submitter" | "manager" | "admin" | "finance" | "viewer">("submitter");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [search, setSearch] = useState("");
@@ -255,7 +256,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
             <select
               value={inviteRole}
               onChange={(e) =>
-                setInviteRole(e.target.value as "submitter" | "manager" | "admin" | "finance")
+                setInviteRole(e.target.value as "submitter" | "manager" | "admin" | "finance" | "viewer")
               }
               className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             >
@@ -263,6 +264,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
               <option value="manager">Manager</option>
               <option value="admin">Admin</option>
               <option value="finance">Finance</option>
+              <option value="viewer">Viewer</option>
             </select>
           </div>
           <button
@@ -410,6 +412,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
               <option value="manager">Manager</option>
               <option value="finance">Finance</option>
               <option value="submitter">Submitter</option>
+              <option value="viewer">Viewer</option>
             </select>
             <select
               value={statusFilter}
@@ -456,6 +459,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
                         <option value="manager">Manager</option>
                         <option value="finance">Finance</option>
                         <option value="admin">Admin</option>
+                        <option value="viewer">Viewer</option>
                       </select>
                     ) : (
                       <button

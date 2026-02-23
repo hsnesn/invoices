@@ -1,10 +1,12 @@
 import { requireAuth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function SalariesPage() {
-  await requireAuth();
+  const { profile } = await requireAuth();
+  if (profile.role === "viewer") redirect("/dashboard");
 
   return (
     <div className="mx-auto max-w-4xl py-12 text-center">

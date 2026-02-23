@@ -29,7 +29,7 @@ type DisplayRow = {
   additionalCost: string; additionalCostNum: number; amount: string; amountNum: number; invoiceAmount: string; invoiceAmountNum: number;
   invNumber: string; beneficiary: string; accountNumber: string; sortCode: string;
   deptManager: string; deptManagerId: string; department: string; departmentId: string;
-  department2: string; istanbulTeam: string; serviceDaysCount: string; days: string; serviceRate: string;
+  department2: string; serviceDaysCount: string; days: string; serviceRate: string;
   month: string; bookedBy: string; serviceDescription: string; additionalCostReason: string;
   status: string; rejectionReason: string; createdAt: string; paidDate: string; group: GroupKey;
 };
@@ -37,7 +37,7 @@ type DisplayRow = {
 type EditDraft = {
   contractor: string; companyName: string; additionalCost: string; invNumber: string; beneficiary: string;
   accountNumber: string; sortCode: string; deptManagerId: string; departmentId: string; department2: string;
-  istanbulTeam: string; serviceDaysCount: string; days: string; serviceRate: string; month: string;
+  serviceDaysCount: string; days: string; serviceRate: string; month: string;
   bookedBy: string; serviceDescription: string; additionalCostReason: string;
 };
 
@@ -79,8 +79,7 @@ const ALL_COLUMNS = [
   { key: "beneficiary", label: "Beneficiary" },
   { key: "accountNumber", label: "Account Nu." },
   { key: "sortCode", label: "Sort Code" },
-  { key: "istanbulTeam", label: "Istanbul Team" },
-  { key: "deptManager", label: "Line Manager" },
+  { key: "deptManager", label: "Department Manager" },
   { key: "bookingForm", label: "Booking Form" },
   { key: "actions", label: "" },
 ];
@@ -158,7 +157,7 @@ export function FreelancerBoard({
       deptManager: wf?.manager_user_id ? profMap[wf.manager_user_id] ?? "—" : "—",
       deptManagerId: wf?.manager_user_id ?? "",
       department: inv.department_id ? deptMap[inv.department_id] ?? "—" : "—", departmentId: inv.department_id ?? "",
-      department2: fl?.department_2 ?? "—", istanbulTeam: fl?.istanbul_team ?? "—",
+      department2: fl?.department_2 ?? "—",
       serviceDaysCount: fl?.service_days_count?.toString() ?? "—", days: fl?.service_days ?? "—",
       serviceRate: fl?.service_rate_per_day ? `£${fl.service_rate_per_day}` : "—",
       month: fl?.service_month ?? "—", bookedBy: fl?.booked_by ?? "—",
@@ -301,7 +300,7 @@ export function FreelancerBoard({
       invNumber: row.invNumber === "—" ? "" : row.invNumber, beneficiary: row.beneficiary === "—" ? "" : row.beneficiary,
       accountNumber: row.accountNumber === "—" ? "" : row.accountNumber, sortCode: row.sortCode === "—" ? "" : row.sortCode,
       deptManagerId: row.deptManagerId, departmentId: row.departmentId,
-      department2: row.department2 === "—" ? "" : row.department2, istanbulTeam: row.istanbulTeam === "—" ? "" : row.istanbulTeam,
+      department2: row.department2 === "—" ? "" : row.department2,
       serviceDaysCount: row.serviceDaysCount === "—" ? "" : row.serviceDaysCount, days: row.days === "—" ? "" : row.days,
       serviceRate: row.serviceRate === "—" ? "" : row.serviceRate.replace(/[£,]/g, ""),
       month: row.month === "—" ? "" : row.month, bookedBy: row.bookedBy === "—" ? "" : row.bookedBy,
@@ -552,7 +551,7 @@ export function FreelancerBoard({
       "Additional Cost": r.additionalCost, "Add. Cost Reason": r.additionalCostReason,
       Amount: r.amount, "Invoice Amount": r.invoiceAmount, "INV Number": r.invNumber,
       Beneficiary: r.beneficiary, "Account Nu.": r.accountNumber, "Sort Code": r.sortCode,
-      "Istanbul Team": r.istanbulTeam, "Line Manager": r.deptManager, Status: r.status,
+      "Department Manager": r.deptManager, Status: r.status,
       "Rejection Reason": r.rejectionReason, "Paid Date": r.paidDate,
     }));
     const ws = XLSX.utils.json_to_sheet(xlsRows);
@@ -623,7 +622,6 @@ export function FreelancerBoard({
       case "sortCode": return isEditing ? inp("sortCode") : r.sortCode;
       case "department": return isEditing ? <select value={editDraft?.departmentId ?? ""} onChange={e => onChangeDraft("departmentId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">{r.department}</span>;
       case "department2": return isEditing ? inp("department2") : r.department2;
-      case "istanbulTeam": return isEditing ? inp("istanbulTeam") : r.istanbulTeam;
       case "serviceDaysCount": return isEditing ? inp("serviceDaysCount", "number") : r.serviceDaysCount;
       case "days": return isEditing ? inp("days") : <span className="max-w-[120px] truncate block" title={r.days}>{r.days}</span>;
       case "serviceRate": return isEditing ? inp("serviceRate") : r.serviceRate;
@@ -682,10 +680,12 @@ export function FreelancerBoard({
               Columns
             </button>
           </div>
-          <Link href="/freelancer-invoices/submit" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-500 transition-all flex items-center gap-1.5">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-            Add Invoice
-          </Link>
+          {currentRole !== "viewer" && (
+            <Link href="/freelancer-invoices/submit" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-500 transition-all flex items-center gap-1.5">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              Add Invoice
+            </Link>
+          )}
         </div>
       </div>
 
@@ -940,7 +940,7 @@ function CompareTable({ rows, ids }: { rows: DisplayRow[]; ids: string[] }) {
     { label: "Amount", key: "amount" }, { label: "Invoice Amount", key: "invoiceAmount" },
     { label: "INV Number", key: "invNumber" }, { label: "Beneficiary", key: "beneficiary" },
     { label: "Account Number", key: "accountNumber" }, { label: "Sort Code", key: "sortCode" },
-    { label: "Istanbul Team", key: "istanbulTeam" }, { label: "Line Manager", key: "deptManager" },
+    { label: "Department Manager", key: "deptManager" },
     { label: "Status", key: "status" }, { label: "Rejection Reason", key: "rejectionReason" },
   ];
 

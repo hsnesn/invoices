@@ -1,4 +1,4 @@
-export type AppRole = "submitter" | "manager" | "admin" | "finance";
+export type AppRole = "submitter" | "manager" | "admin" | "finance" | "viewer";
 
 export type InvoiceStatus =
   | "submitted"

@@ -1540,13 +1540,15 @@ export function InvoicesBoard({
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Guest Invoice Submission</h1>
         <div className="flex items-center gap-2">
-          <Link
-            href="/submit"
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-500 transition-all flex items-center gap-1.5"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-            New Invoice
-          </Link>
+          {currentRole !== "viewer" && (
+            <Link
+              href="/submit"
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-500 transition-all flex items-center gap-1.5"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              New Invoice
+            </Link>
+          )}
           <button onClick={() => setShowDashboard((v) => !v)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm ${showDashboard ? "bg-[#5034FF] text-white shadow-[#5034FF]/25" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"}`}>
             {showDashboard ? "Hide Dashboard" : "Dashboard"}
           </button>
