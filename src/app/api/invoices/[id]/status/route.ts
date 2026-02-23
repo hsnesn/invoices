@@ -165,7 +165,7 @@ export async function POST(
           const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
           const approvedAt = new Date();
 
-          // Send manager-approved email to submitter + admin (before booking form workflow)
+          // Send manager-approved email when invoice moves to The Operations Room Approvals (submitter + admin + Operations Room)
           const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
           const adminProfiles = await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true);
           const adminEmails: string[] = [];
@@ -173,15 +173,20 @@ export async function POST(
             const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
             if (u?.email) adminEmails.push(u.email);
           }
-          if (submitterUser?.email) {
-            await sendManagerApprovedEmail({
-              submitterEmail: submitterUser.email,
-              adminEmails,
-              invoiceId,
-              invoiceNumber: extracted?.invoice_number ?? undefined,
-              managerName: approverProfile.data?.full_name ?? undefined,
-            });
+          const { data: orMembers } = await supabase.from("operations_room_members").select("user_id");
+          const operationsRoomEmails: string[] = [];
+          for (const m of orMembers ?? []) {
+            const u = (await supabase.auth.admin.getUserById(m.user_id)).data?.user;
+            if (u?.email) operationsRoomEmails.push(u.email);
           }
+          await sendManagerApprovedEmail({
+            submitterEmail: submitterUser?.email,
+            adminEmails,
+            operationsRoomEmails,
+            invoiceId,
+            invoiceNumber: extracted?.invoice_number ?? undefined,
+            managerName: approverProfile.data?.full_name ?? undefined,
+          });
 
           // Form created first, then booking form emails (A + B) sent by workflow
           void triggerBookingFormWorkflow(supabase, {
@@ -306,15 +311,20 @@ export async function POST(
             const u = (await supabase.auth.admin.getUserById(p.id)).data?.user;
             if (u?.email) adminEmails.push(u.email);
           }
-          if (submitterUser?.email) {
-            await sendManagerApprovedEmail({
-              submitterEmail: submitterUser.email,
-              adminEmails,
-              invoiceId,
-              invoiceNumber: extracted?.invoice_number ?? undefined,
-              managerName: approverProfile.data?.full_name ?? undefined,
-            });
+          const { data: orMembers } = await supabase.from("operations_room_members").select("user_id");
+          const operationsRoomEmails: string[] = [];
+          for (const m of orMembers ?? []) {
+            const u = (await supabase.auth.admin.getUserById(m.user_id)).data?.user;
+            if (u?.email) operationsRoomEmails.push(u.email);
           }
+          await sendManagerApprovedEmail({
+            submitterEmail: submitterUser?.email,
+            adminEmails,
+            operationsRoomEmails,
+            invoiceId,
+            invoiceNumber: extracted?.invoice_number ?? undefined,
+            managerName: approverProfile.data?.full_name ?? undefined,
+          });
 
           void triggerBookingFormWorkflow(supabase, {
             invoiceId,

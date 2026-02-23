@@ -116,12 +116,18 @@ export async function sendSubmissionEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendManagerApprovedEmail(params: {
-  submitterEmail: string; adminEmails: string[]; invoiceId: string; invoiceNumber?: string; managerName?: string;
+  submitterEmail?: string; adminEmails: string[]; operationsRoomEmails?: string[]; invoiceId: string; invoiceNumber?: string; managerName?: string;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Your invoice";
+  const to = [
+    ...(params.submitterEmail ? [params.submitterEmail] : []),
+    ...params.adminEmails,
+    ...(params.operationsRoomEmails ?? []),
+  ].filter((e, i, arr) => arr.indexOf(e) === i);
+  if (to.length === 0) return { success: false, error: "No recipients" };
   return sendEmail({
-    to: [params.submitterEmail, ...params.adminEmails],
+    to,
     subject: `${invLabel} — Approved by manager`,
     html: wrap("Invoice Approved", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Great news! The invoice has been approved by the line manager${params.managerName ? ` (<strong>${params.managerName}</strong>)` : ""} and is now pending admin review.</p>
