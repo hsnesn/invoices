@@ -34,3 +34,10 @@ body {
 .transition-smooth {
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
+
+/* Mobile card carousel - smooth horizontal swipe */
+.mobile-card-carousel {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}

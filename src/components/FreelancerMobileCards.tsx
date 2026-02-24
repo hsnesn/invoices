@@ -1,22 +1,36 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 
 type DisplayRow = {
   id: string;
   contractor: string;
   submittedBy: string;
   companyName: string;
+  submissionDate: string;
+  additionalCost: string;
   amount: string;
+  invoiceAmount: string;
   invNumber: string;
+  beneficiary: string;
+  accountNumber: string;
+  sortCode: string;
+  deptManager: string;
+  deptManagerId: string;
   department: string;
   department2: string;
+  serviceDaysCount: string;
+  days: string;
+  serviceRate: string;
   month: string;
+  bookedBy: string;
   serviceDescription: string;
+  additionalCostReason: string;
   status: string;
   rejectionReason: string;
   submitterId: string;
-  deptManagerId: string;
+  paidDate: string;
+  createdAt: string;
 };
 
 function statusLabel(s: string): string {
@@ -61,6 +75,21 @@ export function FreelancerMobileCards({
   openRejectModal: (id: string) => void;
   actionLoadingId: string | null;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || rows.length <= 1) return;
+    const onScroll = () => {
+      const cardWidth = el.scrollWidth / rows.length;
+      const idx = Math.round(el.scrollLeft / cardWidth);
+      setActiveIndex(Math.min(Math.max(0, idx), rows.length - 1));
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [rows.length]);
+
   const canApprove = (r: DisplayRow) => {
     if (r.submitterId === currentUserId && currentRole !== "admin" && !isOperationsRoomMember) return false;
     if (currentRole === "admin") return true;
@@ -78,8 +107,9 @@ export function FreelancerMobileCards({
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-4 overflow-y-auto max-h-[calc(100vh-280px)] snap-y snap-mandatory md:hidden">
-      {rows.map((r) => {
+    <div className="md:hidden">
+      <div ref={scrollRef} className="mobile-card-carousel flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory gap-4 pb-4 -mx-1 px-1 max-h-[calc(100vh-260px)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {rows.map((r) => {
         const isSubmitter = r.submitterId === currentUserId;
         const canApp = canApprove(r);
         const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin");
@@ -91,7 +121,7 @@ export function FreelancerMobileCards({
         return (
           <div
             key={r.id}
-            className={`rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-start ${
+            className={`flex-shrink-0 w-[calc(100%-2rem)] min-w-[calc(100%-2rem)] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${
               r.status === "rejected"
                 ? "border-rose-300 dark:border-rose-700"
                 : "border-slate-200 dark:border-slate-600"
@@ -108,27 +138,35 @@ export function FreelancerMobileCards({
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Amount</p>
-                  <p className="font-semibold text-gray-900 dark:text-white">{r.amount}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Month</p>
-                  <p className="text-gray-700 dark:text-gray-200">{r.month}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Department</p>
-                  <p className="truncate text-gray-700 dark:text-gray-200">{r.department}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Submitted by</p>
-                  <p className="truncate text-gray-700 dark:text-gray-200">{r.submittedBy}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Service</p>
-                  <p className="line-clamp-2 text-gray-700 dark:text-gray-200">{r.serviceDescription}</p>
-                </div>
+              <div className="space-y-2 text-sm">
+                {[
+                  { label: "Company", value: r.companyName },
+                  { label: "Submitted by", value: r.submittedBy },
+                  { label: "Submission Date", value: r.submissionDate },
+                  { label: "Amount", value: r.amount },
+                  { label: "Invoice Amount", value: r.invoiceAmount },
+                  { label: "Additional Cost", value: r.additionalCost },
+                  { label: "Department", value: r.department },
+                  { label: "Department 2", value: r.department2 },
+                  { label: "Dept Manager", value: r.deptManager },
+                  { label: "Service Days", value: r.serviceDaysCount },
+                  { label: "Days", value: r.days },
+                  { label: "Rate/Day", value: r.serviceRate },
+                  { label: "Month", value: r.month },
+                  { label: "Booked by", value: r.bookedBy },
+                  { label: "Service Desc.", value: r.serviceDescription },
+                  { label: "Add. Cost Reason", value: r.additionalCostReason },
+                  { label: "Beneficiary", value: r.beneficiary },
+                  { label: "Account Number", value: r.accountNumber },
+                  { label: "Sort Code", value: r.sortCode },
+                  { label: "Paid Date", value: r.paidDate },
+                  { label: "Created", value: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "—" },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between gap-2 border-b border-gray-100 py-1.5 last:border-0 dark:border-gray-700">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{label}</span>
+                    <span className="text-right text-gray-900 dark:text-white break-words min-w-0 max-w-[60%]">{value || "—"}</span>
+                  </div>
+                ))}
               </div>
 
               {r.status === "rejected" && r.rejectionReason && (
@@ -204,6 +242,18 @@ export function FreelancerMobileCards({
           </div>
         );
       })}
+      </div>
+      {rows.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-3">
+          {rows.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i === activeIndex ? "w-4 bg-teal-500 dark:bg-teal-400" : "bg-gray-300 dark:bg-gray-600"}`}
+              aria-hidden
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
