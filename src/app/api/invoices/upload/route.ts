@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendSubmissionEmail } from "@/lib/email";
+import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
+import { isEmailStageEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 
@@ -211,24 +213,23 @@ export async function POST(request: NextRequest) {
       payload: { storage_path: storagePath },
     });
 
-    const submitterUser = (await supabaseAdmin.auth.admin.getUserById(session.user.id))
-      .data?.user;
-    const managerEmailProfiles = await supabaseAdmin
-      .from("profiles")
-      .select("id")
-      .eq("role", "manager")
-      .eq("is_active", true);
-    const managerEmails: string[] = [];
-    for (const p of managerEmailProfiles.data ?? []) {
-      const u = (await supabaseAdmin.auth.admin.getUserById(p.id)).data?.user;
-      if (u?.email) managerEmails.push(u.email);
-    }
-    if (submitterUser?.email) {
-      await sendSubmissionEmail({
-        submitterEmail: submitterUser.email,
-        managerEmails,
-        invoiceId,
-      });
+    const enabled = await isEmailStageEnabled("submission");
+    if (enabled) {
+      const managerIds = (await supabaseAdmin.from("profiles").select("id").eq("role", "manager").eq("is_active", true)).data?.map((p) => p.id) ?? [];
+      const managerEmails = await getFilteredEmailsForUserIds(managerIds);
+      const submitterEmails = await getFilteredEmailsForUserIds([session.user.id]);
+      const submitterEmail = submitterEmails[0];
+      if (submitterEmail || managerEmails.length > 0) {
+        const guestName = parseGuestNameFromServiceDesc(service_description);
+        const invoiceNumber = file.name.replace(/\.[^.]+$/, "");
+        await sendSubmissionEmail({
+          submitterEmail: submitterEmail ?? "",
+          managerEmails,
+          invoiceId,
+          invoiceNumber: invoiceNumber || undefined,
+          guestName,
+        });
+      }
     }
 
     return NextResponse.json({

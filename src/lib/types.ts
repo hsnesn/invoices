@@ -30,6 +30,7 @@ export interface Profile {
   program_ids: string[] | null;
   allowed_pages: PageKey[] | null;
   is_active: boolean;
+  receive_invoice_emails?: boolean;
   created_at: string;
   updated_at: string;
 }

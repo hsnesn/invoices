@@ -8,6 +8,9 @@ Sırayla çalıştır:
 1. `supabase/migrations/00001_initial_schema.sql`
 2. `supabase/migrations/00002_rls_policies.sql`
 3. `supabase/migrations/00003_storage_and_triggers.sql`
+...
+18. `supabase/migrations/00018_invite_token_expiry.sql`
+19. `supabase/migrations/00019_email_settings_and_templates.sql` (e-posta taslakları, aşama ayarları, kullanıcı tercihi)
 
 ## 2. Storage bucket oluştur
 

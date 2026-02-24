@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { DepartmentManagersSection } from "@/components/DepartmentManagersSection";
+import { EmailSetupSection } from "@/components/EmailSetupSection";
 
 interface Department {
   id: string;
@@ -17,6 +18,7 @@ interface Program {
 const TABS = [
   { key: "guest", label: "Guest Invoices", color: "bg-blue-500" },
   { key: "freelancer", label: "Freelancer Invoices", color: "bg-teal-500" },
+  { key: "email", label: "Email", color: "bg-amber-500" },
   { key: "salaries", label: "Salaries", color: "bg-indigo-500" },
 ] as const;
 
@@ -50,6 +52,7 @@ export default function AdminSetupPage() {
       {/* Tab Content */}
       {activeTab === "guest" && <GuestInvoiceSetup />}
       {activeTab === "freelancer" && <FreelancerSetup />}
+      {activeTab === "email" && <EmailSetupSection />}
       {activeTab === "salaries" && <PlaceholderSetup section="Salaries" color="indigo" />}
     </div>
   );

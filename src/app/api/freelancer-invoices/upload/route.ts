@@ -4,6 +4,9 @@ import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
+import { sendSubmissionEmail } from "@/lib/email";
+import { buildFreelancerEmailDetails } from "@/lib/freelancer-email-details";
+import { isEmailStageEnabled, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
 const UUID_RE =
@@ -194,6 +197,31 @@ export async function POST(request: NextRequest) {
       to_status: "pending_manager",
       payload: { storage_path: storagePath, invoice_type: "freelancer", file_count: files.length },
     });
+
+    if (await isEmailStageEnabled("submission")) {
+      const submitterUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
+      const managerIds = (await supabase.from("profiles").select("id").eq("role", "manager").eq("is_active", true)).data?.map((p) => p.id) ?? [];
+      const filteredManagerIds = await filterUserIdsByEmailPreference(managerIds);
+      const managerEmails: string[] = [];
+      for (const id of filteredManagerIds) {
+        const u = (await supabase.auth.admin.getUserById(id)).data?.user;
+        if (u?.email) managerEmails.push(u.email);
+      }
+      const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(session.user.id));
+      if (submitterWants || managerEmails.length > 0) {
+        const { data: fl } = await supabase.from("freelancer_invoice_fields").select("contractor_name, company_name, service_description, service_days_count, service_rate_per_day, service_month, additional_cost").eq("invoice_id", invoiceId).single();
+        const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number, beneficiary_name, account_number, sort_code, gross_amount").eq("invoice_id", invoiceId).single();
+        const deptName = safeDeptId ? ((await supabase.from("departments").select("name").eq("id", safeDeptId).single()).data?.name ?? "—") : "—";
+        const freelancerDetails = buildFreelancerEmailDetails(fl, ext, deptName);
+        await sendSubmissionEmail({
+          submitterEmail: submitterWants ? submitterUser!.email! : "",
+          managerEmails,
+          invoiceId,
+          invoiceNumber: ext?.invoice_number ?? file.name.replace(/\.[^.]+$/, ""),
+          freelancerDetails,
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, invoice_id: invoiceId });
   } catch (e) {

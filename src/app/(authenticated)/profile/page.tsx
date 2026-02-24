@@ -11,6 +11,7 @@ type ProfileData = {
   department_id: string | null;
   department_name: string | null;
   is_active: boolean;
+  receive_invoice_emails: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -29,6 +30,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editName, setEditName] = useState("");
+  const [receiveInvoiceEmails, setReceiveInvoiceEmails] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function ProfilePage() {
       .then((d) => {
         setData(d);
         setEditName(d.full_name ?? "");
+        setReceiveInvoiceEmails(d.receive_invoice_emails !== false);
       })
       .catch(() => setError("Profil yüklenemedi."))
       .finally(() => setLoading(false));
@@ -62,6 +65,31 @@ export default function ProfilePage() {
         router.refresh();
       } else {
         setError(result?.error ?? "İsim güncellenemedi.");
+      }
+    } catch {
+      setError("Bağlantı hatası.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleEmailPref = async (checked: boolean) => {
+    if (!data || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receive_invoice_emails: checked }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        setReceiveInvoiceEmails(checked);
+        setData((prev) => (prev ? { ...prev, receive_invoice_emails: checked } : null));
+        router.refresh();
+      } else {
+        setError(result?.error ?? "Tercih güncellenemedi.");
       }
     } catch {
       setError("Bağlantı hatası.");
@@ -167,6 +195,25 @@ export default function ProfilePage() {
                 Pasif
               </span>
             )}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">E-posta Tercihleri</label>
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700/50">
+            <input
+              type="checkbox"
+              checked={receiveInvoiceEmails}
+              onChange={(e) => handleToggleEmailPref(e.target.checked)}
+              disabled={saving}
+              className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              Fatura güncelleme e-postalarını al
+            </span>
+          </label>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Kapalıysa fatura durum e-postaları (onay, red vb.) gelmez. Booking form e-postaları her zaman gönderilir.
           </p>
         </div>
       </div>

@@ -3,6 +3,8 @@ import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createAuditEvent } from "@/lib/audit";
 import { sendManagerAssignedEmail } from "@/lib/email";
+import { buildFreelancerEmailDetails } from "@/lib/freelancer-email-details";
+import { isEmailStageEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
 
 export async function PATCH(
   request: Request,
@@ -169,15 +171,19 @@ export async function PATCH(
       const newManagerId = (body.deptManagerId as string) || null;
       const prevManagerId = (wf as Record<string, unknown> | null)?.manager_user_id as string | null;
       await supabase.from("invoice_workflows").update({ manager_user_id: newManagerId, updated_at: new Date().toISOString() }).eq("invoice_id", invoiceId);
-      if (newManagerId && newManagerId !== prevManagerId) {
+      if (newManagerId && newManagerId !== prevManagerId && (await isEmailStageEnabled("manager_assigned")) && (await userWantsUpdateEmails(newManagerId))) {
         const { data: mUser } = await supabase.auth.admin.getUserById(newManagerId);
-        const { data: extracted } = await supabase.from("invoice_extracted_fields").select("invoice_number").eq("invoice_id", invoiceId).single();
+        const { data: fl } = await supabase.from("freelancer_invoice_fields").select("contractor_name, company_name, service_description, service_days_count, service_rate_per_day, service_month, additional_cost").eq("invoice_id", invoiceId).single();
+        const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number, beneficiary_name, account_number, sort_code, gross_amount").eq("invoice_id", invoiceId).single();
+        const deptName = existing.department_id ? ((await supabase.from("departments").select("name").eq("id", existing.department_id).single()).data?.name ?? "—") : "—";
+        const freelancerDetails = buildFreelancerEmailDetails(fl, ext, deptName);
         if (mUser?.user?.email) {
           await sendManagerAssignedEmail({
             managerEmail: mUser.user.email,
             invoiceId,
-            invoiceNumber: extracted?.invoice_number ?? undefined,
+            invoiceNumber: ext?.invoice_number ?? undefined,
             assignedByName: profile.full_name ?? undefined,
+            freelancerDetails,
           });
         }
       }

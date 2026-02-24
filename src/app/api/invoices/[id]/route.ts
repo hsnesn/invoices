@@ -3,6 +3,8 @@ import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createAuditEvent } from "@/lib/audit";
 import { sendManagerAssignedEmail } from "@/lib/email";
+import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
+import { isEmailStageEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
 
@@ -244,7 +246,7 @@ export async function PATCH(
           { status: 500 }
         );
       }
-      if (newManagerId && newManagerId !== prevManagerId) {
+      if (newManagerId && newManagerId !== prevManagerId && (await isEmailStageEnabled("manager_assigned")) && (await userWantsUpdateEmails(newManagerId))) {
         const { data: mUser } = await supabase.auth.admin.getUserById(newManagerId);
         const { data: extracted } = await supabase
           .from("invoice_extracted_fields")
@@ -252,11 +254,13 @@ export async function PATCH(
           .eq("invoice_id", invoiceId)
           .single();
         if (mUser?.user?.email) {
+          const guestName = (guest_name?.trim() || parseGuestNameFromServiceDesc(existing.service_description)) ?? undefined;
           await sendManagerAssignedEmail({
             managerEmail: mUser.user.email,
             invoiceId,
             invoiceNumber: extracted?.invoice_number ?? undefined,
             assignedByName: profile.full_name ?? undefined,
+            guestName: guestName ?? undefined,
           });
         }
       }
