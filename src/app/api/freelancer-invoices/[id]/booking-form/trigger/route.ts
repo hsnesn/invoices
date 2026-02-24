@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { triggerBookingFormWorkflow } from "@/lib/booking-form/approval-trigger";
+import { sendBookingFormEmailsForInvoice } from "@/lib/booking-form/process-pending-emails";
 
 export async function POST(
   _request: Request,
@@ -53,7 +54,8 @@ export async function POST(
       .eq("id", approverUserId)
       .single();
 
-    const result = await triggerBookingFormWorkflow(supabase, {
+    // Ensure form exists (creates if not)
+    const createResult = await triggerBookingFormWorkflow(supabase, {
       invoiceId,
       approverUserId,
       approverName: approverProfile.data?.full_name ?? "Admin",
@@ -61,8 +63,8 @@ export async function POST(
       approvedAt: new Date(),
     });
 
-    if (!result.ok) {
-      const errDetail = result.error ?? "Workflow failed";
+    if (!createResult.ok) {
+      const errDetail = createResult.error ?? "Workflow failed";
       console.error("[BookingForm] Manual trigger failed:", errDetail);
       return NextResponse.json(
         { error: errDetail, hint: "Check RESEND_API_KEY, RESEND_FROM_EMAIL (verified domain), and approver email in auth" },
@@ -70,10 +72,19 @@ export async function POST(
       );
     }
 
+    // Send emails immediately (bypass 30s delay)
+    const sendResult = await sendBookingFormEmailsForInvoice(supabase, invoiceId);
+    if (!sendResult.ok) {
+      console.error("[BookingForm] Manual send failed:", sendResult.error);
+      return NextResponse.json(
+        { error: sendResult.error ?? "Failed to send emails" },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      skipped: result.skipped,
-      message: result.skipped ? "Already sent (idempotent)" : "Booking form emails sent to Line Manager and London Operations",
+      message: "Booking form emails sent to Line Manager and London Operations",
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

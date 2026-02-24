@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type AuditStatus = "pending" | "completed" | "failed";
+export type AuditStatus = "pending" | "processing" | "completed" | "failed";
 
 export type AuditRecord = {
   id: string;

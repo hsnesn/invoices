@@ -9,7 +9,6 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateBookingFormPdf, sanitizeFilenamePart } from "./pdf-generator";
-import { sendBookingFormEmailA, sendBookingFormEmailB } from "./email-sender";
 import {
   buildIdempotencyKey,
   checkIdempotency,
@@ -218,43 +217,10 @@ export async function triggerBookingFormWorkflow(
       });
     if (uploadError) {
       console.error("[BookingForm] Storage upload failed:", uploadError);
-      errors.push(`Form save: ${uploadError.message}`);
-      // Continue to send emails even if storage fails (PDF is in memory)
+      return { ok: false, error: `Form save: ${uploadError.message}` };
     }
 
-    // 3. Send emails (after form is created)
-    const resultA = await sendBookingFormEmailA(formData, ctx, pdfBuffer, idempotencyKey);
-    const emailASentAt = resultA.success ? new Date() : null;
-    if (!resultA.success) {
-      const errA = String(resultA.error);
-      errors.push(`Email A (Line Manager): ${errA}`);
-      console.error("[BookingForm] Email A failed:", errA, "| approverEmail:", ctx.approverEmail ? "(set)" : "(empty)");
-    }
-
-    const resultB = await sendBookingFormEmailB(formData, ctx, pdfBuffer, idempotencyKey);
-    const emailBSentAt = resultB.success ? new Date() : null;
-    if (!resultB.success) {
-      const errB = String(resultB.error);
-      errors.push(`Email B (London Ops): ${errB}`);
-      console.error("[BookingForm] Email B failed:", errB);
-    }
-
-    if (useAudit && auditId) {
-      try {
-        await updateAuditRecord(supabase, auditId, {
-          emailASentAt,
-          emailBSentAt,
-          status: errors.length === 0 ? "completed" : "failed",
-          errors: errors.length ? errors.join("; ") : null,
-        });
-      } catch {
-        /* audit table may not exist */
-      }
-    }
-
-    if (errors.length > 0) {
-      return { ok: false, error: errors.join("; ") };
-    }
+    // 3. Emails sent by cron 30 seconds later (see /api/cron/booking-form-emails)
     return { ok: true };
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
