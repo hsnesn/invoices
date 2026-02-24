@@ -166,7 +166,8 @@ export async function POST(request: NextRequest) {
       if (extracted) {
         const flUpdate: Record<string, unknown> = {};
         if (extracted.beneficiary_name && !company_name) {
-          flUpdate.company_name = extracted.beneficiary_name;
+          const bn = String(extracted.beneficiary_name);
+          flUpdate.company_name = /trt/i.test(bn) ? contractor_name : bn;
         }
         if (Object.keys(flUpdate).length > 0) {
           await supabase.from("freelancer_invoice_fields").update(flUpdate).eq("invoice_id", invoiceId);

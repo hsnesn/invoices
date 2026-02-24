@@ -298,6 +298,7 @@ function InvoiceTable({
   expandedRowId,
   onToggleExpand,
   timelineData,
+  filesData,
   notesData,
   newNote,
   onNewNoteChange,
@@ -338,6 +339,7 @@ function InvoiceTable({
   expandedRowId: string | null;
   onToggleExpand: (id: string) => void;
   timelineData: TimelineEvent[];
+  filesData: { storage_path: string; file_name: string }[];
   notesData: NoteItem[];
   newNote: string;
   onNewNoteChange: (v: string) => void;
@@ -639,10 +641,11 @@ function InvoiceTable({
                     {detailLoading ? (
                       <p className="text-sm text-gray-500">Loading...</p>
                     ) : (
-                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        {/* Timeline */}
-                        <div>
-                          <h4 className="mb-2 text-sm font-semibold text-gray-700">Timeline</h4>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                          {/* Timeline */}
+                          <div>
+                            <h4 className="mb-2 text-sm font-semibold text-gray-700">Timeline</h4>
                           {timelineData.length === 0 ? (
                             <p className="text-xs text-gray-400">No events yet.</p>
                           ) : (
@@ -694,8 +697,24 @@ function InvoiceTable({
                               })}
                             </div>
                           )}
+                          </div>
+                          {/* Files */}
+                          <div>
+                            <h4 className="mb-2 text-sm font-semibold text-gray-700">Files</h4>
+                            {filesData.length === 0 ? (
+                              <p className="text-xs text-gray-400">No files.</p>
+                            ) : (
+                              <div className="space-y-1 max-h-40 overflow-y-auto">
+                                {filesData.map((f, i) => (
+                                  <button key={i} onClick={() => expandedRowId && void openPdf(expandedRowId)} className="block w-full text-left rounded border border-gray-200 px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 truncate" title={f.file_name}>
+                                    <span className="inline-flex items-center gap-1"><svg className="h-3.5 w-3.5 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>{f.file_name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        {/* Notes */}
+                        {/* Notes - below Files */}
                         <div>
                           <h4 className="mb-2 text-sm font-semibold text-gray-700">Notes</h4>
                           <div className="space-y-2 max-h-48 overflow-y-auto mb-2">
@@ -903,10 +922,11 @@ export function InvoicesBoard({
       const tx2 = fromAliases(meta, ["2. tx date", "tx date 2"], "—");
       const tx3 = fromAliases(meta, ["3. tx date", "tx date 3"], "—");
       const invoiceDate = fromAliases(meta, ["invoice date", "date"], inv.service_date_to ?? "—");
-      const accountName =
+      const accountNameRaw =
         ext?.beneficiary_name ??
         (typeof raw.beneficiary_name === "string" ? raw.beneficiary_name : null) ??
         "—";
+      const accountName = (() => { const a = accountNameRaw === "—" ? "" : accountNameRaw; const p = guest || producer || "—"; if (!a || /trt/i.test(a)) return p; return a; })();
       const grossFromRaw =
         typeof raw.gross_amount === "number"
           ? raw.gross_amount
@@ -1264,7 +1284,8 @@ export function InvoicesBoard({
     });
   }, []);
 
-  // Row expand - load timeline & notes
+  // Row expand - load timeline, files & notes
+  const [filesData, setFilesData] = useState<{ storage_path: string; file_name: string }[]>([]);
   const toggleExpandRow = useCallback(async (id: string) => {
     if (expandedRowId === id) {
       setExpandedRowId(null);
@@ -1273,13 +1294,16 @@ export function InvoicesBoard({
     setExpandedRowId(id);
     setDetailLoading(true);
     setTimelineData([]);
+    setFilesData([]);
     setNotesData([]);
     try {
-      const [tlRes, ntRes] = await Promise.all([
+      const [tlRes, flRes, ntRes] = await Promise.all([
         fetch(`/api/invoices/${id}/timeline`),
+        fetch(`/api/invoices/${id}/files`),
         fetch(`/api/invoices/${id}/notes`),
       ]);
       if (tlRes.ok) setTimelineData(await tlRes.json());
+      if (flRes.ok) setFilesData(await flRes.json());
       if (ntRes.ok) setNotesData(await ntRes.json());
     } finally {
       setDetailLoading(false);
@@ -1298,6 +1322,9 @@ export function InvoicesBoard({
         const note = await res.json();
         setNotesData((prev) => [...prev, note]);
         setNewNote("");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d?.error ?? "Not eklenemedi.");
       }
     } catch {
       alert("Not eklenemedi. Bağlantınızı kontrol edin.");
@@ -2030,6 +2057,7 @@ export function InvoicesBoard({
               expandedRowId={expandedRowId}
               onToggleExpand={(id) => void toggleExpandRow(id)}
               timelineData={timelineData}
+              filesData={filesData}
               notesData={notesData}
               newNote={newNote}
               onNewNoteChange={setNewNote}

@@ -46,7 +46,8 @@ export async function GET(
     const deptName = dept?.name ?? "—";
     const dept2 = (fl?.department_2 as string) ?? "—";
     const contractorName = (fl?.contractor_name as string) ?? "—";
-    const companyName = (fl?.company_name as string) ?? "—";
+    const companyRaw = (fl?.company_name as string) ?? "—";
+    const companyName = !companyRaw || /trt/i.test(companyRaw) ? "—" : companyRaw;
     const serviceDesc = (fl?.service_description as string) ?? "—";
     const serviceDays = Number(fl?.service_days_count) || 0;
     const serviceMonth = (fl?.service_month as string) ?? "—";

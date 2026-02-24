@@ -196,12 +196,16 @@ export async function PATCH(
       );
     }
 
+    const beneficiaryRaw = asString(body.beneficiary_name);
+    const guestName = asString(body.guest_name);
+    const beneficiarySanitized = beneficiaryRaw && !/trt/i.test(beneficiaryRaw) ? beneficiaryRaw : guestName;
+
     const { error: extractedUpdateError } = await supabase
       .from("invoice_extracted_fields")
       .upsert(
         {
           invoice_id: invoiceId,
-          beneficiary_name: asString(body.beneficiary_name),
+          beneficiary_name: beneficiarySanitized,
           account_number: asString(body.account_number),
           sort_code: asString(body.sort_code),
           invoice_number: asString(body.invoice_number),

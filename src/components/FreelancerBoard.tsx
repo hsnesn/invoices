@@ -159,7 +159,7 @@ export function FreelancerBoard({
     return {
       id: inv.id, submitterId: inv.submitter_user_id,
       contractor: fl?.contractor_name ?? "—", submittedBy: profMap[inv.submitter_user_id] ?? "—",
-      companyName: fl?.company_name ?? "—",
+      companyName: (() => { const c = fl?.company_name ?? ""; const p = fl?.contractor_name ?? "—"; if (!c || /trt/i.test(c)) return p || "—"; return c; })(),
       submissionDate: inv.created_at ? new Date(inv.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—",
       additionalCost: addCost > 0 ? fmtCurrency(addCost) : "—", additionalCostNum: addCost,
       amount: computedAmount > 0 ? fmtCurrency(computedAmount) : "—", amountNum: computedAmount,
@@ -271,12 +271,14 @@ export function FreelancerBoard({
   /* ---------- Callbacks ---------- */
   const toggleGroup = useCallback((key: string) => { setCollapsedGroups(p => { const n = new Set(p); if (n.has(key)) n.delete(key); else n.add(key); return n; }); }, []);
 
+  const [filesData, setFilesData] = useState<{ storage_path: string; file_name: string }[]>([]);
   const toggleExpandRow = useCallback(async (id: string) => {
     if (expandedRowId === id) { setExpandedRowId(null); return; }
-    setExpandedRowId(id); setDetailLoading(true); setTimelineData([]); setNotesData([]);
+    setExpandedRowId(id); setDetailLoading(true); setTimelineData([]); setFilesData([]); setNotesData([]);
     try {
-      const [tlR, ntR] = await Promise.all([fetch(`/api/invoices/${id}/timeline`), fetch(`/api/invoices/${id}/notes`)]);
+      const [tlR, flR, ntR] = await Promise.all([fetch(`/api/invoices/${id}/timeline`), fetch(`/api/invoices/${id}/files`), fetch(`/api/invoices/${id}/notes`)]);
       if (tlR.ok) setTimelineData(await tlR.json());
+      if (flR.ok) setFilesData(await flR.json());
       if (ntR.ok) setNotesData(await ntR.json());
     } finally { setDetailLoading(false); }
   }, [expandedRowId]);
@@ -355,8 +357,19 @@ export function FreelancerBoard({
 
   const addNote = useCallback(async () => {
     if (!expandedRowId || !newNote.trim()) return;
-    await fetch(`/api/invoices/${expandedRowId}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: newNote }) });
-    setNewNote(""); const res = await fetch(`/api/invoices/${expandedRowId}/notes`); if (res.ok) setNotesData(await res.json());
+    try {
+      const res = await fetch(`/api/invoices/${expandedRowId}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: newNote.trim() }) });
+      if (res.ok) {
+        setNewNote("");
+        const listRes = await fetch(`/api/invoices/${expandedRowId}/notes`);
+        if (listRes.ok) setNotesData(await listRes.json());
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d?.error ?? "Not eklenemedi.");
+      }
+    } catch {
+      alert("Not eklenemedi. Bağlantınızı kontrol edin.");
+    }
   }, [expandedRowId, newNote]);
 
   const closePreview = useCallback(() => {
@@ -918,9 +931,10 @@ export function FreelancerBoard({
                           {expandedRowId === r.id && (
                             <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
                               {detailLoading ? <div className="flex items-center gap-2 text-sm text-gray-500"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>Loading...</div> : (
-                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                  <div>
-                                    <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h4>
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                    <div>
+                                      <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h4>
                                     {timelineData.length === 0 ? <p className="text-xs text-gray-400">No events yet.</p> : (
                                     <div className="space-y-2 max-h-60 overflow-y-auto">
                                       {timelineData.map(ev => {
@@ -960,11 +974,24 @@ export function FreelancerBoard({
                                       })}
                                     </div>
                                     )}
+                                    </div>
+                                    <div>
+                                      <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Files</h4>
+                                      {filesData.length === 0 ? <p className="text-xs text-gray-400">No files.</p> : (
+                                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                                          {filesData.map((f, i) => (
+                                            <button key={i} onClick={() => expandedRowId && void openFile(expandedRowId, f.storage_path)} className="block w-full text-left rounded border border-gray-200 px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 truncate" title={f.file_name}>
+                                              <span className="inline-flex items-center gap-1"><svg className="h-3.5 w-3.5 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>{f.file_name}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                   <div>
                                     <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Notes</h4>
                                     <div className="space-y-2 max-h-48 overflow-y-auto mb-2">{notesData.length === 0 ? <p className="text-xs text-gray-400">No notes yet.</p> : notesData.map(n => <div key={n.id} className="rounded border border-gray-200 bg-white px-3 py-2 text-xs dark:border-gray-700 dark:bg-gray-800"><div className="flex justify-between"><span className="font-medium text-gray-700 dark:text-gray-300">{n.author_name}</span><span className="text-gray-400">{new Date(n.created_at).toLocaleString("en-GB")}</span></div><p className="mt-1 text-gray-600 dark:text-gray-400">{n.content}</p></div>)}</div>
-                                    <div className="flex gap-2"><input value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Add a note..." className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white" onKeyDown={e => { if (e.key === "Enter") void addNote(); }} /><button onClick={() => void addNote()} className="rounded bg-blue-500 px-3 py-1 text-xs text-white hover:bg-blue-600">Add</button></div>
+                                    <div className="flex gap-2"><input value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Add a note..." className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white" onKeyDown={e => { if (e.key === "Enter") void addNote(); }} /><button onClick={() => void addNote()} disabled={!newNote.trim()} className="rounded bg-blue-500 px-3 py-1 text-xs text-white hover:bg-blue-600 disabled:opacity-50">Add</button></div>
                                   </div>
                                 </div>
                               )}

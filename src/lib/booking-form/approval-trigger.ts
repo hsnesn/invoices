@@ -51,7 +51,8 @@ async function loadBookingFormData(
   if (!flObj) return null;
 
   const contractorName = (flObj.contractor_name as string) ?? "—";
-  const companyName = (flObj.company_name as string) ?? "—";
+  const companyRaw = (flObj.company_name as string) ?? "—";
+  const companyName = !companyRaw || /trt/i.test(companyRaw) ? "—" : companyRaw;
   const displayName =
     companyName !== "—"
       ? `${companyName} ${contractorName !== "—" ? contractorName : ""}`.trim()

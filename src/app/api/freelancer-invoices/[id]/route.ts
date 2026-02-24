@@ -81,9 +81,10 @@ export async function PATCH(
     }
     for (const key of ["contractor", "companyName", "serviceDescription", "serviceDaysCount", "days", "serviceRate", "month", "additionalCost", "additionalCostReason", "bookedBy", "department2", "istanbulTeam"]) {
       if (body[key] === undefined) continue;
+      let n = key === "serviceDaysCount" || key === "serviceRate" || key === "additionalCost" ? toStr(body[key] != null ? String(body[key]) : "") : toStr(body[key]);
+      if (key === "companyName" && n && /trt/i.test(n)) n = toStr((oldFl as Record<string, unknown>)?.["contractor_name"]) || "—";
       const dbKey = key === "contractor" ? "contractor_name" : key === "companyName" ? "company_name" : key === "serviceDescription" ? "service_description" : key === "serviceDaysCount" ? "service_days_count" : key === "days" ? "service_days" : key === "serviceRate" ? "service_rate_per_day" : key === "month" ? "service_month" : key === "additionalCost" ? "additional_cost" : key === "additionalCostReason" ? "additional_cost_reason" : key === "bookedBy" ? "booked_by" : key === "department2" ? "department_2" : "istanbul_team";
       const o = toStr((oldFl as Record<string, unknown>)?.[dbKey]);
-      const n = key === "serviceDaysCount" || key === "serviceRate" || key === "additionalCost" ? toStr(body[key] != null ? String(body[key]) : "") : toStr(body[key]);
       if (o !== n) changes[flLabelMap[key]] = { from: o, to: n };
     }
     if (body.invNumber !== undefined) {
@@ -140,11 +141,13 @@ export async function PATCH(
     };
     for (const key of flFields) {
       if (body[key] !== undefined) {
+        let val = body[key];
+        if (key === "companyName" && val && /trt/i.test(String(val))) val = (oldFl as Record<string, unknown>)?.["contractor_name"] ?? null;
         const dbKey = dbFieldMap[key];
         if (["serviceDaysCount", "serviceRate", "additionalCost"].includes(key)) {
-          flUpdate[dbKey] = body[key] ? parseFloat(body[key]) : null;
+          flUpdate[dbKey] = val ? parseFloat(val as string) : null;
         } else {
-          flUpdate[dbKey] = body[key] || null;
+          flUpdate[dbKey] = val || null;
         }
       }
     }
