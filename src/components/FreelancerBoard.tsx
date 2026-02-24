@@ -6,6 +6,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { EmptyState } from "./EmptyState";
+import { FreelancerMobileCards } from "./FreelancerMobileCards";
 
 const FreelancerDashboard = lazy(() => import("./FreelancerDashboard").then(m => ({ default: m.FreelancerDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
@@ -909,7 +910,23 @@ export function FreelancerBoard({
               </div>
             </button>
             {!collapsed && (
-              <div className="overflow-x-auto">
+              <>
+                <div className="md:hidden px-4 pb-4">
+                  <FreelancerMobileCards
+                    rows={gRows}
+                    currentRole={currentRole}
+                    currentUserId={currentUserId}
+                    isOperationsRoomMember={isOperationsRoomMember}
+                    onManagerApprove={onManagerApprove}
+                    onAdminApprove={onAdminApprove}
+                    onResubmit={onResubmit}
+                    onMarkPaid={onMarkPaid}
+                    openFile={(id) => void openFile(id)}
+                    openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }}
+                    actionLoadingId={actionLoadingId}
+                  />
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-[2600px] w-full divide-y divide-slate-200 dark:divide-slate-600">
                   <thead className="bg-slate-50 dark:bg-slate-700/50"><tr>
                     {currentRole === "admin" && <th className="px-2 py-2 w-8"><input type="checkbox" checked={gRows.length > 0 && gRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(gRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" /></th>}
@@ -1015,7 +1032,8 @@ export function FreelancerBoard({
                   </tbody>
                   <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{currentRole === "admin" && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(sums.additional) : c.key === "amount" ? fmtCurrency(sums.amount) : c.key === "invoiceAmount" ? fmtCurrency(sums.invoiceAmount) : ""}</td>)}</tr></tfoot>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </div>
         );

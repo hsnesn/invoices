@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { toast } from "sonner";
 import { EmptyState } from "./EmptyState";
+import { InvoiceMobileCards } from "./InvoiceMobileCards";
 
 const DashboardSection = lazy(() => import("./InvoiceDashboard").then((m) => ({ default: m.InvoiceDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
@@ -2061,6 +2062,20 @@ export function InvoicesBoard({
               <span className="inline-flex h-2.5 w-2.5 rounded-full bg-current" />
               {sectionTitle(g)} <span className="font-medium text-slate-600 dark:text-slate-400">({data.length})</span>
             </h2>
+            <div className="md:hidden">
+              <InvoiceMobileCards
+                rows={data}
+                currentRole={currentRole}
+                currentUserId={currentUserId}
+                onManagerApprove={onManagerApprove}
+                onRejectInvoice={onRejectInvoice}
+                onResubmit={onResubmit}
+                onMarkPaid={onMarkPaid}
+                openPdf={openPdf}
+                actionLoadingId={actionLoadingId}
+              />
+            </div>
+            <div className="hidden md:block">
             <InvoiceTable
               rows={data}
               currentRole={currentRole}
@@ -2103,6 +2118,7 @@ export function InvoicesBoard({
               profilePairs={profilePairs}
               managerProfilePairs={managerProfilePairs}
             />
+            </div>
           </section>
         );
       })}
