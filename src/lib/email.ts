@@ -66,8 +66,8 @@ export async function sendEmailWithAttachment(params: {
   idempotencyKey?: string;
 }) {
   if (!process.env.RESEND_API_KEY) {
-    console.warn("RESEND_API_KEY not set - skipping email");
-    return { success: false, error: "Email not configured", data: null };
+    console.error("[Email] RESEND_API_KEY not set - cannot send");
+    return { success: false, error: "Email not configured (RESEND_API_KEY missing)", data: null };
   }
   const to = Array.isArray(params.to) ? params.to : [params.to];
   const resend = getResend();
@@ -86,7 +86,7 @@ export async function sendEmailWithAttachment(params: {
     headers: Object.keys(headers).length ? headers : undefined,
   });
   if (error) {
-    console.error("Resend error:", error);
+    console.error("[Email] Resend API error:", JSON.stringify(error));
     return { success: false, error, data: null };
   }
   return { success: true, data, error: null };

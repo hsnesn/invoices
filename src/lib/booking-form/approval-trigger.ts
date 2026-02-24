@@ -226,13 +226,17 @@ export async function triggerBookingFormWorkflow(
     const resultA = await sendBookingFormEmailA(formData, ctx, pdfBuffer, idempotencyKey);
     const emailASentAt = resultA.success ? new Date() : null;
     if (!resultA.success) {
-      errors.push(`Email A: ${String(resultA.error)}`);
+      const errA = String(resultA.error);
+      errors.push(`Email A (Line Manager): ${errA}`);
+      console.error("[BookingForm] Email A failed:", errA, "| approverEmail:", ctx.approverEmail ? "(set)" : "(empty)");
     }
 
     const resultB = await sendBookingFormEmailB(formData, ctx, pdfBuffer, idempotencyKey);
     const emailBSentAt = resultB.success ? new Date() : null;
     if (!resultB.success) {
-      errors.push(`Email B: ${String(resultB.error)}`);
+      const errB = String(resultB.error);
+      errors.push(`Email B (London Ops): ${errB}`);
+      console.error("[BookingForm] Email B failed:", errB);
     }
 
     if (useAudit && auditId) {

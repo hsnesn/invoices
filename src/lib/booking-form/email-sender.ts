@@ -41,7 +41,7 @@ ${body}
 </body></html>`;
 }
 
-/** Email A: To approver - final confirmation */
+/** Email A: To Line Manager (approver) - confirmation */
 export async function sendBookingFormEmailA(
   data: BookingFormData,
   ctx: ApprovalContext,
@@ -50,7 +50,7 @@ export async function sendBookingFormEmailA(
 ): Promise<{ success: boolean; messageId?: string; error?: unknown }> {
   const to = (ctx.approverEmail || "").trim();
   if (!to) {
-    return { success: false, error: "Approver email is empty - cannot send confirmation" };
+    return { success: false, error: "Approver email is empty - cannot send to Line Manager" };
   }
   const subject = `${data.name} – ${data.month}`;
   const details = buildDetailsSection(data);
@@ -72,7 +72,6 @@ ${details}
     attachments: [{ filename, content: pdfBuffer }],
     idempotencyKey: `${idempotencyKey}_emailA`,
   });
-
   return {
     success: result.success,
     messageId: result.data?.id,
@@ -80,15 +79,13 @@ ${details}
   };
 }
 
-/** Email B: To London Operations + approver - record / filing */
+/** Email B: To London Operations - record / filing */
 export async function sendBookingFormEmailB(
   data: BookingFormData,
   ctx: ApprovalContext,
   pdfBuffer: ArrayBuffer,
   idempotencyKey: string
 ): Promise<{ success: boolean; messageId?: string; error?: unknown }> {
-  const approverEmail = (ctx.approverEmail || "").trim();
-  const to = [LONDON_OPS_EMAIL, ...(approverEmail ? [approverEmail] : [])].filter((e, i, arr) => arr.indexOf(e) === i);
   const subject = `${data.name} – ${data.month}`;
   const approvalDateTime = ctx.approvedAt.toLocaleString("en-GB", {
     day: "numeric",
@@ -115,13 +112,12 @@ ${details}
 
   const filename = `BookingForm_${sanitizeFilenamePart(data.name)}_${sanitizeFilenamePart(data.month)}.pdf`;
   const result = await sendEmailWithAttachment({
-    to,
+    to: LONDON_OPS_EMAIL,
     subject,
     html: wrapEmail(body),
     attachments: [{ filename, content: pdfBuffer }],
     idempotencyKey: `${idempotencyKey}_emailB`,
   });
-
   return {
     success: result.success,
     messageId: result.data?.id,

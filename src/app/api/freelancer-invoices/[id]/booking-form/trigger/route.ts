@@ -37,9 +37,10 @@ export async function POST(
       .eq("invoice_id", invoiceId)
       .single();
 
-    if (!wf || !["ready_for_payment", "paid", "archived"].includes(wf.status)) {
+    const allowedStatuses = ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"];
+    if (!wf || !allowedStatuses.includes(wf.status)) {
       return NextResponse.json(
-        { error: "Invoice must be approved (ready_for_payment or paid)" },
+        { error: "Invoice must be approved (approved_by_manager, pending_admin, ready_for_payment or paid)" },
         { status: 400 }
       );
     }
@@ -61,8 +62,10 @@ export async function POST(
     });
 
     if (!result.ok) {
+      const errDetail = result.error ?? "Workflow failed";
+      console.error("[BookingForm] Manual trigger failed:", errDetail);
       return NextResponse.json(
-        { error: result.error ?? "Workflow failed" },
+        { error: errDetail, hint: "Check RESEND_API_KEY, RESEND_FROM_EMAIL (verified domain), and approver email in auth" },
         { status: 500 }
       );
     }
@@ -70,7 +73,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       skipped: result.skipped,
-      message: result.skipped ? "Already sent (idempotent)" : "Booking form emails sent",
+      message: result.skipped ? "Already sent (idempotent)" : "Booking form emails sent to Line Manager and London Operations",
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

@@ -754,7 +754,7 @@ export function FreelancerBoard({
       case "actions": {
         if (editingId === r.id) return <div className="flex items-center gap-1"><span className="text-xs text-blue-600">Editing{r.status === "rejected" ? " (will resubmit)" : ""}</span><button onClick={e => { e.stopPropagation(); onCancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600">✕</button></div>;
         const canRS = r.status === "rejected" && (isSubmitter || currentRole === "admin");
-        const canSendEmails = currentRole === "admin" && ["ready_for_payment", "paid", "archived"].includes(r.status);
+        const canSendEmails = currentRole === "admin" && ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
         return <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>{canRS && <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50">{actionLoadingId === r.id ? "…" : "↻ Resubmit"}</button>}{canSendEmails && <button onClick={() => void sendBookingFormEmails(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-violet-600 px-2 py-0.5 text-xs text-white hover:bg-violet-500 disabled:opacity-50" title="Send Booking Form emails to Line Manager and London Operations">{actionLoadingId === r.id ? "…" : "📧 Send"}</button>}</div>;
       }
       default: return "—";

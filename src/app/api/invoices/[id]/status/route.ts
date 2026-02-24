@@ -199,16 +199,15 @@ export async function POST(
             if (!emailResult.success) console.error("[ManagerApproved] Email failed:", emailResult.error);
           }
 
-          // Form created first, then booking form emails (A + B) sent by workflow
-          void triggerBookingFormWorkflow(supabase, {
+          // Form created first, then booking form emails (A + B) sent by workflow (await so serverless doesn't terminate before send)
+          const bfResult = await triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
             approverName: approverProfile.data?.full_name ?? "Approver",
             approverEmail: approverUser?.email ?? "",
             approvedAt,
-          }).then((r) => {
-            if (!r.ok && !r.skipped) console.error("[BookingForm] Workflow failed:", r.error);
           });
+          if (!bfResult.ok && !bfResult.skipped) console.error("[BookingForm] Workflow failed:", bfResult.error);
         }
       } else if (to_status === "rejected") {
         if (!rejection_reason?.trim()) {
@@ -340,15 +339,14 @@ export async function POST(
             if (!emailResult.success) console.error("[ManagerApproved] Email failed:", emailResult.error);
           }
 
-          void triggerBookingFormWorkflow(supabase, {
+          const bfResult = await triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
             approverName: approverProfile.data?.full_name ?? "Approver",
             approverEmail: approverUser?.email ?? "",
             approvedAt,
-          }).then((r) => {
-            if (!r.ok && !r.skipped) console.error("[BookingForm] Workflow failed:", r.error);
           });
+          if (!bfResult.ok && !bfResult.skipped) console.error("[BookingForm] Workflow failed:", bfResult.error);
         }
       } else if (to_status === "ready_for_payment") {
         const validFrom = ["pending_manager", "approved_by_manager", "pending_admin"];
@@ -405,15 +403,14 @@ export async function POST(
           const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
           const approverProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
           const approvedAt = new Date();
-          void triggerBookingFormWorkflow(supabase, {
+          const bfResult = await triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
             approverName: approverProfile.data?.full_name ?? "Admin",
             approverEmail: approverUser?.email ?? "",
             approvedAt,
-          }).then((r) => {
-            if (!r.ok && !r.skipped) console.error("[BookingForm] Workflow failed:", r.error);
           });
+          if (!bfResult.ok && !bfResult.skipped) console.error("[BookingForm] Workflow failed:", bfResult.error);
         }
       } else if (to_status === "rejected") {
         if (!rejection_reason?.trim()) {
