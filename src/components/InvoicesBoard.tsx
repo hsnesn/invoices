@@ -469,7 +469,7 @@ function InvoiceTable({
                       title="Mark as paid"
                       className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 hover:bg-emerald-500 hover:text-white disabled:opacity-50 transition-all duration-200 shadow-sm dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-500"
                     >
-                      {actionLoadingId === r.id ? "…" : "₺"}
+                      {actionLoadingId === r.id ? "…" : "£"}
                     </button>
                     {currentRole === "admin" && (
                       <button
@@ -1085,15 +1085,6 @@ export function InvoicesBoard({
   }, [rejectModalId, rejectReason]);
 
   const onMarkPaid = async (invoiceId: string) => {
-    const paymentRef = window.prompt("Payment reference (required):");
-    if (paymentRef === null) return;
-    if (!paymentRef.trim()) {
-      toast.error("Payment reference is required when marking as paid.");
-      return;
-    }
-    const ok = window.confirm(`Mark as paid with reference: ${paymentRef.trim()}?`);
-    if (!ok) return;
-
     setActionLoadingId(invoiceId);
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/status`, {
@@ -1101,7 +1092,6 @@ export function InvoicesBoard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to_status: "paid",
-          payment_reference: paymentRef.trim(),
           paid_date: new Date().toISOString().split("T")[0],
         }),
       });
@@ -1439,10 +1429,8 @@ export function InvoicesBoard({
     } else if (groupKey === "ready_for_payment") {
       toStatus = "ready_for_payment";
     } else if (groupKey === "paid_invoices") {
-      const ref = window.prompt(`Payment reference for ${ids.length} invoice(s):`);
-      if (!ref?.trim()) return;
       toStatus = "paid";
-      payload = { payment_reference: ref.trim(), paid_date: new Date().toISOString().split("T")[0] };
+      payload = { paid_date: new Date().toISOString().split("T")[0] };
     } else if (groupKey === "no_payment_needed") {
       toStatus = "archived";
     } else {

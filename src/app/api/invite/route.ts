@@ -77,35 +77,20 @@ export async function POST(request: NextRequest) {
     const { data: existing } = await supabase.from("user_invitations").select("accepted").eq("email", email.toLowerCase().trim()).single();
     if (existing?.accepted) return NextResponse.json({ error: "User has already accepted this invitation" }, { status: 400 });
 
+    const emailNorm = email.toLowerCase().trim();
+    const inviteToken = crypto.randomUUID();
+    const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
+
     const { data: inv, error: invError } = await supabase.from("user_invitations").upsert({
-      email: email.toLowerCase().trim(), full_name: full_name ?? null, role,
+      email: emailNorm, full_name: full_name ?? null, role,
       department_id: department_id ?? null, program_ids: program_ids ?? [],
       invited_by: profile.id, accepted: false,
+      invite_token: inviteToken, token_expires_at: tokenExpiresAt,
     }, { onConflict: "email" }).select().single();
 
     if (invError) return NextResponse.json({ error: invError.message }, { status: 500 });
 
-    // Use hashed_token to build our own callback URL (Supabase action_link redirect can fail)
-    const emailNorm = email.toLowerCase().trim();
-    const nextPath = "/auth/accept-invite";
-    let magicLink: string | undefined;
-
-    for (const { type, linkType } of [{ type: "invite" as const, linkType: "invite" }, { type: "magiclink" as const, linkType: "magiclink" }]) {
-      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-        type, email: emailNorm,
-        options: { redirectTo: `${APP_URL}/auth/callback` },
-      });
-      const hash = linkData?.properties?.hashed_token;
-      if (hash) {
-        magicLink = `${APP_URL}/auth/callback?token_hash=${encodeURIComponent(hash)}&next=${encodeURIComponent(nextPath)}`;
-        break;
-      }
-      if (linkError && type === "invite") {
-        console.warn("invite link failed, trying magiclink:", linkError.message);
-      }
-    }
-
-    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
+    const magicLink = `${APP_URL}/auth/invite?token=${encodeURIComponent(inviteToken)}`;
 
     const resend = getResend();
     if (!resend) return NextResponse.json({ error: "Email not configured. Set RESEND_API_KEY in environment variables." }, { status: 500 });
@@ -157,20 +142,11 @@ export async function PATCH(request: NextRequest) {
     const { data: inv } = await supabase.from("user_invitations").select("*").eq("email", emailNorm).eq("accepted", false).single();
     if (!inv) return NextResponse.json({ error: "Invitation not found or already accepted" }, { status: 404 });
 
-    const nextPath = "/auth/accept-invite";
-    let magicLink: string | undefined;
-    for (const type of ["invite", "magiclink"] as const) {
-      const { data } = await supabase.auth.admin.generateLink({
-        type, email: emailNorm,
-        options: { redirectTo: `${APP_URL}/auth/callback` },
-      });
-      const hash = data?.properties?.hashed_token;
-      if (hash) {
-        magicLink = `${APP_URL}/auth/callback?token_hash=${encodeURIComponent(hash)}&next=${encodeURIComponent(nextPath)}`;
-        break;
-      }
-    }
-    if (!magicLink) return NextResponse.json({ error: "Failed to generate invitation link" }, { status: 500 });
+    const inviteToken = crypto.randomUUID();
+    const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from("user_invitations").update({ invite_token: inviteToken, token_expires_at: tokenExpiresAt }).eq("id", inv.id);
+
+    const magicLink = `${APP_URL}/auth/invite?token=${encodeURIComponent(inviteToken)}`;
 
     const resend = getResend();
     if (!resend) return NextResponse.json({ error: "Email not configured. Set RESEND_API_KEY in environment variables." }, { status: 500 });

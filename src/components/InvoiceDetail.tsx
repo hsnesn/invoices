@@ -22,7 +22,6 @@ export function InvoiceDetail({
   const [loading, setLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [adminComment, setAdminComment] = useState("");
-  const [paymentRef, setPaymentRef] = useState("");
   const [paidDate, setPaidDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -386,33 +385,17 @@ export function InvoiceDetail({
                 </>
               )}
               {status === "ready_for_payment" && (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Payment reference (required)"
-                    value={paymentRef}
-                    onChange={(e) => setPaymentRef(e.target.value)}
-                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-                  />
-                  <input
-                    type="date"
-                    value={paidDate}
-                    onChange={(e) => setPaidDate(e.target.value)}
-                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-                  />
-                  <button
-                    onClick={() =>
-                      transitionStatus("paid", {
-                        payment_reference: paymentRef.trim() || undefined,
-                        paid_date: paidDate,
-                      })
-                    }
-                    disabled={loading || !paymentRef.trim()}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    Mark paid
-                  </button>
-                </>
+                <button
+                  onClick={() =>
+                    transitionStatus("paid", {
+                      paid_date: paidDate,
+                    })
+                  }
+                  disabled={loading}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  Mark paid
+                </button>
               )}
               {(status === "paid" || status === "ready_for_payment") && (
                 <button
@@ -434,33 +417,17 @@ export function InvoiceDetail({
             <h2 className="mb-4 font-medium text-slate-200">Finance actions</h2>
             <div className="flex flex-wrap items-center gap-4">
               {status === "ready_for_payment" && (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Payment reference (required)"
-                    value={paymentRef}
-                    onChange={(e) => setPaymentRef(e.target.value)}
-                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-                  />
-                  <input
-                    type="date"
-                    value={paidDate}
-                    onChange={(e) => setPaidDate(e.target.value)}
-                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-                  />
-                  <button
-                    onClick={() =>
-                      transitionStatus("paid", {
-                        payment_reference: paymentRef.trim() || undefined,
-                        paid_date: paidDate,
-                      })
-                    }
-                    disabled={loading || !paymentRef.trim()}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    Mark paid
-                  </button>
-                </>
+                <button
+                  onClick={() =>
+                    transitionStatus("paid", {
+                      paid_date: paidDate,
+                    })
+                  }
+                  disabled={loading}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  Mark paid
+                </button>
               )}
               {status === "paid" && (
                 <button

@@ -96,7 +96,7 @@ export function InvoiceMobileCards({
           const canApprove = currentRole === "admin" || (!isSubmitter && currentRole === "manager");
           const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
           const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin");
-          const canReject = (r.status === "pending_manager" && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
+          const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
           return (
           <div
             key={r.id}
@@ -160,7 +160,7 @@ export function InvoiceMobileCards({
                   </svg>
                   View File
                 </button>
-                {r.status === "pending_manager" && canApprove && (
+                {(r.status === "pending_manager" || r.status === "submitted") && canApprove && (
                   <>
                     <button
                       onClick={() => void onManagerApprove(r.id)}
@@ -193,10 +193,10 @@ export function InvoiceMobileCards({
                     disabled={actionLoadingId === r.id}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
-                    {actionLoadingId === r.id ? "…" : "₺"} Mark Paid
+                    {actionLoadingId === r.id ? "…" : "£"} Mark Paid
                   </button>
                 )}
-                {canReject && r.status !== "pending_manager" && (
+                {canReject && r.status !== "pending_manager" && r.status !== "submitted" && (
                   <button
                     onClick={() => void onRejectInvoice(r.id)}
                     disabled={actionLoadingId === r.id}

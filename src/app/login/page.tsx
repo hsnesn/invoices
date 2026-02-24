@@ -83,9 +83,13 @@ function LoginPageContent() {
             Your account has been deactivated. Contact an administrator.
           </div>
         )}
-        {errorDescription && (
+        {(errorParam || errorDescription) && (
           <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-200">
-            {decodeURIComponent(errorDescription.replace(/\+/g, " "))}
+            {errorParam && errorParam !== "deactivated"
+              ? decodeURIComponent(errorParam.replace(/\+/g, " "))
+              : errorDescription
+                ? decodeURIComponent(errorDescription.replace(/\+/g, " "))
+                : null}
           </div>
         )}
 

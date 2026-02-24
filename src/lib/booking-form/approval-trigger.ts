@@ -131,6 +131,22 @@ export async function triggerBookingFormWorkflow(
     approvedAt: Date;
   }
 ): Promise<TriggerResult> {
+  // Skip if booking form was already created for this invoice (first approval only)
+  try {
+    const { data: existingForInvoice } = await supabase
+      .from("booking_form_email_audit")
+      .select("id")
+      .eq("invoice_id", params.invoiceId)
+      .eq("status", "completed")
+      .limit(1)
+      .maybeSingle();
+    if (existingForInvoice) {
+      return { ok: true, skipped: true };
+    }
+  } catch {
+    /* table may not exist */
+  }
+
   const idempotencyKey = buildIdempotencyKey(params.invoiceId, params.approvedAt);
   let auditId: string | null = null;
   let useAudit = true;

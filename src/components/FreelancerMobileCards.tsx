@@ -61,6 +61,9 @@ export function FreelancerMobileCards({
   onMarkPaid,
   openFile,
   openRejectModal,
+  viewBookingForm,
+  downloadBookingForm,
+  sendBookingFormEmails,
   actionLoadingId,
 }: {
   rows: DisplayRow[];
@@ -73,6 +76,9 @@ export function FreelancerMobileCards({
   onMarkPaid: (id: string) => void;
   openFile: (id: string) => void;
   openRejectModal: (id: string) => void;
+  viewBookingForm: (id: string, contractor: string, month: string) => void;
+  downloadBookingForm: (id: string, contractor: string, month: string) => void;
+  sendBookingFormEmails: (id: string) => void;
   actionLoadingId: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -116,7 +122,7 @@ export function FreelancerMobileCards({
         const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
         const canOpsRoomApprove = isOperationsRoomMember && (r.status === "approved_by_manager" || r.status === "pending_admin");
         const canAdminApprove = currentRole === "admin" && (r.status === "approved_by_manager" || r.status === "pending_admin");
-        const canReject = (r.status === "pending_manager" && canApp) || canOpsRoomApprove || canAdminApprove;
+        const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApp) || canOpsRoomApprove || canAdminApprove;
 
         return (
           <div
@@ -156,9 +162,6 @@ export function FreelancerMobileCards({
                   { label: "Booked by", value: r.bookedBy },
                   { label: "Service Desc.", value: r.serviceDescription },
                   { label: "Add. Cost Reason", value: r.additionalCostReason },
-                  { label: "Beneficiary", value: r.beneficiary },
-                  { label: "Account Number", value: r.accountNumber },
-                  { label: "Sort Code", value: r.sortCode },
                   { label: "Paid Date", value: r.paidDate },
                   { label: "Created", value: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "—" },
                 ].map(({ label, value }) => (
@@ -185,7 +188,32 @@ export function FreelancerMobileCards({
                   </svg>
                   View File
                 </button>
-                {r.status === "pending_manager" && canApp && (
+                {["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status) && (
+                  <>
+                    <button
+                      onClick={() => void viewBookingForm(r.id, r.contractor, r.month)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-800/50"
+                    >
+                      View Booking Form
+                    </button>
+                    <button
+                      onClick={() => void downloadBookingForm(r.id, r.contractor, r.month)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                    >
+                      Download BF
+                    </button>
+                    {currentRole === "admin" && (
+                      <button
+                        onClick={() => void sendBookingFormEmails(r.id)}
+                        disabled={actionLoadingId === r.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                      >
+                        {actionLoadingId === r.id ? "…" : "📧"} Send BF
+                      </button>
+                    )}
+                  </>
+                )}
+                {(r.status === "pending_manager" || r.status === "submitted") && canApp && (
                   <>
                     <button
                       onClick={() => void onManagerApprove(r.id)}
@@ -226,10 +254,10 @@ export function FreelancerMobileCards({
                     disabled={actionLoadingId === r.id}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
-                    {actionLoadingId === r.id ? "…" : "₺"} Mark Paid
+                    {actionLoadingId === r.id ? "…" : "£"} Mark Paid
                   </button>
                 )}
-                {canReject && r.status !== "pending_manager" && (
+                {canReject && r.status !== "pending_manager" && r.status !== "submitted" && (
                   <button
                     onClick={() => openRejectModal(r.id)}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500"

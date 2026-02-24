@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { EmptyState } from "./EmptyState";
@@ -145,6 +146,7 @@ export function FreelancerBoard({
   currentUserId: string;
   isOperationsRoomMember?: boolean;
 }) {
+  const router = useRouter();
   const deptMap = useMemo(() => Object.fromEntries(departmentPairs), [departmentPairs]);
   const profMap = useMemo(() => Object.fromEntries(profilePairs), [profilePairs]);
 
@@ -187,6 +189,10 @@ export function FreelancerBoard({
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
+  const refreshAndKeepVisible = useCallback(() => {
+    setGroupFilter("");
+    router.refresh();
+  }, [router]);
   const [managerFilter, setManagerFilter] = useState("");
   const [bookedByFilter, setBookedByFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -306,8 +312,8 @@ export function FreelancerBoard({
     if (wasRejected) {
       await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "pending_manager" }) });
     }
-    window.location.reload();
-  }, [saveDraft, rows]);
+    refreshAndKeepVisible();
+  }, [saveDraft, rows, refreshAndKeepVisible]);
 
   const onStartEdit = useCallback((row: DisplayRow) => {
     const prevId = editingIdRef.current; const prevDraft = editDraftRef.current;
@@ -334,29 +340,23 @@ export function FreelancerBoard({
   /* ---------- Status actions ---------- */
   const statusAction = useCallback(async (id: string, body: Record<string, unknown>) => {
     setActionLoadingId(id);
-    try { await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); window.location.reload(); }
+    try { await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); refreshAndKeepVisible(); }
     finally { setActionLoadingId(null); }
-  }, []);
+  }, [refreshAndKeepVisible]);
 
   const onManagerApprove = useCallback((id: string) => statusAction(id, { to_status: "approved_by_manager", manager_confirmed: true }), [statusAction]);
   const onAdminApprove = useCallback((id: string) => statusAction(id, { to_status: "ready_for_payment" }), [statusAction]);
   const onResubmit = useCallback((id: string) => statusAction(id, { to_status: "pending_manager" }), [statusAction]);
   const onMarkPaid = useCallback((id: string) => {
-    const paymentRef = window.prompt("Payment reference (required):");
-    if (paymentRef === null) return;
-    if (!paymentRef.trim()) {
-      toast.error("Payment reference is required when marking as paid.");
-      return;
-    }
-    statusAction(id, { to_status: "paid", payment_reference: paymentRef.trim(), paid_date: new Date().toISOString().split("T")[0] });
+    statusAction(id, { to_status: "paid", paid_date: new Date().toISOString().split("T")[0] });
   }, [statusAction]);
 
   const submitReject = useCallback(async () => {
     if (!rejectModalId || !rejectReason.trim()) return;
     setActionLoadingId(rejectModalId);
-    try { await fetch(`/api/invoices/${rejectModalId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "rejected", rejection_reason: rejectReason }) }); setRejectModalId(null); setRejectReason(""); window.location.reload(); }
+    try { await fetch(`/api/invoices/${rejectModalId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "rejected", rejection_reason: rejectReason }) }); setRejectModalId(null); setRejectReason(""); refreshAndKeepVisible(); }
     finally { setActionLoadingId(null); }
-  }, [rejectModalId, rejectReason]);
+  }, [rejectModalId, rejectReason, refreshAndKeepVisible]);
 
   const addNote = useCallback(async () => {
     if (!expandedRowId || !newNote.trim()) return;
@@ -504,15 +504,15 @@ export function FreelancerBoard({
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Approve ${selectedIds.size} invoice(s)?`)) return;
     for (const id of Array.from(selectedIds)) { await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "approved_by_manager", manager_confirmed: true }) }); }
-    window.location.reload();
-  }, [selectedIds]);
+    refreshAndKeepVisible();
+  }, [selectedIds, refreshAndKeepVisible]);
   const bulkReject = useCallback(async () => {
     if (selectedIds.size === 0) return;
     const reason = window.prompt(`Rejection reason for ${selectedIds.size} invoice(s):`);
     if (!reason?.trim()) return;
     for (const id of Array.from(selectedIds)) { await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "rejected", rejection_reason: reason.trim() }) }); }
-    window.location.reload();
-  }, [selectedIds]);
+    refreshAndKeepVisible();
+  }, [selectedIds, refreshAndKeepVisible]);
   const bulkDownload = useCallback(async () => {
     if (selectedIds.size === 0) return;
     setBulkDownloading(true);
@@ -531,11 +531,11 @@ export function FreelancerBoard({
       for (const id of Array.from(selectedIds)) {
         await fetch(`/api/invoices/${id}`, { method: "DELETE" });
       }
-      window.location.reload();
+      refreshAndKeepVisible();
     } finally {
       setActionLoadingId(null);
     }
-  }, [selectedIds]);
+  }, [selectedIds, refreshAndKeepVisible]);
 
   const bulkMoveToGroup = useCallback(async (groupKey: string) => {
     const ids = Array.from(selectedIds);
@@ -557,10 +557,8 @@ export function FreelancerBoard({
     } else if (groupKey === "ready_for_payment") {
       toStatus = "ready_for_payment";
     } else if (groupKey === "paid") {
-      const ref = window.prompt(`Payment reference for ${ids.length} invoice(s):`);
-      if (!ref?.trim()) return;
       toStatus = "paid";
-      payload = { payment_reference: ref.trim(), paid_date: new Date().toISOString().split("T")[0] };
+      payload = { paid_date: new Date().toISOString().split("T")[0] };
     } else {
       return;
     }
@@ -581,11 +579,11 @@ export function FreelancerBoard({
         toast.error(errors.join("\n"));
         return;
       }
-      window.location.reload();
+      refreshAndKeepVisible();
     } finally {
       setActionLoadingId(null);
     }
-  }, [selectedIds]);
+  }, [selectedIds, refreshAndKeepVisible]);
 
   /* ---------- Duplicate detection ---------- */
   const duplicates = useMemo(() => {
@@ -627,7 +625,7 @@ export function FreelancerBoard({
         if (disposed) return;
         const supabase = createClient();
         sub = supabase.channel("fl-rt").on("postgres_changes", { event: "*", schema: "public", table: "invoice_workflows" }, () => {
-          if (!disposed) window.location.reload();
+          if (!disposed) router.refresh();
         }).subscribe();
       } catch { /* realtime not critical */ }
     })();
@@ -923,6 +921,9 @@ export function FreelancerBoard({
                     onMarkPaid={onMarkPaid}
                     openFile={(id) => void openFile(id)}
                     openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }}
+                    viewBookingForm={viewBookingForm}
+                    downloadBookingForm={downloadBookingForm}
+                    sendBookingFormEmails={sendBookingFormEmails}
                     actionLoadingId={actionLoadingId}
                   />
                 </div>

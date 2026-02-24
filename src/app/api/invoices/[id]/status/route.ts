@@ -450,12 +450,6 @@ export async function POST(
             { status: 400 }
           );
         }
-        if (!payment_reference?.trim()) {
-          return NextResponse.json(
-            { error: "Payment reference is required when marking as paid" },
-            { status: 400 }
-          );
-        }
         await supabase
           .from("invoice_workflows")
           .update({
