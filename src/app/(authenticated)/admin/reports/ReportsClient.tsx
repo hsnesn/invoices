@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
 /* ------------------------------------------------------------------ */
@@ -57,7 +58,7 @@ export function ReportsClient() {
         body: JSON.stringify({ type: reportType, year, month, quarter, invoiceType, sendEmail, emailTo: sendEmail ? emailTo : undefined, dateFrom: reportType === "custom" ? dateFrom : undefined, dateTo: reportType === "custom" ? dateTo : undefined }),
       });
       if (res.ok) { setReport(await res.json()); setActiveTab("overview"); }
-      else alert("Failed to generate report");
+      else toast.error("Failed to generate report");
     } finally { setLoading(false); }
   }, [reportType, year, month, quarter, invoiceType, sendEmail, emailTo, dateFrom, dateTo]);
 
@@ -66,7 +67,7 @@ export function ReportsClient() {
     setEmailSending(true);
     try {
       const res = await fetch("/api/reports/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: reportType, year, month, quarter, invoiceType, sendEmail: true, emailTo, dateFrom: reportType === "custom" ? dateFrom : undefined, dateTo: reportType === "custom" ? dateTo : undefined }) });
-      if (res.ok) { const d = await res.json(); setReport(d); alert(d.emailSent ? "Report sent!" : `Failed: ${d.emailError}`); }
+      if (res.ok) { const d = await res.json(); setReport(d); d.emailSent ? toast.success("Report sent!") : toast.error(`Failed: ${d.emailError}`); }
     } finally { setEmailSending(false); }
   }, [emailTo, report, reportType, year, month, quarter, invoiceType, dateFrom, dateTo]);
 

@@ -3,6 +3,8 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { toast } from "sonner";
+import { EmptyState } from "./EmptyState";
 
 const DashboardSection = lazy(() => import("./InvoiceDashboard").then((m) => ({ default: m.InvoiceDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
@@ -370,9 +372,9 @@ function InvoiceTable({
   }, []);
 
   return (
-    <div className="overflow-x-auto rounded-2xl border-2 border-slate-300 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
+    <div className="overflow-x-auto overflow-y-visible rounded-2xl border-2 border-slate-300 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
       <table className="min-w-[2800px] divide-y divide-slate-200 dark:divide-slate-600">
-        <thead className="bg-slate-100 dark:bg-slate-700">
+        <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-700 shadow-sm">
           <tr>
             {isCol("checkbox") && currentRole === "admin" && (
             <th className="px-2 py-3 text-center w-10">
@@ -1085,7 +1087,7 @@ export function InvoicesBoard({
     const paymentRef = window.prompt("Payment reference (required):");
     if (paymentRef === null) return;
     if (!paymentRef.trim()) {
-      alert("Payment reference is required when marking as paid.");
+      toast.error("Payment reference is required when marking as paid.");
       return;
     }
     const ok = window.confirm(`Mark as paid with reference: ${paymentRef.trim()}?`);
@@ -1106,7 +1108,7 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        alert(data?.error ?? "Failed to mark as paid");
+        toast.error(data?.error ?? "Failed to mark as paid");
       }
     } finally {
       setActionLoadingId(null);
@@ -1176,7 +1178,7 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        alert(data?.error ?? "Failed to move");
+        toast.error(data?.error ?? "Failed to move");
       }
     } finally {
       setActionLoadingId(null);
@@ -1197,7 +1199,7 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        alert(data?.error ?? "Failed to move");
+        toast.error(data?.error ?? "Failed to move");
       }
     } finally {
       setActionLoadingId(null);
@@ -1217,11 +1219,11 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        alert(data?.error ?? "File replacement failed");
+        toast.error(data?.error ?? "File replacement failed");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
-      alert(msg.includes("fetch") ? "Bağlantı hatası. Sunucunun çalıştığından emin olun." : msg);
+      toast.error(msg.includes("fetch") ? "Bağlantı hatası. Sunucunun çalıştığından emin olun." : msg);
     } finally {
       setActionLoadingId(null);
     }
@@ -1258,7 +1260,7 @@ export function InvoicesBoard({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        alert(data?.error ?? "Download failed");
+        toast.error(data?.error ?? "Download failed");
         return;
       }
       const blob = await res.blob();
@@ -1324,10 +1326,10 @@ export function InvoicesBoard({
         setNewNote("");
       } else {
         const d = await res.json().catch(() => ({}));
-        alert(d?.error ?? "Not eklenemedi.");
+        toast.error(d?.error ?? "Not eklenemedi.");
       }
     } catch {
-      alert("Not eklenemedi. Bağlantınızı kontrol edin.");
+      toast.error("Not eklenemedi. Bağlantınızı kontrol edin.");
     }
   }, [expandedRowId, newNote]);
 
@@ -1459,7 +1461,7 @@ export function InvoicesBoard({
         if (!res.ok) errors.push(`Invoice ${id}: ${data.error ?? res.statusText}`);
       }
       if (errors.length > 0) {
-        alert(errors.join("\n"));
+        toast.error(errors.join("\n"));
         return;
       }
       window.location.reload();
@@ -2022,7 +2024,36 @@ export function InvoicesBoard({
         )}
       </div>
 
-      {groups.map((g) => {
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          }
+          title="No invoices match your filters"
+          description="Try adjusting your search or filter criteria to see more results."
+          action={
+            <button
+              onClick={() => {
+                setSearch("");
+                setDepartmentFilter("");
+                setProgrammeFilter("");
+                setGroupFilter("");
+                setProducerFilter("");
+                setPaymentTypeFilter("");
+                setManagerFilter("");
+                setDateFrom("");
+                setDateTo("");
+                setSortField("");
+              }}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Clear filters
+            </button>
+          }
+        />
+      ) : groups.map((g) => {
         const data = filtered.filter((r) => r.group === g);
         return (
           <section key={g} className="space-y-2">

@@ -4,6 +4,8 @@ import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspens
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import useSWR from "swr";
+import { toast } from "sonner";
+import { EmptyState } from "./EmptyState";
 
 const FreelancerDashboard = lazy(() => import("./FreelancerDashboard").then(m => ({ default: m.FreelancerDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
@@ -342,7 +344,7 @@ export function FreelancerBoard({
     const paymentRef = window.prompt("Payment reference (required):");
     if (paymentRef === null) return;
     if (!paymentRef.trim()) {
-      alert("Payment reference is required when marking as paid.");
+      toast.error("Payment reference is required when marking as paid.");
       return;
     }
     statusAction(id, { to_status: "paid", payment_reference: paymentRef.trim(), paid_date: new Date().toISOString().split("T")[0] });
@@ -365,10 +367,10 @@ export function FreelancerBoard({
         if (listRes.ok) setNotesData(await listRes.json());
       } else {
         const d = await res.json().catch(() => ({}));
-        alert(d?.error ?? "Not eklenemedi.");
+        toast.error(d?.error ?? "Not eklenemedi.");
       }
     } catch {
-      alert("Not eklenemedi. Bağlantınızı kontrol edin.");
+      toast.error("Not eklenemedi. Bağlantınızı kontrol edin.");
     }
   }, [expandedRowId, newNote]);
 
@@ -435,8 +437,8 @@ export function FreelancerBoard({
     try {
       const fd = new FormData(); fd.append("file", file);
       const res = await fetch(`/api/invoices/${invoiceId}/replace-file`, { method: "POST", body: fd });
-      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); alert(d?.error ?? "File replacement failed"); }
-    } catch (err) { alert(err instanceof Error ? err.message : "Upload failed"); }
+      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); toast.error(d?.error ?? "File replacement failed"); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Upload failed"); }
     finally { setActionLoadingId(null); }
   }, []);
 
@@ -445,28 +447,28 @@ export function FreelancerBoard({
     try {
       const fd = new FormData(); fd.append("file", file);
       const res = await fetch(`/api/invoices/${invoiceId}/add-file`, { method: "POST", body: fd });
-      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); alert(d?.error ?? "Add file failed"); }
-    } catch (err) { alert(err instanceof Error ? err.message : "Upload failed"); }
+      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); toast.error(d?.error ?? "Add file failed"); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Upload failed"); }
     finally { setActionLoadingId(null); }
   }, []);
 
   const viewBookingForm = useCallback(async (id: string, contractor: string, month: string) => {
     try {
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
-      if (!r.ok) { alert("Booking form could not be generated"); return; }
+      if (!r.ok) { toast.error("Booking form could not be generated"); return; }
       const blob = await r.blob();
       const blobUrl = URL.createObjectURL(blob);
       setPreviewUrl(blobUrl);
       setPreviewHtml(null);
       setPreviewName(`Booking_Form_${contractor.replace(/\s+/g, "_")}_${month}.pdf`);
       setPreviewDownloadUrl(blobUrl);
-    } catch { alert("Error loading booking form"); }
+    } catch { toast.error("Error loading booking form"); }
   }, []);
 
   const downloadBookingForm = useCallback(async (id: string, contractor: string, month: string) => {
     try {
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
-      if (!r.ok) { alert("Booking form could not be generated"); return; }
+      if (!r.ok) { toast.error("Booking form could not be generated"); return; }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -476,7 +478,7 @@ export function FreelancerBoard({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch { alert("Error downloading booking form"); }
+    } catch { toast.error("Error downloading booking form"); }
   }, []);
 
   const sendBookingFormEmails = useCallback(async (id: string) => {
@@ -484,9 +486,9 @@ export function FreelancerBoard({
     try {
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form/trigger`, { method: "POST" });
       const d = await r.json().catch(() => null);
-      if (r.ok) alert(d?.skipped ? "Already sent (idempotent)" : "Booking form emails sent to Line Manager and London Operations.");
-      else alert(d?.error ?? "Failed to send booking form emails");
-    } catch { alert("Error sending booking form emails"); }
+      if (r.ok) toast.success(d?.skipped ? "Already sent (idempotent)" : "Booking form emails sent to Line Manager and London Operations.");
+      else toast.error(d?.error ?? "Failed to send booking form emails");
+    } catch { toast.error("Error sending booking form emails"); }
     finally { setActionLoadingId(null); }
   }, []);
 
@@ -515,7 +517,7 @@ export function FreelancerBoard({
     setBulkDownloading(true);
     try {
       const res = await fetch("/api/invoices/bulk-download", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoice_ids: Array.from(selectedIds) }) });
-      if (!res.ok) { alert("Download failed"); return; }
+      if (!res.ok) { toast.error("Download failed"); return; }
       const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `freelancer-invoices-${new Date().toISOString().split("T")[0]}.zip`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } finally { setBulkDownloading(false); }
   }, [selectedIds]);
@@ -575,7 +577,7 @@ export function FreelancerBoard({
         if (!res.ok) errors.push(`Invoice ${id}: ${data.error ?? res.statusText}`);
       }
       if (errors.length > 0) {
-        alert(errors.join("\n"));
+        toast.error(errors.join("\n"));
         return;
       }
       window.location.reload();
@@ -878,7 +880,17 @@ export function FreelancerBoard({
       )}
 
       {/* Groups */}
-      {GROUPS.map(g => {
+      {filteredRows.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          }
+          title="No freelancer invoices"
+          description="There are no invoices matching your filters. Submit a new invoice or adjust your search."
+        />
+      ) : GROUPS.map(g => {
         const gRows = groupedRows[g.key] ?? [];
         if (gRows.length === 0 && g.key === "rejected" && !groupFilter) return null;
         const collapsed = collapsedGroups.has(g.key);

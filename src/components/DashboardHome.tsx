@@ -1,7 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import useSWR from "swr";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import type { Profile, PageKey } from "@/lib/types";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+type Stats = {
+  guest: { pending: number; paid: number; rejected: number; total: number };
+  freelancer: { pending: number; paid: number; rejected: number; total: number };
+  monthlyTrend: { month: string; guest: number; freelancer: number; total: number }[];
+};
 
 interface PageCard {
   title: string;
@@ -123,6 +133,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   const isAdmin = profile.role === "admin";
   const isViewer = profile.role === "viewer";
   const userPages = profile.allowed_pages;
+  const { data: stats } = useSWR<Stats>("/api/dashboard/stats", fetcher);
 
   const visiblePages = PAGES.filter((p) => {
     if (p.viewerHidden && isViewer) return false;
@@ -153,6 +164,83 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Metric Cards */}
+      {stats && (
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
+            <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Guest Pending</p>
+            <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{stats.guest.pending}</p>
+            <Link href="/invoices?group=pending" className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
+              View →
+            </Link>
+          </div>
+          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30">
+            <p className="text-xs font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Guest Paid</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-800 dark:text-emerald-200">{stats.guest.paid}</p>
+            <Link href="/invoices?group=paid" className="mt-2 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
+              View →
+            </Link>
+          </div>
+          <div className="rounded-xl border border-teal-200/80 bg-teal-50/80 p-4 shadow-sm dark:border-teal-800/60 dark:bg-teal-950/30">
+            <p className="text-xs font-medium uppercase tracking-wider text-teal-600 dark:text-teal-400">Freelancer Pending</p>
+            <p className="mt-1 text-2xl font-bold text-teal-800 dark:text-teal-200">{stats.freelancer.pending}</p>
+            <Link href="/freelancer-invoices" className="mt-2 inline-block text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+              View →
+            </Link>
+          </div>
+          <div className="rounded-xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
+            <p className="text-xs font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Freelancer Paid</p>
+            <p className="mt-1 text-2xl font-bold text-sky-800 dark:text-sky-200">{stats.freelancer.paid}</p>
+            <Link href="/freelancer-invoices" className="mt-2 inline-block text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">
+              View →
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Mini Chart */}
+      {stats?.monthlyTrend?.length ? (
+        <div className="mb-8 rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Invoices by Month</h2>
+          <div className="mt-4 h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stats.monthlyTrend}>
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="guest" fill="#3b82f6" name="Guest" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="freelancer" fill="#14b8a6" name="Freelancer" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Quick Actions */}
+      <div className="mb-8 flex flex-wrap gap-3">
+        <Link
+          href="/invoices"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          Guest Invoices
+        </Link>
+        <Link
+          href="/freelancer-invoices"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+          Freelancer Invoices
+        </Link>
+        <Link
+          href="/admin/reports"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          Reports
+        </Link>
       </div>
 
       {/* Page Cards */}

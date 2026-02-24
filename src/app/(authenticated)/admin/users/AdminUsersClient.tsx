@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import useSWR from "swr";
+import { toast } from "sonner";
 import type { Profile, PageKey } from "@/lib/types";
 import { ALL_PAGES } from "@/lib/types";
 
@@ -125,7 +126,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       );
     } else {
       const data = await res.json();
-      alert(data.error || "Failed");
+      toast.error(data.error || "Failed");
     }
   };
 

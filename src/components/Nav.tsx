@@ -18,7 +18,7 @@ export function Nav({ profile }: { profile: Profile }) {
   };
 
   return (
-    <nav className="flex items-center justify-between border-b border-gray-200/80 bg-white px-6 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200/80 bg-white/95 px-6 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-gray-800 dark:bg-gray-900 dark:bg-gray-900/95 supports-[backdrop-filter]:dark:bg-gray-900/80">
       <div className="flex items-center gap-4">
         <Link href="/dashboard" className="flex items-center gap-3">
           <img src="/trt-logo.png" alt="TRT" className="h-8 object-contain" />
