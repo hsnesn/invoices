@@ -41,10 +41,13 @@ export function Nav({ profile }: { profile: Profile }) {
             )}
           </button>
         )}
-        <span className="hidden text-sm text-gray-500 dark:text-gray-400 sm:inline">
+        <Link
+          href="/profile"
+          className="hidden text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white sm:inline"
+        >
           {profile.full_name || profile.role}
           <span className="ml-1 text-gray-400 dark:text-gray-500">({profile.role})</span>
-        </span>
+        </Link>
         <button
           onClick={handleSignOut}
           className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
