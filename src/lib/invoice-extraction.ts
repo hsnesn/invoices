@@ -142,7 +142,8 @@ function regexExtractFromText(text: string) {
     /(?:beneficiary|payee|account\s*name|name\s+on\s+account)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
   ]);
   const companyFromLabel = lineValue([
-    /(?:company|business|trading\s+as)\s*(?:name)?\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+    /(?:company\s+name|business\s+name|trading\s+as)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+    /(?:bank\s+name)[:\-]?\s*[^:]+-\s*([A-Za-z0-9 '&.,-]+(?:Ltd|Inc|LLC)\.?)/i,
   ]);
   const currency =
     full.match(/\b(GBP|EUR|USD|TRY)\b/i)?.[1]?.toUpperCase() ??
@@ -183,9 +184,10 @@ function regexExtractFromText(text: string) {
     }
   }
 
+  const rawCompany = companyFromLabel && /[A-Za-z]{2,}/.test(companyFromLabel) && !/^\d+$/.test(companyFromLabel.replace(/\s/g, "")) ? companyFromLabel : null;
   return {
     beneficiary_name: stripInternalRefs(beneficiary),
-    company_name: stripInternalRefs(companyFromLabel),
+    company_name: stripInternalRefs(rawCompany),
     account_number: accountNumber,
     sort_code: sortCodeRaw ? normalizeSortCode(sortCodeRaw) ?? sortCodeRaw : null,
     invoice_number: stripInternalRefs(invoiceNumber),
@@ -246,7 +248,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
 
   const FIELD_PROMPTS: Record<string, string> = {
     beneficiary_name: `Extract ONLY the beneficiary/account holder name from this invoice. Person or company who receives payment. Look for "Account holder name", "Payee name", "Beneficiary", "Name on account". NO address. NEVER use date, invoice number, or amount. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
-    company_name: `Extract ONLY the company/business name if the payee is a company. Look for "Company name", "Trading as", "Ltd", "Inc". If self-employed, return null.` + CERTAIN_SUFFIX,
+    company_name: `Extract ONLY the company/business NAME (e.g. "FluentWorld Ltd", "ABC Ltd"). Look for the company name in the header or "Bank Name" line. NEVER use "Company Reg. No." - that is a registration number (digits), NOT a name. Company name must contain letters.` + CERTAIN_SUFFIX,
     account_number: `Extract ONLY the bank account number from the BANK DETAILS section. Look for "Account No." or "Account Number" - the number where payment is sent. Typically 8 digits for UK. NEVER use "Company Reg. No.", "VAT No.", "Registration No." or similar - those are different. Digits only.` + CERTAIN_SUFFIX,
     sort_code: `Extract ONLY the UK sort code from the bank details. Look for "Sort Code", "Sort/Branch Code". Exactly 6 digits. NEVER use Company Reg. No. or other numbers.` + CERTAIN_SUFFIX,
     invoice_number: `Extract ONLY the invoice number. Look for "Invoice No." or "Invoice Number" - often format like INV-123. NEVER use "Company Reg. No.", "Registration No.", "VAT No." - those are different. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
@@ -286,6 +288,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     if (result.value == null || result.value === "") return;
     if (result.certain === false) return; // skip only when explicitly uncertain
     const val = result.value;
+    if (key === "company_name" && typeof val === "string" && /^\d+$/.test(val.replace(/\s/g, ""))) return; // reject pure numbers (e.g. Company Reg. No.)
     if (key === "gross_amount") {
       (parsed as Record<string, unknown>)[key] = typeof val === "number" ? val : parseNumberLike(String(val));
     } else {
