@@ -37,7 +37,7 @@ function normalizeHeader(h: string): string {
     .replace(/\s+/g, " ");
 }
 
-function getCell(row: Record<string, unknown>, ...aliases: string[]): string {
+function getCell(row: Record<string, unknown>, ...aliases: string[]): string | number | Date {
   const keys = Object.keys(row).map((k) => normalizeHeader(k));
   for (const alias of aliases) {
     const n = normalizeHeader(alias);
@@ -45,18 +45,32 @@ function getCell(row: Record<string, unknown>, ...aliases: string[]): string {
     if (idx >= 0) {
       const key = Object.keys(row)[idx];
       const v = row[key];
-      return typeof v === "string" ? v.trim() : v != null ? String(v).trim() : "";
+      if (v == null) return "";
+      if (typeof v === "string") return v.trim();
+      if (typeof v === "number" || v instanceof Date) return v;
+      return String(v).trim();
     }
   }
   return "";
 }
 
-function parseDate(s: string): string | null {
-  if (!s || !s.trim()) return null;
-  const t = s.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-  const d = new Date(t);
-  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+/** Parse date from string, Excel serial number, or Date object. Returns YYYY-MM-DD or null. */
+function parseDate(val: string | number | Date): string | null {
+  if (val == null || (typeof val === "string" && !val.trim())) return null;
+  if (typeof val === "string") {
+    const t = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const d = new Date(t);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  }
+  if (typeof val === "number") {
+    if (val < 1 || val > 2958465) return null;
+    const jsDate = new Date((val - 25569) * 86400000);
+    if (!Number.isNaN(jsDate.getTime())) return jsDate.toISOString().slice(0, 10);
+    return null;
+  }
+  if (val instanceof Date && !Number.isNaN(val.getTime())) return val.toISOString().slice(0, 10);
   return null;
 }
 
@@ -132,8 +146,8 @@ export async function POST(request: NextRequest) {
       }
       if (firstCell === "Guest Name" || firstCell === "guest name") continue;
 
-      const guestName = getCell(row, "Guest Name", "guest name", "guest_name");
-      const paymentTypeRaw = getCell(row, "Payment Type", "payment type", "payment_type");
+      const guestName = String(getCell(row, "Guest Name", "guest name", "guest_name") ?? "").trim();
+      const paymentTypeRaw = String(getCell(row, "Payment Type", "payment type", "payment_type") ?? "").trim();
       const paymentType = paymentTypeRaw
         ? (/unpaid|no payment/i.test(paymentTypeRaw) || paymentTypeRaw.toLowerCase() === "unpaid"
             ? "unpaid_guest"
@@ -145,30 +159,30 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const departmentName = getCell(row, "Department", "department name");
-      const programmeName = getCell(row, "Programme Name", "Programme", "programme name");
+      const departmentName = String(getCell(row, "Department", "department name") ?? "").trim();
+      const programmeName = String(getCell(row, "Programme Name", "Programme", "programme name") ?? "").trim();
       let departmentId: string | null = null;
       let programId: string | null = null;
       if (departmentName) {
-        departmentId = deptMap.get(departmentName.trim().toLowerCase()) ?? null;
+        departmentId = deptMap.get(departmentName.toLowerCase()) ?? null;
         if (departmentId && programmeName) {
           programId =
-            progMap.get(`${departmentId}:${programmeName.trim().toLowerCase()}`) ?? null;
+            progMap.get(`${departmentId}:${programmeName.toLowerCase()}`) ?? null;
         }
       }
 
-      const title = getCell(row, "Title", "title");
-      const producer = getCell(row, "Producer", "producer name");
-      const topic = getCell(row, "Topic", "topic");
+      const title = String(getCell(row, "Title", "title") ?? "").trim() || undefined;
+      const producer = String(getCell(row, "Producer", "producer name") ?? "").trim() || undefined;
+      const topic = String(getCell(row, "Topic", "topic") ?? "").trim() || undefined;
       const invoiceDate = parseDate(getCell(row, "Invoice Date", "invoice date"));
       const tx1 = parseDate(getCell(row, "TX Date", "TX Date 1", "tx date 1"));
       const tx2 = parseDate(getCell(row, "2. TX Date", "TX Date 2", "tx date 2"));
       const tx3 = parseDate(getCell(row, "3. TX Date", "TX Date 3", "tx date 3"));
-      const accountName = getCell(row, "Account Name", "Beneficiary", "beneficiary_name");
-      const amount = parseAmount(getCell(row, "Amount", "Gross Amount", "gross_amount"));
-      const invNumber = getCell(row, "INV Number", "Invoice Number", "invoice_number");
-      const sortCode = getCell(row, "Sort Code", "sort_code");
-      const accountNumber = getCell(row, "Account Number", "account_number");
+      const accountName = String(getCell(row, "Account Name", "Beneficiary", "beneficiary_name") ?? "").trim() || null;
+      const amount = parseAmount(String(getCell(row, "Amount", "Gross Amount", "gross_amount") ?? ""));
+      const invNumber = String(getCell(row, "INV Number", "Invoice Number", "invoice_number") ?? "").trim() || null;
+      const sortCode = String(getCell(row, "Sort Code", "sort_code") ?? "").trim() || null;
+      const accountNumber = String(getCell(row, "Account Number", "account_number") ?? "").trim() || null;
       const paidDateRaw = getCell(row, "Payment Date", "Paid Date", "paid_date");
 
       const service_description = buildServiceDescription({
