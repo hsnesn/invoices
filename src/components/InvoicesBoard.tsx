@@ -247,7 +247,15 @@ function EditGuestInvoiceModal({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Producer</label>
-              <input type="text" value={producer} onChange={(e) => setProducer(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+              <select value={producer} onChange={(e) => setProducer(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="">Select...</option>
+                {producer && !profilePairs.some(([, n]) => n === producer) && (
+                  <option value={producer}>{producer}</option>
+                )}
+                {profilePairs.map(([id, name]) => (
+                  <option key={id} value={name}>{name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Type</label>
@@ -2400,6 +2408,11 @@ export function InvoicesBoard({
                   ["Example Unpaid", "", "Title", "Producer", "Programmes", "Bigger Than Football", "Topic", "2025-01-15", "2025-01-15", "", "", "", "", "0", "INV-002", "", "", "", ""],
                 ];
                 const ws = XLSX.utils.aoa_to_sheet(data);
+                ws["!cols"] = [
+                  { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 12 },
+                  { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 10 },
+                  { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 12 },
+                ];
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "guest invoice submission");
                 XLSX.writeFile(wb, "guest-invoices-import-template.xlsx");

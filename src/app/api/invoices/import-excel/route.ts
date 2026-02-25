@@ -118,12 +118,20 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
     const userId = session.user.id;
 
-    const { data: departments } = await supabase.from("departments").select("id, name");
-    const { data: programs } = await supabase.from("programs").select("id, name, department_id");
+    const [{ data: departments }, { data: programs }, { data: profiles }] = await Promise.all([
+      supabase.from("departments").select("id, name"),
+      supabase.from("programs").select("id, name, department_id"),
+      supabase.from("profiles").select("id, full_name").eq("is_active", true),
+    ]);
     const deptMap = new Map<string, string>((departments ?? []).map((d) => [d.name.trim().toLowerCase(), d.id]));
     const progMap = new Map<string, string>();
     for (const p of programs ?? []) {
       progMap.set(`${p.department_id}:${p.name.trim().toLowerCase()}`, p.id);
+    }
+    const producerMap = new Map<string, string>();
+    for (const p of profiles ?? []) {
+      const name = (p.full_name ?? "").trim();
+      if (name) producerMap.set(name.toLowerCase(), name);
     }
 
     const created: string[] = [];
@@ -172,7 +180,10 @@ export async function POST(request: NextRequest) {
       }
 
       const title = String(getCell(row, "Title", "title") ?? "").trim() || undefined;
-      const producer = String(getCell(row, "Producer", "producer name") ?? "").trim() || undefined;
+      const producerRaw = String(getCell(row, "Producer", "producer name") ?? "").trim();
+      const producer = producerRaw
+        ? (producerMap.get(producerRaw.toLowerCase()) ?? producerRaw)
+        : undefined;
       const topic = String(getCell(row, "Topic", "topic") ?? "").trim() || undefined;
       const invoiceDate = parseDate(getCell(row, "Invoice Date", "invoice date"));
       const tx1 = parseDate(getCell(row, "TX Date", "TX Date 1", "tx date 1"));
