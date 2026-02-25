@@ -57,12 +57,12 @@ type NoteItem = { id: number; content: string; author_name: string; created_at: 
 /* CONSTANTS                                                           */
 /* ------------------------------------------------------------------ */
 
-const GROUPS: { key: GroupKey; label: string; borderColor: string; headerBg: string }[] = [
-  { key: "submitted", label: "Submitted Invoices", borderColor: "border-l-[#18C868]", headerBg: STATUS_GROUP_COLORS.submitted },
-  { key: "rejected", label: "Rejected Invoices", borderColor: "border-l-[#E53A4C]", headerBg: STATUS_GROUP_COLORS.rejected },
-  { key: "admin_approvals", label: "The Operations Room Approvals", borderColor: "border-l-[#F9509E]", headerBg: STATUS_GROUP_COLORS.admin_approvals },
-  { key: "ready_for_payment", label: "Ready for Payment", borderColor: "border-l-[#0C86BB]", headerBg: STATUS_GROUP_COLORS.ready_for_payment },
-  { key: "paid", label: "Paid Invoices", borderColor: "border-l-[#28C16E]", headerBg: STATUS_GROUP_COLORS.paid },
+const GROUPS: { key: GroupKey; label: string; color: string; headerBg: string; textColor: string }[] = [
+  { key: "submitted", label: "Submitted Invoices", color: "border-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", textColor: "text-amber-700 dark:text-amber-400" },
+  { key: "rejected", label: "Rejected Invoices", color: "border-rose-500", headerBg: "bg-rose-50 dark:bg-rose-950/30", textColor: "text-rose-700 dark:text-rose-400" },
+  { key: "admin_approvals", label: "The Operations Room Approvals", color: "border-orange-500", headerBg: "bg-orange-50 dark:bg-orange-950/30", textColor: "text-orange-700 dark:text-orange-400" },
+  { key: "ready_for_payment", label: "Ready for Payment", color: "border-sky-500", headerBg: "bg-sky-50 dark:bg-sky-950/30", textColor: "text-sky-700 dark:text-sky-400" },
+  { key: "paid", label: "Paid Invoices", color: "border-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", textColor: "text-emerald-700 dark:text-emerald-400" },
 ];
 
 const FL_MOVE_GROUPS: MoveGroup[] = [
@@ -896,12 +896,12 @@ export function FreelancerBoard({
         const collapsed = collapsedGroups.has(g.key);
         const sums = groupSums[g.key];
         return (
-          <div key={g.key} className={`rounded-xl border-l-4 ${g.borderColor} bg-white shadow-md dark:bg-slate-800 overflow-hidden`}>
-            <button onClick={() => toggleGroup(g.key)} className="w-full flex items-center justify-between px-4 py-3 transition-colors hover:opacity-90" style={{ backgroundColor: g.headerBg, color: "#ffffff" }}>
+          <div key={g.key} className={`rounded-xl border-l-4 ${g.color} bg-white shadow-md dark:bg-slate-800 overflow-hidden`}>
+            <button onClick={() => toggleGroup(g.key)} className={`w-full flex items-center justify-between px-4 py-3 ${g.headerBg} transition-colors hover:opacity-90`}>
               <div className="flex items-center gap-2">
-                <svg className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} fill="currentColor" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                <h2 className="text-sm font-bold">{g.label}</h2>
-                <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:text-slate-200">{gRows.length}</span>
+                <svg className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                <h2 className={`text-sm font-bold ${g.textColor}`}>{g.label}</h2>
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:text-slate-300">{gRows.length}</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                 {sums.amount > 0 && <span>Amount: <strong>{fmtCurrency(sums.amount)}</strong></span>}

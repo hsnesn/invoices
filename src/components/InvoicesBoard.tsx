@@ -9,7 +9,7 @@ import { InvoiceMobileCards } from "./InvoiceMobileCards";
 
 const DashboardSection = lazy(() => import("./InvoiceDashboard").then((m) => ({ default: m.InvoiceDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
-import { departmentBadgeStyle, programmeBadgeStyle, sectionHeaderStyle, GUEST_SECTION_COLORS } from "@/lib/colors";
+import { departmentBadgeStyle, programmeBadgeStyle, GUEST_SECTION_COLORS } from "@/lib/colors";
 
 type InvoiceRow = {
   id: string;
@@ -194,6 +194,13 @@ function producerColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
+function sectionColor(group: DisplayRow["group"]): string {
+  if (group === "pending_line_manager") return "text-amber-700 dark:text-amber-300";
+  if (group === "ready_for_payment") return "text-sky-700 dark:text-sky-300";
+  if (group === "paid_invoices") return "text-emerald-700 dark:text-emerald-300";
+  if (group === "rejected") return "text-rose-700 dark:text-rose-300";
+  return "text-slate-600 dark:text-slate-400";
+}
 
 function parseServiceDescription(value: string | null): Record<string, string> {
   if (!value) return {};
@@ -2031,9 +2038,9 @@ export function InvoicesBoard({
         const data = filtered.filter((r) => r.group === g);
         return (
           <section key={g} className="space-y-2">
-            <h2 className="text-base font-bold flex items-center gap-2 text-white rounded-lg px-3 py-2" style={sectionHeaderStyle(g)}>
+            <h2 className={`text-base font-bold flex items-center gap-2 ${sectionColor(g)}`}>
               <span className="inline-flex h-2.5 w-2.5 rounded-full bg-current" />
-              {sectionTitle(g)} <span className="font-medium opacity-90">({data.length})</span>
+              {sectionTitle(g)} <span className="font-medium text-slate-600 dark:text-slate-400">({data.length})</span>
             </h2>
             <div className="md:hidden">
               <InvoiceMobileCards

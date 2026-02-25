@@ -90,6 +90,14 @@ function looksLikeFieldLabel(s: string | null | undefined): boolean {
   return BENEFICIARY_LABEL_PATTERNS.some((p) => p.test(v));
 }
 
+function stripAddressFromName(s: string | null | undefined): string | null {
+  if (!s?.trim()) return null;
+  const v = s.trim();
+  const first = v.split(/[,;\n]/)[0]?.trim();
+  if (!first || first.length > 100) return v;
+  return first;
+}
+
 function stripInternalRefs(s: string | null | undefined): string | null {
   if (!s?.trim()) return null;
   const v = s.trim().replace(/\bTRT\s*World\b/gi, "").replace(/\bTRTWORLD\b/gi, "").replace(/\bTRT\s*WORLD\b/gi, "").replace(/\bTRT\b/g, "").trim();
@@ -131,17 +139,32 @@ function regexExtractFromText(text: string) {
       /\b(\d{8})\b/,
     ])?.replace(/\s+/g, "") ?? null;
   const beneficiaryFromLabel = lineValue([
-    /(?:beneficiary|payee|account\s*name|name)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+    /(?:beneficiary|payee|account\s*name|name\s+on\s+account)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+  ]);
+  const companyFromLabel = lineValue([
+    /(?:company|business|trading\s+as)\s*(?:name)?\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
   ]);
   const currency =
     full.match(/\b(GBP|EUR|USD|TRY)\b/i)?.[1]?.toUpperCase() ??
     (full.includes("£") ? "GBP" : null);
-  const grossRaw =
-    lineValue([
-      /(?:grand\s*total|total\s*amount|total|amount\s*due|gross)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
-      /(?:balance\s*due)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
-      /[£$€]\s*([0-9][0-9,]*(?:\.\d{2})?)/,
-    ]) ?? null;
+  const grossPatterns = [
+    /(?:grand\s*total|total\s*amount|amount\s*due|balance\s*due|invoice\s*total|total\s*payable|amount\s*payable|payment\s*due|final\s*(?:total|amount)|amount\s*to\s*pay|invoice\s*value|total\s*due)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
+    /(?:^|\s)(?:total|gross|sum)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
+    /(?:balance\s*due|amount\s*due)\s*[:\-]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
+  ];
+  let grossRaw = lineValue(grossPatterns);
+  if (!grossRaw) {
+    const amountRegex = /[£$€]\s*([0-9][0-9,]*(?:\.[0-9]{2})?)|([0-9][0-9,]*(?:\.[0-9]{2})?)\s*[£$€]?/g;
+    const allAmounts: number[] = [];
+    let m;
+    while ((m = amountRegex.exec(full)) !== null) {
+      const s = (m[1] || m[2])?.replace(/,/g, "");
+      const n = s ? parseNumberLike(s) : null;
+      if (n != null && n > 0 && n < 10000000) allAmounts.push(n);
+    }
+    grossRaw = allAmounts.length > 0 ? String(Math.max(...allAmounts)) : null;
+  }
+  if (!grossRaw) grossRaw = lineValue([/[£$€]\s*([0-9][0-9,]*(?:\.\d{2})?)/]);
   const netRaw =
     lineValue([/(?:net|subtotal|sub\s*total)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i]) ?? null;
   const vatRaw =
@@ -162,6 +185,7 @@ function regexExtractFromText(text: string) {
 
   return {
     beneficiary_name: stripInternalRefs(beneficiary),
+    company_name: stripInternalRefs(companyFromLabel),
     account_number: accountNumber,
     sort_code: sortCodeRaw ? normalizeSortCode(sortCodeRaw) ?? sortCodeRaw : null,
     invoice_number: stripInternalRefs(invoiceNumber),
@@ -204,6 +228,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
 
   let parsed: {
     beneficiary_name?: string | null;
+    company_name?: string | null;
     account_number?: string | null;
     sort_code?: string | null;
     invoice_number?: string | null;
@@ -217,17 +242,28 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
 
   const extractionPrompt = `Extract invoice fields from this document with high accuracy.
 Return a JSON object with exactly these keys:
-beneficiary_name, account_number, sort_code, invoice_number, invoice_date, net_amount, vat_amount, gross_amount, currency.
+beneficiary_name, company_name, account_number, sort_code, invoice_number, invoice_date, net_amount, vat_amount, gross_amount, currency.
 
 CRITICAL RULES - extract exactly as shown in the document:
 - invoice_number: Copy the exact invoice/reference number as printed (letters, numbers, slashes, hyphens). Do not invent or modify.
 - sort_code: UK format only - exactly 6 digits, no spaces or dashes (e.g. 123456). Extract from "Sort Code" or equivalent field.
 - account_number: Exactly as shown - typically 8 digits for UK, no spaces. Extract from "Account Number" or equivalent.
-- beneficiary_name: The VALUE (not the label) next to bank account name fields. Extract ONLY the actual name.
+- beneficiary_name: The VALUE (not the label) next to bank account name fields. Extract ONLY the actual name - NO address.
   * LOOK FOR labels like: "Your full name on bank account", "Account holder name", "Payee name", "Beneficiary", "Name on account", "Account name" - then take the VALUE written next to/under that label.
   * If a company: use the company name. If a person: use the person's full name.
+  * NEVER include address: no street, road, avenue, postcode, city, country, building number. Name ONLY.
   * NEVER use a field LABEL as beneficiary. REJECT: "Appearance Date", "Invoice Date", "Payment Date", "Submission Date", or any phrase ending in "Date", "Number", "Code", "Amount".
   * REJECT: dates, numbers, invoice refs. Use null if no valid person/company name found.
+- company_name: The company/business name if the payee is a company. Look for "Company name", "Business name", "Trading as", "Ltd", "Inc", "LLC" etc.
+  * If the payee is SELF-EMPLOYED (no company): use null for company_name. The person's name goes in beneficiary_name only.
+  * If a company exists: extract the exact company name. If both company and person appear, company_name = company, beneficiary_name = person or company (who receives payment).
+- gross_amount: The TOTAL amount to pay - CRITICAL, must be found. Look everywhere:
+  * Labels: "Grand Total", "Total", "Total Amount", "Amount Due", "Balance Due", "Invoice Total", "Total Payable", "Amount Payable", "Payment Due", "Sum", "Gross", "Net + VAT", "Final Total", "Amount to Pay", "Invoice Value"
+  * The total is usually: at the bottom of the document, in a payment/bank details section, the LARGEST amount on the invoice, or in a row labeled "Total"
+  * Format: numeric only, e.g. 1250.00 or 1,250.00. Include decimals if present. No currency symbols.
+  * If multiple amounts: use the one labeled "Total"/"Grand Total"/"Amount Due", NOT subtotals or line items. If unclear, use the LARGEST amount.
+- net_amount: Subtotal before VAT/tax. Labels: "Net", "Subtotal", "Sub total".
+- vat_amount: VAT/tax amount. Labels: "VAT", "Tax", "GST".
 
 STRICT EXCLUSIONS - NEVER include in any field:
 - Do NOT include "TRT", "TRT World", "TRTWORLD", "TRT WORLD" or any variant in beneficiary_name, invoice_number, or any extracted field.
@@ -237,7 +273,8 @@ STRICT EXCLUSIONS - NEVER include in any field:
 Other rules:
 - Use null when unknown or ambiguous
 - invoice_date: YYYY-MM-DD format if available
-- amounts: numeric only, no currency symbols
+- amounts: numeric only, no currency symbols (strip £ $ € ,)
+- gross_amount is the most important amount - scan the entire document if needed to find the total payable
 - Be precise: double-check numbers match the document exactly`;
 
   const isPdf = ext === "pdf";
@@ -317,6 +354,7 @@ Other rules:
 
   if (parsed.beneficiary_name) {
     parsed.beneficiary_name = stripInternalRefs(parsed.beneficiary_name) ?? undefined;
+    if (parsed.beneficiary_name) parsed.beneficiary_name = stripAddressFromName(parsed.beneficiary_name) ?? undefined;
     if (
       parsed.beneficiary_name &&
       (looksLikeDate(parsed.beneficiary_name) ||
@@ -326,6 +364,15 @@ Other rules:
       parsed.beneficiary_name = undefined;
   }
   if (parsed.invoice_number) parsed.invoice_number = stripInternalRefs(parsed.invoice_number) ?? undefined;
+
+  let companyName: string | null = null;
+  if (parsed.company_name) {
+    const c = stripInternalRefs(parsed.company_name);
+    if (c && looksLikeName(c) && !looksLikeDate(c) && !looksLikeFieldLabel(c)) companyName = c;
+  }
+  if (!companyName && parsed.beneficiary_name) {
+    companyName = parsed.beneficiary_name;
+  }
 
   const sortCode = parsed.sort_code ? normalizeSortCode(parsed.sort_code) : null;
   const net = parsed.net_amount ?? 0;
@@ -382,6 +429,19 @@ Other rules:
 
   if (upsertError) {
     throw new Error("Failed to save extraction: " + upsertError.message);
+  }
+
+  const { data: inv } = await supabase.from("invoices").select("invoice_type").eq("id", invoiceId).single();
+  if ((inv as { invoice_type?: string } | null)?.invoice_type === "freelancer") {
+    let flCompanyName = companyName ?? parsed.beneficiary_name ?? null;
+    if (flCompanyName) {
+      flCompanyName = stripInternalRefs(flCompanyName) ?? stripAddressFromName(flCompanyName) ?? null;
+      if (flCompanyName && /trt/i.test(flCompanyName)) flCompanyName = null;
+    }
+    await supabase
+      .from("freelancer_invoice_fields")
+      .update({ company_name: flCompanyName, updated_at: new Date().toISOString() })
+      .eq("invoice_id", invoiceId);
   }
 
   await createAuditEvent({
