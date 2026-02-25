@@ -119,9 +119,15 @@ export async function PATCH(
       const n = toStr(body.deptManagerId) === "—" ? "Unassigned" : toStr(body.deptManagerId);
       if (o !== n) changes["Manager"] = { from: o, to: n };
     }
+    if (body.submitterUserId !== undefined && profile.role === "admin") {
+      const o = toStr(existing.submitter_user_id);
+      const n = toStr(body.submitterUserId);
+      if (o !== n) changes["Submitted by"] = { from: o, to: n };
+    }
 
     const invoiceUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (body.departmentId !== undefined) invoiceUpdate.department_id = body.departmentId || null;
+    if (body.submitterUserId !== undefined && profile.role === "admin") invoiceUpdate.submitter_user_id = body.submitterUserId || null;
 
     await supabase.from("invoices").update(invoiceUpdate).eq("id", invoiceId);
 

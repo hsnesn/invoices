@@ -186,7 +186,9 @@ export async function POST(request: NextRequest) {
       const p = `${session.user.id}/${invoiceId}-${stem}-${Date.now()}-${i}.${ext}`;
       const buf = Buffer.from(await f.arrayBuffer());
       const { error: ue } = await supabase.storage.from(BUCKET).upload(p, buf, { contentType: f.type || "application/octet-stream", upsert: false });
-      if (!ue) await supabase.from("invoice_files").insert({ invoice_id: invoiceId, storage_path: p, file_name: f.name, sort_order: i });
+      if (ue) continue; // skip failed uploads but don't fail the whole request
+      const { error: insertErr } = await supabase.from("invoice_files").insert({ invoice_id: invoiceId, storage_path: p, file_name: f.name, sort_order: i });
+      if (insertErr) continue; // skip failed inserts
     }
 
     await createAuditEvent({

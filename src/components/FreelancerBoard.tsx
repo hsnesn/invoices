@@ -48,6 +48,7 @@ type EditDraft = {
   accountNumber: string; sortCode: string; deptManagerId: string; departmentId: string; department2: string;
   serviceDaysCount: string; days: string; serviceRate: string; month: string;
   bookedBy: string; serviceDescription: string; additionalCostReason: string;
+  submitterUserId?: string;
 };
 
 type TimelineEvent = { id: number; event_type: string; from_status: string | null; to_status: string | null; payload: Record<string, unknown> | null; actor_name: string; created_at: string };
@@ -306,15 +307,10 @@ export function FreelancerBoard({
   const finishEdit = useCallback(async () => {
     const id = editingIdRef.current; const draft = editDraftRef.current;
     if (!id || !draft) { setEditingId(null); setEditDraft(null); return; }
-    const row = rows.find(r => r.id === id);
-    const wasRejected = row?.status === "rejected";
     setEditingId(null); setEditDraft(null);
     await saveDraft(id, draft);
-    if (wasRejected) {
-      await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "pending_manager" }) });
-    }
     refreshAndKeepVisible();
-  }, [saveDraft, rows, refreshAndKeepVisible]);
+  }, [saveDraft, refreshAndKeepVisible]);
 
   const onStartEdit = useCallback((row: DisplayRow) => {
     const prevId = editingIdRef.current; const prevDraft = editDraftRef.current;
@@ -332,6 +328,7 @@ export function FreelancerBoard({
       month: row.month === "—" ? "" : row.month, bookedBy: row.bookedBy === "—" ? "" : row.bookedBy,
       serviceDescription: row.serviceDescription === "—" ? "" : row.serviceDescription,
       additionalCostReason: row.additionalCostReason === "—" ? "" : row.additionalCostReason,
+      submitterUserId: row.submitterId || undefined,
     });
   }, [saveDraft, handleRowDblClick]);
 
@@ -703,7 +700,7 @@ export function FreelancerBoard({
     switch (col) {
       case "status": return <StatusCell r={r} canApprove={canApprove(r)} isSubmitter={isSubmitter} currentRole={currentRole} isOperationsRoomMember={isOperationsRoomMember} actionLoadingId={actionLoadingId} onManagerApprove={onManagerApprove} onAdminApprove={onAdminApprove} onResubmit={onResubmit} onMarkPaid={onMarkPaid} openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }} />;
       case "contractor": return isEditing ? inp("contractor") : <span className="font-medium">{r.contractor}{r.status === "rejected" && r.rejectionReason && <div className="mt-1 rounded bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300"><span className="font-semibold">Rejection:</span> {r.rejectionReason}</div>}</span>;
-      case "submittedBy": return <SubmitterBadge name={r.submittedBy} />;
+      case "submittedBy": return isEditing && currentRole === "admin" ? <select value={editDraft?.submitterUserId ?? ""} onChange={e => onChangeDraft("submitterUserId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">—</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <SubmitterBadge name={r.submittedBy} />;
       case "companyName": return isEditing ? inp("companyName") : r.companyName;
       case "submissionDate": return r.submissionDate;
       case "files": return (
@@ -753,7 +750,7 @@ export function FreelancerBoard({
         );
       }
       case "actions": {
-        if (editingId === r.id) return <div className="flex items-center gap-1"><span className="text-xs text-blue-600">Editing{r.status === "rejected" ? " (will resubmit)" : ""}</span><button onClick={e => { e.stopPropagation(); onCancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600">✕</button></div>;
+        if (editingId === r.id) return <div className="flex items-center gap-1"><span className="text-xs text-blue-600">Editing</span><button onClick={e => { e.stopPropagation(); onCancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600">✕</button></div>;
         const canRS = r.status === "rejected" && (isSubmitter || currentRole === "admin");
         const canSendEmails = currentRole === "admin" && ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
         return <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>{canRS && <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50">{actionLoadingId === r.id ? "…" : "↻ Resubmit"}</button>}{canSendEmails && <button onClick={() => void sendBookingFormEmails(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-violet-600 px-2 py-0.5 text-xs text-white hover:bg-violet-500 disabled:opacity-50" title="Send Booking Form emails to Line Manager and London Operations">{actionLoadingId === r.id ? "…" : "📧 Send"}</button>}</div>;
@@ -951,7 +948,7 @@ export function FreelancerBoard({
                               </div>
                             </td>}
                             {COLUMNS.map(c => {
-                              const noEdit = ["status", "files", "submittedBy", "submissionDate", "invoiceAmount", "amount", "actions", "bookingForm"].includes(c.key);
+                              const noEdit = ["status", "files", "submissionDate", "invoiceAmount", "amount", "actions", "bookingForm"].includes(c.key) || (c.key === "submittedBy" && currentRole !== "admin");
                               return (
                                 <td key={c.key} className={`px-3 py-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap${!noEdit ? editTdCls : ""}`} onDoubleClick={!noEdit && editable && !isEditing ? e => { e.stopPropagation(); e.preventDefault(); handleRowDblClick(); onStartEdit(r); } : undefined}>
                                   {renderCell(r, c.key, isEditing)}
