@@ -613,7 +613,7 @@ export function SalariesBoard({
                           onClick={(e) => handleRowClick(s, e)}
                           onDoubleClick={() => handleRowDoubleClick(s)}
                         >
-                          <td className="px-4 py-3">
+                          <td className="whitespace-nowrap px-4 py-3">
                             <span
                               className="inline-flex rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm"
                               style={{ backgroundColor: getEmployeeBadgeColor(s, nameToColor) }}
@@ -621,14 +621,14 @@ export function SalariesBoard({
                               {s.employee_name ?? "—"}
                             </span>
                           </td>
-                          <td className="px-4 py-3 font-medium tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.net_pay)}</td>
-                          <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.sortCode}</td>
-                          <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.account}</td>
-                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.reference ?? "—"}</td>
-                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.payment_month ?? "—"}</td>
-                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.process_date ?? "—"}</td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.employer_total_cost)}</td>
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <td className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.net_pay)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.sortCode}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.account}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300" title={s.reference ?? undefined}>{s.reference ?? "—"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{s.payment_month ?? "—"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{s.process_date ?? "—"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.employer_total_cost)}</td>
+                          <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             {s.payslip_storage_path ? (
                               <div className="flex gap-2">
                                 <a
@@ -650,8 +650,8 @@ export function SalariesBoard({
                               "—"
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex flex-wrap justify-end gap-1.5">
+                          <td className="whitespace-nowrap px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex justify-end gap-1.5">
                               {canEdit && s.payslip_storage_path && (
                                 <button
                                   onClick={() => handleReExtract(s.id)}

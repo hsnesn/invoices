@@ -531,9 +531,9 @@ export async function runSalaryExtraction(
           .select("id, full_name, bank_account_number, sort_code, ni_number");
         const matched = matchEmployeeByName(extractedName, employees ?? []);
         if (matched) {
-          parsed.bank_account_number = matched.bank_account_number ?? null;
-          parsed.sort_code = matched.sort_code ? (normalizeSortCode(matched.sort_code) ?? matched.sort_code) : null;
-          parsed.ni_number = matched.ni_number ?? null;
+          parsed.bank_account_number = matched.bank_account_number ?? parsed.bank_account_number ?? null;
+          parsed.sort_code = matched.sort_code ? (normalizeSortCode(matched.sort_code) ?? matched.sort_code) : parsed.sort_code ?? null;
+          parsed.ni_number = matched.ni_number ?? parsed.ni_number ?? null;
         }
       }
     }

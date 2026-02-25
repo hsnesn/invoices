@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { DepartmentManagersSection } from "@/components/DepartmentManagersSection";
 import { EmailSetupSection } from "@/components/EmailSetupSection";
 import { ContractorTemplatesSection } from "@/components/ContractorTemplatesSection";
+import { SalariesSetupSection } from "@/components/SalariesSetupSection";
 
 interface Department {
   id: string;
@@ -54,7 +55,7 @@ export default function AdminSetupPage() {
       {activeTab === "guest" && <GuestInvoiceSetup />}
       {activeTab === "freelancer" && <FreelancerSetup />}
       {activeTab === "email" && <EmailSetupSection />}
-      {activeTab === "salaries" && <PlaceholderSetup section="Salaries" color="indigo" />}
+      {activeTab === "salaries" && <SalariesSetupSection />}
     </div>
   );
 }

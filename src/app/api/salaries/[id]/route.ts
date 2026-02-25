@@ -254,6 +254,15 @@ export async function PATCH(
       if (updateError) {
         return NextResponse.json({ error: updateError.message }, { status: 500 });
       }
+      const empId = (existing as { employee_id?: string }).employee_id;
+      if (empId && (updates.bank_account_number != null || updates.sort_code != null)) {
+        const empUpdates: Record<string, unknown> = {};
+        if (updates.bank_account_number != null) empUpdates.bank_account_number = updates.bank_account_number;
+        if (updates.sort_code != null) empUpdates.sort_code = updates.sort_code;
+        if (Object.keys(empUpdates).length > 0) {
+          await supabase.from("employees").update({ ...empUpdates, updated_at: new Date().toISOString() }).eq("id", empId);
+        }
+      }
       await createSalaryAuditEvent({
         salary_id: id,
         actor_user_id: session.user.id,
