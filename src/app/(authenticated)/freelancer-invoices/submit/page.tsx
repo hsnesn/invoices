@@ -20,7 +20,6 @@ export default function FreelancerSubmitPage() {
 
   const { data: departments = [] } = useSWR<{ id: string; name: string }[]>("/api/departments", fetcher);
   const { data: serviceDescriptions = [] } = useSWR<SetupItem[]>("/api/freelancer-setup?category=service_description", fetcher);
-  const { data: costReasons = [] } = useSWR<SetupItem[]>("/api/freelancer-setup?category=additional_cost_reason", fetcher);
   const { data: bookedByOptions = [] } = useSWR<SetupItem[]>("/api/freelancer-setup?category=booked_by", fetcher);
 
   const [contractorName, setContractorName] = useState("");
@@ -32,7 +31,6 @@ export default function FreelancerSubmitPage() {
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set());
   const [serviceRatePerDay, setServiceRatePerDay] = useState("");
   const [additionalCost, setAdditionalCost] = useState("");
-  const [additionalCostReason, setAdditionalCostReason] = useState("");
   const [additionalCostReasonCustom, setAdditionalCostReasonCustom] = useState("");
   const [submissionDate] = useState(today);
   const [currency, setCurrency] = useState("GBP");
@@ -98,7 +96,7 @@ export default function FreelancerSubmitPage() {
     fd.append("service_rate_per_day", serviceRatePerDay);
     fd.append("service_month", serviceMonth);
     fd.append("additional_cost", additionalCost);
-    fd.append("additional_cost_reason", additionalCostReasonCustom.trim() || additionalCostReason);
+    fd.append("additional_cost_reason", additionalCostReasonCustom.trim());
     fd.append("booked_by", bookedBy);
     fd.append("currency", currency);
     fd.append("inv_number", invNumber.trim());
@@ -235,18 +233,13 @@ export default function FreelancerSubmitPage() {
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency === "USD" ? "$" : currency === "EUR" ? "€" : "£"}</span>
             <input type="number" step="0.01" min={0} value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} className={inputCls + " pl-7"} />
           </div>
-          <p className={hintCls}>If you did different work than your normal daily work (e.g. Field Cameraman, Studio Cameraman, Program Editor), specify the role and which day it was.</p>
+          <p className={hintCls}>If the services provided differed from the originally agreed scope of services (for example, location-based camera operation, studio-based camera operation, or editing services), please specify the nature of the services delivered and the relevant date(s). If you rented out your equipment, please specify which equipment and on which dates.</p>
         </div>
 
         {/* 11. Additional Cost Reason */}
         <div>
           <label className={labelCls}>11. Additional Cost Reason</label>
-          <select value={additionalCostReason} onChange={(e) => setAdditionalCostReason(e.target.value)} className={inputCls}>
-            <option value="">None</option>
-            {costReasons.map((r) => <option key={r.id} value={r.value}>{r.value}</option>)}
-          </select>
-          <p className={hintCls}>Or enter custom text (max 75 characters)</p>
-          <input value={additionalCostReasonCustom} onChange={(e) => setAdditionalCostReasonCustom(e.target.value.slice(0, 75))} placeholder="Custom reason..." maxLength={75} className={inputCls + " mt-1"} />
+          <input value={additionalCostReasonCustom} onChange={(e) => setAdditionalCostReasonCustom(e.target.value.slice(0, 75))} placeholder="Describe the reason for additional cost..." maxLength={75} className={inputCls} />
           {additionalCostReasonCustom.length > 0 && <p className="text-right text-[11px] text-gray-400 mt-0.5">{additionalCostReasonCustom.length}/75</p>}
         </div>
 
