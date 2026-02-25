@@ -245,7 +245,7 @@ export function SalariesBoard({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<SalaryRow | null>(null);
   const [addEmployeeName, setAddEmployeeName] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadEmployeeId, setUploadEmployeeId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -315,21 +315,21 @@ export function SalariesBoard({
   }, [addEmployeeName, mutate]);
 
   const handleUpload = useCallback(async () => {
-    if (!uploadFile) {
-      toast.error("Please select a file");
+    if (uploadFiles.length === 0) {
+      toast.error("Please select at least one file");
       return;
     }
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", uploadFile);
+      for (const f of uploadFiles) formData.append("file", f);
       if (uploadEmployeeId) formData.append("employee_id", uploadEmployeeId);
       const res = await fetch("/api/salaries/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      toast.success(data.bulk ? `${data.count ?? 0} salaries imported` : "Payslip uploaded and extracted");
+      toast.success(data.bulk || data.count > 1 ? `${data.count ?? 0} payslips imported` : "Payslip uploaded and extracted");
       setShowUploadModal(false);
-      setUploadFile(null);
+      setUploadFiles([]);
       setUploadEmployeeId("");
       mutate();
     } catch (e) {
@@ -337,7 +337,7 @@ export function SalariesBoard({
     } finally {
       setUploading(false);
     }
-  }, [uploadFile, uploadEmployeeId, mutate]);
+  }, [uploadFiles, uploadEmployeeId, mutate]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm("Delete this salary record? This cannot be undone.")) return;
@@ -737,7 +737,7 @@ export function SalariesBoard({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
             <h2 className="text-lg font-semibold">Upload Payslip</h2>
-            <p className="mt-1 text-sm text-gray-500">Upload a PDF payslip. AI will extract salary data.</p>
+            <p className="mt-1 text-sm text-gray-500">Upload one or more PDF payslips. AI will extract salary data. You can select multiple files at once.</p>
             <select
               value={uploadEmployeeId}
               onChange={(e) => setUploadEmployeeId(e.target.value)}
@@ -751,14 +751,18 @@ export function SalariesBoard({
             <input
               type="file"
               accept=".pdf,.docx,.doc,.xlsx,.xls"
-              onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+              multiple
+              onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}
               className="mt-3 w-full text-sm"
             />
+            {uploadFiles.length > 0 && (
+              <p className="mt-2 text-xs text-gray-500">{uploadFiles.length} file(s) selected</p>
+            )}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setShowUploadModal(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
                 Cancel
               </button>
-              <button onClick={handleUpload} disabled={uploading || !uploadFile} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50">
+              <button onClick={handleUpload} disabled={uploading || uploadFiles.length === 0} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50">
                 {uploading ? "Uploading..." : "Upload"}
               </button>
             </div>

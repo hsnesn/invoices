@@ -81,44 +81,47 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const filesRaw = formData.getAll("file");
+    const files = (Array.isArray(filesRaw) ? filesRaw : [filesRaw])
+      .filter((f): f is File => f instanceof File);
     const employee_id = formData.get("employee_id") as string | null;
 
-    const fileExt = file?.name?.split(".").pop()?.toLowerCase() ?? "";
-    if (!file || !ALLOWED_EXT.includes(fileExt)) {
+    if (files.length === 0) {
       return NextResponse.json(
-        { error: "Invalid or missing file. Supported: PDF, DOCX, DOC, XLSX, XLS" },
+        { error: "No files selected. Supported: PDF, DOCX, DOC, XLSX, XLS" },
         { status: 400 }
       );
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const allCreated: unknown[] = [];
     const supabase = createAdminClient();
     const { data: allEmployees } = await supabase
       .from("employees")
       .select("id, full_name, bank_account_number, sort_code, email_address, ni_number");
 
-    const isExcel = fileExt === "xlsx" || fileExt === "xls";
-    const excelRows = isExcel ? parseExcelBulk(buffer) : [];
+    for (const file of files) {
+      const fileExt = file.name?.split(".").pop()?.toLowerCase() ?? "";
+      if (!ALLOWED_EXT.includes(fileExt)) continue;
 
-    if (isExcel && excelRows.length > 1) {
-      const stem = safeFileStem(file.name);
-      const firstId = crypto.randomUUID();
-      const storagePath = `salaries/${session.user.id}/${firstId}-${stem}.${fileExt}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const isExcel = fileExt === "xlsx" || fileExt === "xls";
+      const excelRows = isExcel ? parseExcelBulk(buffer) : [];
 
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, buffer, {
-          contentType: file.type || "application/octet-stream",
-          upsert: false,
-        });
+      if (isExcel && excelRows.length > 1) {
+        const stem = safeFileStem(file.name);
+        const firstId = crypto.randomUUID();
+        const storagePath = `salaries/${session.user.id}/${firstId}-${stem}.${fileExt}`;
 
-      if (uploadError) {
-        return NextResponse.json({ error: "Upload failed: " + uploadError.message }, { status: 500 });
-      }
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET)
+          .upload(storagePath, buffer, {
+            contentType: file.type || "application/octet-stream",
+            upsert: false,
+          });
 
-      const created: unknown[] = [];
-      for (const row of excelRows) {
+        if (uploadError) continue;
+
+        for (const row of excelRows) {
         const matched = matchEmployee(row.employee_name ?? "", allEmployees ?? []);
         const empId = matched?.id ?? null;
         const bankAccount = row.bank_account_number ?? matched?.bank_account_number ?? null;
@@ -160,7 +163,7 @@ export async function POST(request: NextRequest) {
           console.error("Bulk insert error:", insertErr);
           continue;
         }
-        created.push(inserted);
+        allCreated.push(inserted);
 
         if (matched && (bankAccount || sortCode)) {
           const updates: Record<string, unknown> = {};
@@ -170,127 +173,125 @@ export async function POST(request: NextRequest) {
             await supabase.from("employees").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", matched.id);
           }
         }
-      }
-
-      return NextResponse.json({
-        success: true,
-        bulk: true,
-        count: created.length,
-        salaries: created,
-      });
-    }
-
-    const salaryId = crypto.randomUUID();
-    const stem = safeFileStem(file.name);
-    const storagePath = `salaries/${session.user.id}/${salaryId}-${stem}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(storagePath, buffer, {
-        contentType: file.type || "application/octet-stream",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      return NextResponse.json({ error: "Upload failed: " + uploadError.message }, { status: 500 });
-    }
-
-    let employeeName = "Unknown";
-    let bankAccount: string | null = null;
-    let sortCode: string | null = null;
-    let niNumber: string | null = null;
-
-    if (employee_id) {
-      const { data: emp } = await supabase
-        .from("employees")
-        .select("full_name, bank_account_number, sort_code, ni_number")
-        .eq("id", employee_id)
-        .single();
-      if (emp) {
-        employeeName = emp.full_name ?? "Unknown";
-        bankAccount = emp.bank_account_number ?? null;
-        sortCode = emp.sort_code ?? null;
-        niNumber = emp.ni_number ?? null;
-      }
-    }
-
-    const { data: inserted, error: insertError } = await supabase
-      .from("salaries")
-      .insert({
-        id: salaryId,
-        employee_id: employee_id || null,
-        employee_name: employeeName,
-        ni_number: niNumber,
-        bank_account_number: bankAccount,
-        sort_code: sortCode,
-        payslip_storage_path: storagePath,
-        status: "pending",
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      await supabase.storage.from(BUCKET).remove([storagePath]);
-      return NextResponse.json({ error: "Failed to create salary record: " + insertError.message }, { status: 500 });
-    }
-
-    try {
-      await runSalaryExtraction(salaryId, storagePath, session.user.id);
-    } catch (extractErr) {
-      console.error("Salary extraction failed:", extractErr);
-    }
-
-    const { data: afterExtract } = await supabase
-      .from("salaries")
-      .select("employee_name, bank_account_number, sort_code")
-      .eq("id", salaryId)
-      .single();
-
-    if (afterExtract?.employee_name) {
-      const matched = matchEmployee(afterExtract.employee_name, allEmployees ?? []);
-      const extractedBank = afterExtract.bank_account_number ?? null;
-      const extractedSort = afterExtract.sort_code ?? null;
-
-      if (matched) {
-        const salaryBank = extractedBank ?? matched.bank_account_number;
-        const salarySort = extractedSort ?? matched.sort_code;
-        await supabase
-          .from("salaries")
-          .update({
-            employee_id: matched.id,
-            bank_account_number: salaryBank ?? undefined,
-            sort_code: salarySort ?? undefined,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", salaryId);
-
-        const empUpdates: Record<string, unknown> = {};
-        if (extractedBank && !matched.bank_account_number) empUpdates.bank_account_number = extractedBank;
-        if (extractedSort && !matched.sort_code) empUpdates.sort_code = extractedSort;
-        if (Object.keys(empUpdates).length > 0) {
-          await supabase.from("employees").update({ ...empUpdates, updated_at: new Date().toISOString() }).eq("id", matched.id);
         }
-      } else if (!employee_id) {
-        await supabase
-          .from("salaries")
-          .update({
-            bank_account_number: extractedBank ?? undefined,
-            sort_code: extractedSort ?? undefined,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", salaryId);
+        continue;
       }
+
+      const salaryId = crypto.randomUUID();
+      const stem = safeFileStem(file.name);
+      const storagePath = `salaries/${session.user.id}/${salaryId}-${stem}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(storagePath, buffer, {
+          contentType: file.type || "application/octet-stream",
+          upsert: false,
+        });
+
+      if (uploadError) continue;
+
+      let employeeName = "Unknown";
+      let bankAccount: string | null = null;
+      let sortCode: string | null = null;
+      let niNumber: string | null = null;
+
+      if (employee_id) {
+        const { data: emp } = await supabase
+          .from("employees")
+          .select("full_name, bank_account_number, sort_code, ni_number")
+          .eq("id", employee_id)
+          .single();
+        if (emp) {
+          employeeName = emp.full_name ?? "Unknown";
+          bankAccount = emp.bank_account_number ?? null;
+          sortCode = emp.sort_code ?? null;
+          niNumber = emp.ni_number ?? null;
+        }
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("salaries")
+        .insert({
+          id: salaryId,
+          employee_id: employee_id || null,
+          employee_name: employeeName,
+          ni_number: niNumber,
+          bank_account_number: bankAccount,
+          sort_code: sortCode,
+          payslip_storage_path: storagePath,
+          status: "pending",
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        await supabase.storage.from(BUCKET).remove([storagePath]);
+        continue;
+      }
+
+      try {
+        await runSalaryExtraction(salaryId, storagePath, session.user.id);
+      } catch (extractErr) {
+        console.error("Salary extraction failed:", extractErr);
+      }
+
+      const { data: afterExtract } = await supabase
+        .from("salaries")
+        .select("employee_name, bank_account_number, sort_code")
+        .eq("id", salaryId)
+        .single();
+
+      if (afterExtract?.employee_name) {
+        const matched = matchEmployee(afterExtract.employee_name, allEmployees ?? []);
+        const extractedBank = afterExtract.bank_account_number ?? null;
+        const extractedSort = afterExtract.sort_code ?? null;
+
+        if (matched) {
+          const salaryBank = extractedBank ?? matched.bank_account_number;
+          const salarySort = extractedSort ?? matched.sort_code;
+          await supabase
+            .from("salaries")
+            .update({
+              employee_id: matched.id,
+              bank_account_number: salaryBank ?? undefined,
+              sort_code: salarySort ?? undefined,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", salaryId);
+
+          const empUpdates: Record<string, unknown> = {};
+          if (extractedBank && !matched.bank_account_number) empUpdates.bank_account_number = extractedBank;
+          if (extractedSort && !matched.sort_code) empUpdates.sort_code = extractedSort;
+          if (Object.keys(empUpdates).length > 0) {
+            await supabase.from("employees").update({ ...empUpdates, updated_at: new Date().toISOString() }).eq("id", matched.id);
+          }
+        } else if (!employee_id) {
+          await supabase
+            .from("salaries")
+            .update({
+              bank_account_number: extractedBank ?? undefined,
+              sort_code: extractedSort ?? undefined,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", salaryId);
+        }
+      }
+
+      const { data: updated } = await supabase
+        .from("salaries")
+        .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
+        .eq("id", salaryId)
+        .single();
+
+      allCreated.push(updated ?? inserted);
     }
 
-    const { data: updated } = await supabase
-      .from("salaries")
-      .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
-      .eq("id", salaryId)
-      .single();
-
+    const multi = files.length > 1 || allCreated.length > 1;
     return NextResponse.json({
       success: true,
-      salary: updated ?? inserted,
+      bulk: multi,
+      count: allCreated.length,
+      salaries: allCreated,
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
