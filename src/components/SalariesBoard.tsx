@@ -33,7 +33,7 @@ type SalaryRow = {
   paid_date: string | null;
   email_sent_status: string | null;
   created_at: string;
-  employees?: { full_name: string | null; email_address: string | null; badge_color: string | null } | null;
+  employees?: { full_name: string | null; email_address: string | null; badge_color: string | null; bank_account_number?: string | null; sort_code?: string | null } | null;
 };
 
 const GROUPS = [
@@ -196,6 +196,12 @@ function AuditLogModal({ salaryId, employeeName, onClose }: { salaryId: string; 
       </div>
     </div>
   );
+}
+
+function getBankDisplay(s: SalaryRow): { sortCode: string; account: string } {
+  const sortCode = s.sort_code ?? s.employees?.sort_code ?? null;
+  const account = s.bank_account_number ?? s.employees?.bank_account_number ?? null;
+  return { sortCode: sortCode ?? "—", account: account ?? "—" };
 }
 
 function getEmployeeBadgeColor(
@@ -577,67 +583,65 @@ export function SalariesBoard({
             const rows = filtered.filter((r) => statusToGroup(r.status) === g.key);
             if (rows.length === 0) return null;
             return (
-              <div key={g.key} className={`rounded-xl border-2 ${g.color} overflow-hidden`}>
-                <div className={`px-4 py-2 ${g.headerBg} ${g.textColor} font-semibold`}>
+              <div key={g.key} className={`overflow-hidden rounded-2xl border ${g.color} shadow-sm`}>
+                <div className={`px-5 py-3 ${g.headerBg} ${g.textColor} text-sm font-semibold`}>
                   {g.label} ({rows.length})
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] text-sm">
+                  <table className="w-full min-w-[800px] text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
-                        <th className="px-3 py-2 text-left font-medium">ID</th>
-                        <th className="px-3 py-2 text-left font-medium">Employee</th>
-                        <th className="px-3 py-2 text-left font-medium">Net Pay</th>
-                        <th className="px-3 py-2 text-left font-medium">Gross Pay</th>
-                        <th className="px-3 py-2 text-left font-medium">Sort Code</th>
-                        <th className="px-3 py-2 text-left font-medium">Account</th>
-                        <th className="px-3 py-2 text-left font-medium">Reference</th>
-                        <th className="px-3 py-2 text-left font-medium">Month</th>
-                        <th className="px-3 py-2 text-left font-medium">Date</th>
-                        <th className="px-3 py-2 text-left font-medium">Total Cost</th>
-                        <th className="px-3 py-2 text-left font-medium">File</th>
-                        <th className="px-3 py-2 text-left font-medium">Actions</th>
+                      <tr className="border-b border-gray-200/80 bg-white/80 dark:border-gray-700/80 dark:bg-gray-900/50">
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Employee</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Net Pay</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sort Code</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Account</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Reference</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Month</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Date</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Cost</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">File</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((s) => (
+                      {rows.map((s) => {
+                        const bank = getBankDisplay(s);
+                        return (
                         <tr
                           key={s.id}
-                          className="cursor-pointer border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/30"
+                          className="group cursor-pointer border-b border-gray-100/80 transition-colors hover:bg-gray-50/70 dark:border-gray-700/50 dark:hover:bg-gray-800/40"
                           onClick={(e) => handleRowClick(s, e)}
                           onDoubleClick={() => handleRowDoubleClick(s)}
                         >
-                          <td className="px-3 py-2">{s.display_id ?? "—"}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-4 py-3">
                             <span
-                              className="inline-flex rounded px-2 py-1 text-sm font-medium text-white"
+                              className="inline-flex rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm"
                               style={{ backgroundColor: getEmployeeBadgeColor(s, nameToColor) }}
                             >
                               {s.employee_name ?? "—"}
                             </span>
                           </td>
-                          <td className="px-3 py-2">{fmtCurrency(s.net_pay)}</td>
-                          <td className="px-3 py-2">{fmtCurrency(s.total_gross_pay)}</td>
-                          <td className="px-3 py-2">{s.sort_code ?? "—"}</td>
-                          <td className="px-3 py-2">{s.bank_account_number ?? "—"}</td>
-                          <td className="px-3 py-2">{s.reference ?? "—"}</td>
-                          <td className="px-3 py-2">{s.payment_month ?? "—"}</td>
-                          <td className="px-3 py-2">{s.process_date ?? "—"}</td>
-                          <td className="px-3 py-2">{fmtCurrency(s.employer_total_cost)}</td>
-                          <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-4 py-3 font-medium tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.net_pay)}</td>
+                          <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.sortCode}</td>
+                          <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.account}</td>
+                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.reference ?? "—"}</td>
+                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.payment_month ?? "—"}</td>
+                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.process_date ?? "—"}</td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.employer_total_cost)}</td>
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             {s.payslip_storage_path ? (
                               <div className="flex gap-2">
                                 <a
                                   href={`/api/salaries/download?path=${encodeURIComponent(s.payslip_storage_path)}&view=1`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-indigo-600 hover:underline dark:text-indigo-400"
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50"
                                 >
                                   View
                                 </a>
                                 <button
                                   onClick={() => downloadPayslip(s.payslip_storage_path!, s.employee_name ? `${s.employee_name}-payslip.pdf` : "payslip.pdf")}
-                                  className="text-indigo-600 hover:underline dark:text-indigo-400"
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50"
                                 >
                                   Download
                                 </button>
@@ -646,8 +650,8 @@ export function SalariesBoard({
                               "—"
                             )}
                           </td>
-                          <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex flex-wrap gap-1">
+                          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-wrap justify-end gap-1.5">
                               {canEdit && s.payslip_storage_path && (
                                 <button
                                   onClick={() => handleReExtract(s.id)}
@@ -678,7 +682,7 @@ export function SalariesBoard({
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      );})}
                     </tbody>
                   </table>
                 </div>
