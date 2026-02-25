@@ -124,19 +124,19 @@ function regexExtractFromText(text: string) {
 
   const invoiceNumber =
     lineValue([
-      /(?:invoice\s*(?:number|no|#)\s*[:\-]?\s*)([A-Z0-9\-\/]+)/i,
-      /(?:inv(?:oice)?\s*#\s*[:\-]?\s*)([A-Z0-9\-\/]+)/i,
-      /(?:reference|ref)\s*[:\-]?\s*([A-Z0-9\-\/]{4,})/i,
+      /(?:invoice\s*(?:number|no|#)\s*[:\-.]?\s*)([A-Z0-9\-\/]+)/i,
+      /(?:inv(?:oice)?\s*#\s*[:\-.]?\s*)([A-Z0-9\-\/]+)/i,
+      /(?:reference|ref)\s*[:\-.]?\s*([A-Z0-9\-\/]{4,})/i,
     ]) ?? null;
   const sortCodeRaw =
     lineValue([
+      /(?:sort\s*\/\s*branch\s*code|sort\s*code)\s*[:\-]?\s*(\d{6})/i,
       /(?:sort\s*code)\s*[:\-]?\s*(\d{2}[- ]?\d{2}[- ]?\d{2})/i,
-      /\b(\d{2}[- ]?\d{2}[- ]?\d{2})\b/,
     ]) ?? null;
   const accountNumber =
     lineValue([
-      /(?:account\s*(?:number|no|#)?)\s*[:\-]?\s*([0-9 ]{6,20})/i,
-      /\b(\d{8})\b/,
+      /(?:account\s*(?:number|no|#)?)\s*[:\-.]?\s*([0-9 ]{6,20})/i,
+      /(?:bank\s+detail|account\s+no)[\s\S]*?(\d{8})\b/i,
     ])?.replace(/\s+/g, "") ?? null;
   const beneficiaryFromLabel = lineValue([
     /(?:beneficiary|payee|account\s*name|name\s+on\s+account)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
@@ -247,9 +247,9 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   const FIELD_PROMPTS: Record<string, string> = {
     beneficiary_name: `Extract ONLY the beneficiary/account holder name from this invoice. Person or company who receives payment. Look for "Account holder name", "Payee name", "Beneficiary", "Name on account". NO address. NEVER use date, invoice number, or amount. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
     company_name: `Extract ONLY the company/business name if the payee is a company. Look for "Company name", "Trading as", "Ltd", "Inc". If self-employed, return null.` + CERTAIN_SUFFIX,
-    account_number: `Extract ONLY the bank account number. Typically 8 digits for UK. Look for "Account Number". Digits only, no spaces.` + CERTAIN_SUFFIX,
-    sort_code: `Extract ONLY the UK sort code. Exactly 6 digits. Look for "Sort Code". No spaces or dashes.` + CERTAIN_SUFFIX,
-    invoice_number: `Extract ONLY the invoice/reference number. Copy exactly - letters, numbers, slashes, hyphens. Look for "Invoice Number", "Reference", "Ref". NEVER use a date.` + CERTAIN_SUFFIX,
+    account_number: `Extract ONLY the bank account number from the BANK DETAILS section. Look for "Account No." or "Account Number" - the number where payment is sent. Typically 8 digits for UK. NEVER use "Company Reg. No.", "VAT No.", "Registration No." or similar - those are different. Digits only.` + CERTAIN_SUFFIX,
+    sort_code: `Extract ONLY the UK sort code from the bank details. Look for "Sort Code", "Sort/Branch Code". Exactly 6 digits. NEVER use Company Reg. No. or other numbers.` + CERTAIN_SUFFIX,
+    invoice_number: `Extract ONLY the invoice number. Look for "Invoice No." or "Invoice Number" - often format like INV-123. NEVER use "Company Reg. No.", "Registration No.", "VAT No." - those are different. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
     invoice_date: `Extract ONLY the invoice date. Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
     gross_amount: `Extract ONLY the final total amount to pay. Look for "Grand Total", "Total", "Amount Due", "Total Payable". NOT subtotals. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
     currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP.` + CERTAIN_SUFFIX,
