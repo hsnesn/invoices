@@ -4,11 +4,11 @@ import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/salaries - List salaries (admin, operations) */
+/** GET /api/salaries - List salaries (admin, operations, finance) */
 export async function GET(request: NextRequest) {
   try {
     const { profile } = await requireAuth();
-    if (profile.role !== "admin" && profile.role !== "operations") {
+    if (profile.role !== "admin" && profile.role !== "operations" && profile.role !== "finance") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

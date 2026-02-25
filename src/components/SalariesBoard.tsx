@@ -55,6 +55,95 @@ function statusToGroup(status: string): string {
 
 const DEFAULT_BADGE_COLOR = "#64748b";
 
+function EditSalaryModal({
+  salary,
+  onSave,
+  onClose,
+  saving,
+}: {
+  salary: SalaryRow;
+  onSave: (updates: Record<string, unknown>) => void;
+  onClose: () => void;
+  saving: boolean;
+}) {
+  const [employee_name, setEmployeeName] = useState(salary.employee_name ?? "");
+  const [net_pay, setNetPay] = useState(String(salary.net_pay ?? ""));
+  const [total_gross_pay, setTotalGrossPay] = useState(String(salary.total_gross_pay ?? ""));
+  const [bank_account_number, setBankAccount] = useState(salary.bank_account_number ?? "");
+  const [sort_code, setSortCode] = useState(salary.sort_code ?? "");
+  const [payment_month, setPaymentMonth] = useState(salary.payment_month ?? "");
+  const [process_date, setProcessDate] = useState(salary.process_date ?? "");
+  const [reference, setReference] = useState(salary.reference ?? "");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updates: Record<string, unknown> = {};
+    if (employee_name.trim()) updates.employee_name = employee_name.trim();
+    const np = parseFloat(net_pay);
+    if (!Number.isNaN(np)) updates.net_pay = np;
+    const gp = parseFloat(total_gross_pay);
+    if (!Number.isNaN(gp)) updates.total_gross_pay = gp;
+    if (bank_account_number.trim()) updates.bank_account_number = bank_account_number.trim();
+    if (sort_code.trim()) updates.sort_code = sort_code.trim();
+    if (payment_month.trim()) updates.payment_month = payment_month.trim();
+    if (process_date.trim()) updates.process_date = process_date.trim();
+    if (reference.trim()) updates.reference = reference.trim();
+    onSave(updates);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold">Edit Salary</h2>
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Employee Name</label>
+            <input type="text" value={employee_name} onChange={(e) => setEmployeeName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Net Pay</label>
+              <input type="number" step="0.01" value={net_pay} onChange={(e) => setNetPay(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Gross Pay</label>
+              <input type="number" step="0.01" value={total_gross_pay} onChange={(e) => setTotalGrossPay(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Code</label>
+              <input type="text" value={sort_code} onChange={(e) => setSortCode(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Number</label>
+              <input type="text" value={bank_account_number} onChange={(e) => setBankAccount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Month</label>
+              <input type="text" value={payment_month} onChange={(e) => setPaymentMonth(e.target.value)} placeholder="e.g. January" className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Process Date</label>
+              <input type="text" value={process_date} onChange={(e) => setProcessDate(e.target.value)} placeholder="YYYY-MM-DD" className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Reference</label>
+            <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">{saving ? "Saving..." : "Save"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function getEmployeeBadgeColor(
   salary: SalaryRow,
   nameToColor: Map<string, string>
@@ -73,13 +162,28 @@ function getEmployeeBadgeColor(
   return DEFAULT_BADGE_COLOR;
 }
 
-export function SalariesBoard({ employees }: { employees: { id: string; full_name: string | null; badge_color: string | null }[] }) {
+type Profile = { role: string };
+
+export function SalariesBoard({
+  profile,
+  employees,
+}: {
+  profile: Profile;
+  employees: { id: string; full_name: string | null; badge_color: string | null }[];
+}) {
+  const canEdit = profile.role === "admin" || profile.role === "operations";
+  const canMarkPaid = canEdit || profile.role === "finance";
+
   const { data: salaries = [], mutate } = useSWR<SalaryRow[]>("/api/salaries", fetcher);
+  const { data: stats } = useSWR<{ pending: { count: number; netTotal: number; costTotal: number }; paid: { count: number; netTotal: number; costTotal: number }; monthlyTrend: { month: string; count: number; netTotal: number; costTotal: number }[] }>("/api/salaries/stats", fetcher);
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState<SalaryRow | null>(null);
   const [addEmployeeName, setAddEmployeeName] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadEmployeeId, setUploadEmployeeId] = useState("");
@@ -87,6 +191,9 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
   const [adding, setAdding] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [reExtractingId, setReExtractingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const grouped = React.useMemo(() => {
     const byGroup: Record<string, SalaryRow[]> = { pending: [], needs_review: [], paid: [] };
@@ -101,15 +208,17 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
     return salaries.filter((s) => {
       if (search) {
         const q = search.toLowerCase();
-        if (![s.employee_name, s.reference, s.payment_month, s.ni_number].some((v) => String(v ?? "").toLowerCase().includes(q))) return false;
+        if (![s.employee_name, s.reference, s.payment_month, s.ni_number, s.bank_account_number].some((v) => String(v ?? "").toLowerCase().includes(q))) return false;
       }
       if (statusFilter && s.status !== statusFilter) return false;
       if (monthFilter && s.payment_month !== monthFilter) return false;
+      if (yearFilter && s.payment_year !== parseInt(yearFilter, 10)) return false;
       return true;
     });
-  }, [salaries, search, statusFilter, monthFilter]);
+  }, [salaries, search, statusFilter, monthFilter, yearFilter]);
 
   const uniqueMonths = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.payment_month).filter(Boolean))).sort(), [salaries]);
+  const uniqueYears = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.payment_year).filter(Boolean))).sort((a, b) => (b ?? 0) - (a ?? 0)), [salaries]);
 
   const nameToColor = React.useMemo(() => {
     const m = new Map<string, string>();
@@ -168,6 +277,68 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
       setUploading(false);
     }
   }, [uploadFile, uploadEmployeeId, mutate]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    if (!confirm("Delete this salary record? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/salaries/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Delete failed");
+      }
+      toast.success("Record deleted");
+      mutate();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [mutate]);
+
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter) params.set("status", statusFilter);
+      if (monthFilter) params.set("month", monthFilter);
+      if (yearFilter) params.set("year", yearFilter);
+      const res = await fetch(`/api/salaries/export?${params}`);
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `salaries-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel exported");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }, [statusFilter, monthFilter, yearFilter]);
+
+  const handleSaveEdit = useCallback(async (salary: SalaryRow, updates: Record<string, unknown>) => {
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/salaries/${salary.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Update failed");
+      toast.success("Updated");
+      setShowEditModal(null);
+      mutate();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [mutate]);
 
   const handleReExtract = useCallback(async (id: string) => {
     setReExtractingId(id);
@@ -228,20 +399,54 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payslips</h1>
         <div className="flex flex-wrap gap-2">
+          {canEdit && (
+            <>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+              >
+                <span>+</span> Add Salary
+              </button>
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
+              >
+                <span>↑</span> Upload Payslip
+              </button>
+            </>
+          )}
           <button
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            onClick={handleExport}
+            disabled={exporting || salaries.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
           >
-            <span>+</span> Add Salary
-          </button>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
-          >
-            <span>↑</span> Upload Payslip
+            {exporting ? "..." : "Export Excel"}
           </button>
         </div>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Pending</p>
+            <p className="mt-1 text-xl font-bold text-amber-900 dark:text-amber-100">{stats.pending?.count ?? 0}</p>
+            <p className="text-xs text-amber-600 dark:text-amber-500">Net: {fmtCurrency(stats.pending?.netTotal)}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30">
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Paid</p>
+            <p className="mt-1 text-xl font-bold text-emerald-900 dark:text-emerald-100">{stats.paid?.count ?? 0}</p>
+            <p className="text-xs text-emerald-600 dark:text-emerald-500">Net: {fmtCurrency(stats.paid?.netTotal)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Pending Cost</p>
+            <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{fmtCurrency(stats.pending?.costTotal)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Paid Cost</p>
+            <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{fmtCurrency(stats.paid?.costTotal)}</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <input
@@ -269,6 +474,16 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
           <option value="">All months</option>
           {uniqueMonths.map((m) => (
             <option key={m!} value={m!}>{m}</option>
+          ))}
+        </select>
+        <select
+          value={yearFilter}
+          onChange={(e) => setYearFilter(e.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+        >
+          <option value="">All years</option>
+          {uniqueYears.map((y) => (
+            <option key={y!} value={y!}>{y}</option>
           ))}
         </select>
       </div>
@@ -338,19 +553,37 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
                           <td className="px-3 py-2">{fmtCurrency(s.employer_total_cost)}</td>
                           <td className="px-3 py-2">
                             {s.payslip_storage_path ? (
-                              <button
-                                onClick={() => downloadPayslip(s.payslip_storage_path!, s.employee_name ? `${s.employee_name}-payslip.pdf` : "payslip.pdf")}
-                                className="text-indigo-600 hover:underline dark:text-indigo-400"
-                              >
-                                PDF
-                              </button>
+                              <div className="flex gap-2">
+                                <a
+                                  href={`/api/salaries/download?path=${encodeURIComponent(s.payslip_storage_path)}&view=1`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-600 hover:underline dark:text-indigo-400"
+                                >
+                                  View
+                                </a>
+                                <button
+                                  onClick={() => downloadPayslip(s.payslip_storage_path!, s.employee_name ? `${s.employee_name}-payslip.pdf` : "payslip.pdf")}
+                                  className="text-indigo-600 hover:underline dark:text-indigo-400"
+                                >
+                                  Download
+                                </button>
+                              </div>
                             ) : (
                               "—"
                             )}
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex flex-wrap gap-1">
-                              {s.payslip_storage_path && (
+                              {canEdit && (
+                                <button
+                                  onClick={() => setShowEditModal(s)}
+                                  className="rounded bg-slate-600 px-2 py-1 text-xs font-medium text-white hover:bg-slate-500"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                              {canEdit && s.payslip_storage_path && (
                                 <button
                                   onClick={() => handleReExtract(s.id)}
                                   disabled={reExtractingId === s.id}
@@ -359,13 +592,22 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
                                   {reExtractingId === s.id ? "..." : "Re-extract"}
                                 </button>
                               )}
-                              {s.status !== "paid" && (
+                              {canMarkPaid && s.status !== "paid" && (
                                 <button
                                   onClick={() => handleMarkPaid(s.id)}
                                   disabled={markingPaidId === s.id || !s.net_pay}
                                   className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                                 >
                                   {markingPaidId === s.id ? "..." : "Mark Paid"}
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button
+                                  onClick={() => handleDelete(s.id)}
+                                  disabled={deletingId === s.id}
+                                  className="rounded bg-rose-600 px-2 py-1 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+                                >
+                                  {deletingId === s.id ? "..." : "Delete"}
                                 </button>
                               )}
                             </div>
@@ -403,6 +645,15 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
             </div>
           </div>
         </div>
+      )}
+
+      {showEditModal && (
+        <EditSalaryModal
+          salary={showEditModal}
+          onSave={(updates) => handleSaveEdit(showEditModal, updates)}
+          onClose={() => setShowEditModal(null)}
+          saving={savingEdit}
+        />
       )}
 
       {showUploadModal && (

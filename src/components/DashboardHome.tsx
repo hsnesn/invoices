@@ -141,6 +141,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.adminOnly && !isAdmin) return false;
     if (isViewer) return ["guest_invoices", "freelancer_invoices", "reports"].includes(p.pageKey);
     if (isOperations) return ["guest_invoices", "freelancer_invoices", "reports", "salaries"].includes(p.pageKey);
+    if (profile.role === "finance") return ["guest_invoices", "freelancer_invoices", "reports", "salaries"].includes(p.pageKey);
     if (userPages && userPages.length > 0) return userPages.includes(p.pageKey);
     return true;
   });

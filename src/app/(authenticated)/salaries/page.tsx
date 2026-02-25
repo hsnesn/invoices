@@ -9,7 +9,7 @@ export const revalidate = 0;
 export default async function SalariesPage() {
   const { profile } = await requireAuth();
   if (profile.role === "viewer") redirect("/dashboard");
-  if (profile.role !== "admin" && profile.role !== "operations") {
+  if (profile.role !== "admin" && profile.role !== "operations" && profile.role !== "finance") {
     redirect("/dashboard");
   }
 
@@ -21,7 +21,10 @@ export default async function SalariesPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <SalariesBoard employees={(employees ?? []).map((e) => ({ id: e.id, full_name: e.full_name, badge_color: e.badge_color }))} />
+      <SalariesBoard
+        profile={profile}
+        employees={(employees ?? []).map((e) => ({ id: e.id, full_name: e.full_name, badge_color: e.badge_color }))}
+      />
     </div>
   );
 }

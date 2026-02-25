@@ -6,17 +6,63 @@ import { sendSalaryPaymentConfirmationEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
-/** PATCH /api/salaries/[id] - Update salary (e.g. mark as paid) */
+function canEdit(role: string): boolean {
+  return role === "admin" || role === "operations";
+}
+function canMarkPaid(role: string): boolean {
+  return role === "admin" || role === "operations" || role === "finance";
+}
+function canDelete(role: string): boolean {
+  return role === "admin" || role === "operations";
+}
+
+/** DELETE /api/salaries/[id] - Delete salary (admin, operations) */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { profile } = await requireAuth();
+    if (!canDelete(profile.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const supabase = createAdminClient();
+    const { data: existing, error: fetchError } = await supabase
+      .from("salaries")
+      .select("id, payslip_storage_path")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !existing) {
+      return NextResponse.json({ error: "Salary not found" }, { status: 404 });
+    }
+
+    const { error: deleteError } = await supabase.from("salaries").delete().eq("id", id);
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
+
+    const path = (existing as { payslip_storage_path?: string }).payslip_storage_path;
+    if (path) {
+      await supabase.storage.from("invoices").remove([path]);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
+
+/** PATCH /api/salaries/[id] - Update salary (edit, mark paid, re-extract) */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { session, profile } = await requireAuth();
-    if (profile.role !== "admin" && profile.role !== "operations") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const action = body.action as string;
@@ -33,6 +79,9 @@ export async function PATCH(
     }
 
     if (action === "re_extract") {
+      if (!canEdit(profile.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const storagePath = (existing as { payslip_storage_path?: string }).payslip_storage_path;
       if (!storagePath) {
         return NextResponse.json({ error: "No payslip file to extract from" }, { status: 400 });
@@ -82,10 +131,12 @@ export async function PATCH(
     }
 
     if (action === "mark_paid") {
+      if (!canMarkPaid(profile.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       if (existing.status === "paid") {
         return NextResponse.json({ error: "Already marked as paid" }, { status: 400 });
       }
-
       if (!existing.net_pay || existing.net_pay <= 0) {
         return NextResponse.json(
           { error: "Cannot mark as paid: Net Pay is missing or invalid" },
@@ -159,51 +210,59 @@ export async function PATCH(
       return NextResponse.json(updated);
     }
 
-    const allowedFields = [
-      "employee_name",
-      "ni_number",
-      "bank_account_number",
-      "sort_code",
-      "net_pay",
-      "total_gross_pay",
-      "paye_tax",
-      "employee_ni",
-      "employee_pension",
-      "employer_pension",
-      "employer_ni",
-      "payment_month",
-      "payment_year",
-      "process_date",
-      "tax_period",
-      "reference",
-    ];
-    const updates: Record<string, unknown> = {};
-    for (const key of allowedFields) {
-      if (key in body && body[key] !== undefined) {
-        updates[key] = body[key];
+    if (action === "edit" || Object.keys(body).some((k) => k !== "action")) {
+      if (!canEdit(profile.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
+      const allowedFields = [
+        "employee_name",
+        "ni_number",
+        "bank_account_number",
+        "sort_code",
+        "net_pay",
+        "total_gross_pay",
+        "paye_tax",
+        "employee_ni",
+        "employee_pension",
+        "employer_pension",
+        "employer_ni",
+        "payment_month",
+        "payment_year",
+        "process_date",
+        "tax_period",
+        "reference",
+      ];
+      const updates: Record<string, unknown> = {};
+      for (const key of allowedFields) {
+        if (key in body && body[key] !== undefined) {
+          updates[key] = body[key];
+        }
+      }
+      if (updates.net_pay != null || updates.total_gross_pay != null || updates.employer_pension != null || updates.employer_ni != null) {
+        const gross = (updates.total_gross_pay as number) ?? existing.total_gross_pay ?? 0;
+        const erPension = (updates.employer_pension as number) ?? existing.employer_pension ?? 0;
+        const erNi = (updates.employer_ni as number) ?? existing.employer_ni ?? 0;
+        if (gross > 0) updates.employer_total_cost = gross + erPension + erNi;
+      }
+      if (Object.keys(updates).length === 0) {
+        return NextResponse.json(existing);
+      }
+      const { error: updateError } = await supabase
+        .from("salaries")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+      const { data: updated } = await supabase
+        .from("salaries")
+        .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
+        .eq("id", id)
+        .single();
+      return NextResponse.json(updated ?? existing);
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json(existing);
-    }
-
-    const { error: updateError } = await supabase
-      .from("salaries")
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq("id", id);
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    const { data: updated } = await supabase
-      .from("salaries")
-      .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
-      .eq("id", id)
-      .single();
-
-    return NextResponse.json(updated ?? existing);
+    return NextResponse.json(existing);
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
