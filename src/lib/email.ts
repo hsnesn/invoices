@@ -428,6 +428,7 @@ export type SalaryForEmail = {
   paid_date: string | null;
   reference: string | null;
   payment_month: string | null;
+  payment_year: number | null;
 };
 
 function fmtCurrency(v: number | null | undefined): string {
@@ -443,7 +444,8 @@ export async function sendSalaryPaymentConfirmationEmail(params: {
 }): Promise<{ success: boolean; error?: string }> {
   const s = params.salary;
   const month = s.payment_month ?? "Salary";
-  const subject = `${month} Salary Payment Confirmation`;
+  const year = s.payment_year ? ` ${s.payment_year}` : "";
+  const subject = `${month}${year} Salary Payment Confirmation`;
 
   const rows = [
     ["Employee", fmt(s.employee_name)],

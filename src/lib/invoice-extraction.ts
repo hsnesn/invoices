@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
+import stringSimilarity from "string-similarity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createAuditEvent } from "@/lib/audit";
 import { normalizeSortCode, amountsConsistent } from "@/lib/validation";
@@ -249,6 +250,8 @@ type ContractorTemplate = {
   company_name?: string | null;
 };
 
+const SIMILARITY_THRESHOLD = 0.72;
+
 function findMatchingTemplate(
   templates: ContractorTemplate[],
   namesToMatch: (string | null | undefined)[],
@@ -268,6 +271,60 @@ function findMatchingTemplate(
     }
   }
   return null;
+}
+
+function findMatchingTemplateBySimilarity(
+  templates: ContractorTemplate[],
+  documentText: string
+): ContractorTemplate | null {
+  const lines = documentText.split(/\n/).map((l) => l.trim()).filter(Boolean);
+  const candidates: string[] = [];
+  for (const line of lines) {
+    const words = line.split(/\s+/).filter(Boolean);
+    if (words.length >= 2 && words.length <= 8 && /[A-Za-z]{2,}/.test(line) && line.length <= 80) {
+      candidates.push(line);
+    }
+  }
+  const full = documentText;
+  const labelRegex = /(?:beneficiary|payee|account\s*holder|name\s+on\s+account|company\s+name|contractor)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,80})/gi;
+  let labelM;
+  while ((labelM = labelRegex.exec(full)) !== null) {
+    const val = labelM[1]?.trim();
+    if (val && val.length >= 4) candidates.push(val);
+  }
+  const seen = new Set<string>();
+  const uniqueCandidates = candidates.filter((c) => {
+    const k = normalizeForMatch(c);
+    if (seen.has(k) || k.length < 4) return false;
+    seen.add(k);
+    return true;
+  });
+
+  let bestTemplate: ContractorTemplate | null = null;
+  let bestScore = SIMILARITY_THRESHOLD;
+
+  for (const t of templates) {
+    const templateNames = [t.name, ...(t.name_aliases ?? [])].filter(Boolean);
+    for (const tn of templateNames) {
+      if (!tn || tn.length < 3) continue;
+      const tnNorm = normalizeForMatch(tn);
+      for (const c of uniqueCandidates) {
+        const cNorm = normalizeForMatch(c);
+        const sim = stringSimilarity.compareTwoStrings(tnNorm, cNorm);
+        if (sim > bestScore) {
+          bestScore = sim;
+          bestTemplate = t;
+        }
+        const partialRatio =
+          Math.min(tnNorm.length, cNorm.length) / Math.max(tnNorm.length, cNorm.length);
+        if ((cNorm.includes(tnNorm) || tnNorm.includes(cNorm)) && partialRatio >= 0.7 && partialRatio > bestScore) {
+          bestScore = partialRatio;
+          bestTemplate = t;
+        }
+      }
+    }
+  }
+  return bestTemplate;
 }
 
 export async function runInvoiceExtraction(invoiceId: string, actorUserId: string | null) {
@@ -321,6 +378,8 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP.` + CERTAIN_SUFFIX,
   };
 
+  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "currency"];
+
   async function extractSingleField(
     fieldKey: string,
     docText: string,
@@ -360,16 +419,46 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     }
   }
 
+  const { data: templates } = await supabase.from("contractor_templates").select("name, name_aliases, account_number, sort_code, beneficiary_name, company_name");
+  let contractorFromDb: string | null = null;
+  if ((invoice as { invoice_type?: string })?.invoice_type === "freelancer") {
+    const { data: fl } = await supabase.from("freelancer_invoice_fields").select("contractor_name").eq("invoice_id", invoiceId).single();
+    contractorFromDb = (fl as { contractor_name?: string } | null)?.contractor_name ?? null;
+  }
+
+  let templateMatched: ContractorTemplate | null = null;
+  if (templates?.length) {
+    const tmpls = templates as ContractorTemplate[];
+    templateMatched = findMatchingTemplateBySimilarity(tmpls, text) ?? findMatchingTemplate(tmpls, [contractorFromDb], text);
+  }
+
+  if (templateMatched) {
+    if (templateMatched.account_number) parsed.account_number = templateMatched.account_number;
+    if (templateMatched.sort_code) parsed.sort_code = templateMatched.sort_code;
+    if (templateMatched.beneficiary_name) parsed.beneficiary_name = templateMatched.beneficiary_name;
+    if (templateMatched.company_name) parsed.company_name = templateMatched.company_name;
+  }
+
   try {
     if (!openai) throw new Error("OPENAI_API_KEY missing");
 
     if (hasText) {
-      const fields = Object.keys(FIELD_PROMPTS);
+      const fieldsToExtract = templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS);
       const results = await Promise.all(
-        fields.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
+        fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
       );
       for (const { key, result } of results) {
         applyFieldResult(key, result);
+      }
+      if (!templateMatched) {
+        const namesToMatch = [parsed.beneficiary_name, parsed.company_name, contractorFromDb];
+        const fallbackMatch = templates?.length ? findMatchingTemplate(templates as ContractorTemplate[], namesToMatch, text) : null;
+        if (fallbackMatch) {
+          if (fallbackMatch.account_number) parsed.account_number = fallbackMatch.account_number;
+          if (fallbackMatch.sort_code) parsed.sort_code = fallbackMatch.sort_code;
+          if (fallbackMatch.beneficiary_name) parsed.beneficiary_name = fallbackMatch.beneficiary_name;
+          if (fallbackMatch.company_name) parsed.company_name = fallbackMatch.company_name;
+        }
       }
       const aiFieldCount = Object.keys(parsed).filter((k) => parsed[k as keyof typeof parsed] != null).length;
       if (aiFieldCount < 2) {
@@ -382,12 +471,22 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   } catch (err) {
     try {
       if (openai && text.trim().length > 20) {
-        const fields = Object.keys(FIELD_PROMPTS);
+        const fieldsToExtract = templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS);
         const results = await Promise.all(
-          fields.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
+          fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
         );
         for (const { key, result } of results) {
           applyFieldResult(key, result);
+        }
+        if (!templateMatched && templates?.length) {
+          const namesToMatch = [parsed.beneficiary_name, parsed.company_name, contractorFromDb];
+          const fallbackMatch = findMatchingTemplate(templates as ContractorTemplate[], namesToMatch, text);
+          if (fallbackMatch) {
+            if (fallbackMatch.account_number) parsed.account_number = fallbackMatch.account_number;
+            if (fallbackMatch.sort_code) parsed.sort_code = fallbackMatch.sort_code;
+            if (fallbackMatch.beneficiary_name) parsed.beneficiary_name = fallbackMatch.beneficiary_name;
+            if (fallbackMatch.company_name) parsed.company_name = fallbackMatch.company_name;
+          }
         }
         const aiFieldCount = Object.keys(parsed).filter((k) => parsed[k as keyof typeof parsed] != null).length;
         if (aiFieldCount < 2) parsed = { ...regexParsed, ...parsed };
@@ -404,21 +503,6 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
           : "Extraction failed";
       parsed = regexParsed;
     }
-  }
-
-  const { data: templates } = await supabase.from("contractor_templates").select("name, name_aliases, account_number, sort_code, beneficiary_name, company_name");
-  let contractorFromDb: string | null = null;
-  if ((invoice as { invoice_type?: string })?.invoice_type === "freelancer") {
-    const { data: fl } = await supabase.from("freelancer_invoice_fields").select("contractor_name").eq("invoice_id", invoiceId).single();
-    contractorFromDb = (fl as { contractor_name?: string } | null)?.contractor_name ?? null;
-  }
-  const namesToMatch = [parsed.beneficiary_name, parsed.company_name, contractorFromDb];
-  const matched = templates?.length ? findMatchingTemplate(templates as ContractorTemplate[], namesToMatch, text) : null;
-  if (matched) {
-    if (matched.account_number) parsed.account_number = matched.account_number;
-    if (matched.sort_code) parsed.sort_code = matched.sort_code;
-    if (matched.beneficiary_name) parsed.beneficiary_name = matched.beneficiary_name;
-    if (matched.company_name) parsed.company_name = matched.company_name;
   }
 
   if (parsed.beneficiary_name) {

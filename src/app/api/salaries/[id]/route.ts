@@ -349,4 +349,5 @@ type SalaryForEmail = {
   paid_date: string | null;
   reference: string | null;
   payment_month: string | null;
+  payment_year: number | null;
 };

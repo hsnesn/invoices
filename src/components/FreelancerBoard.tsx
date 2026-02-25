@@ -20,7 +20,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 /* ------------------------------------------------------------------ */
 
 type WfShape = { status: string; rejection_reason: string | null; manager_user_id: string | null; paid_date: string | null };
-type ExtShape = { invoice_number: string | null; beneficiary_name: string | null; account_number: string | null; sort_code: string | null; gross_amount: number | null; extracted_currency: string | null };
+type ExtShape = { invoice_number: string | null; beneficiary_name: string | null; account_number: string | null; sort_code: string | null; gross_amount: number | null; extracted_currency: string | null; needs_review?: boolean };
 type FlShape = { contractor_name: string | null; company_name: string | null; service_description: string | null; service_days_count: number | null; service_days: string | null; service_rate_per_day: number | null; service_month: string | null; additional_cost: number | null; additional_cost_reason: string | null; booked_by: string | null; department_2: string | null; istanbul_team: string | null };
 
 type FreelancerInvoiceRow = {
@@ -41,6 +41,7 @@ type DisplayRow = {
   department2: string; serviceDaysCount: string; days: string; serviceRate: string;
   month: string; bookedBy: string; serviceDescription: string; additionalCostReason: string;
   status: string; rejectionReason: string; createdAt: string; paidDate: string; group: GroupKey;
+  hasMissingInfo: boolean; missingFields: string[];
 };
 
 type EditDraft = {
@@ -183,6 +184,15 @@ export function FreelancerBoard({
       serviceDescription: fl?.service_description ?? "—", additionalCostReason: fl?.additional_cost_reason ?? "—",
       status, rejectionReason: wf?.rejection_reason ?? "", createdAt: inv.created_at,
       paidDate: wf?.paid_date ?? "", group: statusToGroup(status),
+      ...(function () {
+        const m: string[] = [];
+        if (!ext?.beneficiary_name) m.push("Alacaklı");
+        if (!ext?.account_number) m.push("Hesap No");
+        if (!ext?.sort_code) m.push("Sort Code");
+        if (!ext?.gross_amount) m.push("Tutar");
+        if (!ext?.invoice_number) m.push("Fatura No");
+        return { hasMissingInfo: m.length > 0 || ext?.needs_review === true, missingFields: m };
+      })(),
     };
   }), [invoices, deptMap, profMap]);
 
@@ -191,6 +201,7 @@ export function FreelancerBoard({
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
+  const [missingInfoFilter, setMissingInfoFilter] = useState(false);
   const refreshAndKeepVisible = useCallback(() => {
     setGroupFilter("");
     router.refresh();
@@ -200,13 +211,14 @@ export function FreelancerBoard({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const hasFilter = !!(search || departmentFilter || monthFilter || groupFilter || managerFilter || bookedByFilter || dateFrom || dateTo);
-  const clearFilters = () => { setSearch(""); setDepartmentFilter(""); setMonthFilter(""); setGroupFilter(""); setManagerFilter(""); setBookedByFilter(""); setDateFrom(""); setDateTo(""); };
+  const hasFilter = !!(search || departmentFilter || monthFilter || groupFilter || missingInfoFilter || managerFilter || bookedByFilter || dateFrom || dateTo);
+  const clearFilters = () => { setSearch(""); setDepartmentFilter(""); setMonthFilter(""); setGroupFilter(""); setMissingInfoFilter(false); setManagerFilter(""); setBookedByFilter(""); setDateFrom(""); setDateTo(""); };
 
   const uniqueMonths = useMemo(() => Array.from(new Set(rows.map(r => r.month).filter(m => m !== "—"))).sort(), [rows]);
   const uniqueBookedBy = useMemo(() => Array.from(new Set(rows.map(r => r.bookedBy).filter(b => b !== "—"))).sort(), [rows]);
 
   const filteredRows = useMemo(() => rows.filter(r => {
+    if (missingInfoFilter && !r.hasMissingInfo) return false;
     if (search) { const q = search.toLowerCase(); if (![r.contractor, r.companyName, r.submittedBy, r.beneficiary, r.invNumber, r.serviceDescription, r.bookedBy, r.department, r.department2].some(v => v.toLowerCase().includes(q))) return false; }
     if (departmentFilter && r.departmentId !== departmentFilter) return false;
     if (monthFilter && r.month !== monthFilter) return false;
@@ -216,7 +228,7 @@ export function FreelancerBoard({
     if (dateFrom && r.createdAt < dateFrom) return false;
     if (dateTo && r.createdAt > dateTo + "T23:59:59") return false;
     return true;
-  }), [rows, search, departmentFilter, monthFilter, groupFilter, managerFilter, bookedByFilter, dateFrom, dateTo]);
+  }), [rows, search, departmentFilter, monthFilter, groupFilter, missingInfoFilter, managerFilter, bookedByFilter, dateFrom, dateTo]);
 
   /* ---------- Column visibility ---------- */
   const [visibleColumns, setVisibleColumns] = useState<string[]>([...DEFAULT_VISIBLE]);
@@ -698,7 +710,14 @@ export function FreelancerBoard({
     const inp = (key: keyof EditDraft, type = "text") => <input type={type} value={editDraft?.[key] ?? ""} onChange={e => onChangeDraft(key, e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />;
     const isSubmitter = r.submitterId === currentUserId;
     switch (col) {
-      case "status": return <StatusCell r={r} canApprove={canApprove(r)} isSubmitter={isSubmitter} currentRole={currentRole} isOperationsRoomMember={isOperationsRoomMember} actionLoadingId={actionLoadingId} onManagerApprove={onManagerApprove} onAdminApprove={onAdminApprove} onResubmit={onResubmit} onMarkPaid={onMarkPaid} openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }} />;
+      case "status": return (
+        <div>
+          <StatusCell r={r} canApprove={canApprove(r)} isSubmitter={isSubmitter} currentRole={currentRole} isOperationsRoomMember={isOperationsRoomMember} actionLoadingId={actionLoadingId} onManagerApprove={onManagerApprove} onAdminApprove={onAdminApprove} onResubmit={onResubmit} onMarkPaid={onMarkPaid} openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }} />
+          {r.hasMissingInfo && (
+            <div className="mt-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400" title={r.missingFields.length ? `Eksik: ${r.missingFields.join(", ")}` : "Eksik veya hatalı bilgi"}>⚠ Eksik</div>
+          )}
+        </div>
+      );
       case "contractor": return isEditing ? inp("contractor") : <span className="font-medium">{r.contractor}{r.status === "rejected" && r.rejectionReason && <div className="mt-1 rounded bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300"><span className="font-semibold">Rejection:</span> {r.rejectionReason}</div>}</span>;
       case "submittedBy": return isEditing && currentRole === "admin" ? <select value={editDraft?.submitterUserId ?? ""} onChange={e => onChangeDraft("submitterUserId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">—</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <SubmitterBadge name={r.submittedBy} />;
       case "companyName": return isEditing ? inp("companyName") : r.companyName;
@@ -825,6 +844,10 @@ export function FreelancerBoard({
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search contractor, company, beneficiary..." className="w-56 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
           <select value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Departments</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
           <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Months</option>{uniqueMonths.map(m => <option key={m} value={m}>{m}</option>)}</select>
+          <label className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400 cursor-pointer">
+            <input type="checkbox" checked={missingInfoFilter} onChange={e => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
+            Eksik bilgi
+          </label>
           <select value={groupFilter} onChange={e => setGroupFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Status</option>{GROUPS.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}</select>
           <select value={managerFilter} onChange={e => setManagerFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Managers</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
           <select value={bookedByFilter} onChange={e => setBookedByFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Booked By</option>{uniqueBookedBy.map(b => <option key={b} value={b}>{b}</option>)}</select>

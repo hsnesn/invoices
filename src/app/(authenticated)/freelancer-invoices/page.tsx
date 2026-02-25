@@ -58,7 +58,7 @@ export default async function FreelancerInvoicesPage() {
       submitter_user_id,
       invoice_type,
       invoice_workflows(status, rejection_reason, manager_user_id, paid_date),
-      invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency),
+      invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency, needs_review),
       freelancer_invoice_fields(contractor_name, company_name, service_description, service_days_count, service_days, service_rate_per_day, service_month, additional_cost, additional_cost_reason, booked_by, department_2, istanbul_team)
     `)
     .eq("invoice_type", "freelancer")

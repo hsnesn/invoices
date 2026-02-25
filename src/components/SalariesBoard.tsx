@@ -259,6 +259,7 @@ export function SalariesBoard({
   const [statusFilter, setStatusFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<SalaryRow | null>(null);
@@ -299,12 +300,14 @@ export function SalariesBoard({
       if (statusFilter && s.status !== statusFilter) return false;
       if (monthFilter && s.payment_month !== monthFilter) return false;
       if (yearFilter && s.payment_year !== parseInt(yearFilter, 10)) return false;
+      if (nameFilter && (s.employee_name ?? "").toLowerCase() !== nameFilter.toLowerCase()) return false;
       return true;
     });
-  }, [salaries, search, statusFilter, monthFilter, yearFilter]);
+  }, [salaries, search, statusFilter, monthFilter, yearFilter, nameFilter]);
 
   const uniqueMonths = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.payment_month).filter(Boolean))).sort(), [salaries]);
   const uniqueYears = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.payment_year).filter(Boolean))).sort((a, b) => (b ?? 0) - (a ?? 0)), [salaries]);
+  const uniqueEmployeeNames = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.employee_name).filter(Boolean))).sort((a, b) => String(a ?? "").localeCompare(String(b ?? ""))), [salaries]);
 
   const nameToColor = React.useMemo(() => {
     const m = new Map<string, string>();
@@ -382,13 +385,14 @@ export function SalariesBoard({
     }
   }, [mutate]);
 
-  const handleExport = useCallback(async () => {
+  const handleExportExcel = useCallback(async () => {
     setExporting(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter) params.set("status", statusFilter);
       if (monthFilter) params.set("month", monthFilter);
       if (yearFilter) params.set("year", yearFilter);
+      if (nameFilter) params.set("name", nameFilter);
       const res = await fetch(`/api/salaries/export?${params}`);
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
@@ -404,7 +408,45 @@ export function SalariesBoard({
     } finally {
       setExporting(false);
     }
-  }, [statusFilter, monthFilter, yearFilter]);
+  }, [statusFilter, monthFilter, yearFilter, nameFilter]);
+
+  const handleExportPdf = useCallback(async () => {
+    setExporting(true);
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
+      doc.setFontSize(14);
+      doc.text("Salary Report", 14, 15);
+      doc.setFontSize(8);
+      doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")} | ${filtered.length} records`, 14, 20);
+      const bank = (s: SalaryRow) => getBankDisplay(s);
+      autoTable(doc, {
+        startY: 25,
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [59, 130, 246] },
+        head: [["Employee", "Net Pay", "Sort Code", "Account", "Reference", "Month", "Date"]],
+        body: filtered.map((s) => {
+          const b = bank(s);
+          return [
+            s.employee_name ?? "—",
+            fmtCurrency(s.net_pay),
+            b.sortCode,
+            b.account,
+            s.reference ?? "—",
+            s.payment_month ?? "—",
+            s.paid_date ?? s.process_date ?? "—",
+          ];
+        }),
+      });
+      doc.save(`salaries-${new Date().toISOString().split("T")[0]}.pdf`);
+      toast.success("PDF exported");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }, [filtered]);
 
   const handleSaveEdit = useCallback(async (salary: SalaryRow, updates: Record<string, unknown>) => {
     setSavingEdit(true);
@@ -687,11 +729,18 @@ export function SalariesBoard({
             </>
           )}
           <button
-            onClick={handleExport}
+            onClick={() => void handleExportExcel()}
             disabled={exporting || salaries.length === 0}
             className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
           >
             {exporting ? "..." : "Export Excel"}
+          </button>
+          <button
+            onClick={() => void handleExportPdf()}
+            disabled={exporting || filtered.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+          >
+            {exporting ? "..." : "Export PDF"}
           </button>
         </div>
       </div>
@@ -755,6 +804,16 @@ export function SalariesBoard({
           <option value="">All years</option>
           {uniqueYears.map((y) => (
             <option key={y!} value={y!}>{y}</option>
+          ))}
+        </select>
+        <select
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+        >
+          <option value="">All employees</option>
+          {uniqueEmployeeNames.map((n) => (
+            <option key={n!} value={n!}>{n}</option>
           ))}
         </select>
       </div>

@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const month = searchParams.get("month");
     const year = searchParams.get("year");
+    const name = searchParams.get("name");
 
     const supabase = createAdminClient();
     let query = supabase
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
     if (status) query = query.eq("status", status);
     if (month) query = query.eq("payment_month", month);
     if (year) query = query.eq("payment_year", parseInt(year, 10));
+    if (name?.trim()) query = query.ilike("employee_name", `%${name.trim()}%`);
 
     const { data: salaries, error } = await query;
 

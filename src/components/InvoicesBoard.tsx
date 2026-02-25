@@ -36,6 +36,7 @@ type InvoiceRow = {
     gross_amount: number | null;
     extracted_currency: string | null;
     raw_json?: Record<string, unknown> | null;
+    needs_review?: boolean;
   }[] | null;
 };
 
@@ -67,6 +68,8 @@ type DisplayRow = {
   rejectionReason: string;
   createdAt: string;
   group: "pending_line_manager" | "ready_for_payment" | "paid_invoices" | "no_payment_needed" | "rejected";
+  hasMissingInfo: boolean;
+  missingFields: string[];
 };
 
 type TimelineEvent = {
@@ -93,6 +96,7 @@ type SavedFilter = {
     departmentFilter: string;
     programmeFilter: string;
     groupFilter: string;
+    missingInfoFilter: boolean;
     producerFilter: string;
     paymentTypeFilter: string;
     managerFilter: string;
@@ -498,6 +502,11 @@ function InvoiceTable({
                   </div>
                 )}
               {isDuplicate && <div className="mt-0.5 text-[9px] font-bold text-yellow-600" title="Possible duplicate">⚠ DUP</div>}
+              {r.hasMissingInfo && (
+                <div className="mt-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400" title={r.missingFields.length ? `Eksik: ${r.missingFields.join(", ")}` : "Eksik veya hatalı bilgi"}>
+                  ⚠ Eksik
+                </div>
+              )}
               </td>
               )}
               {isCol("guest") && (
@@ -794,6 +803,7 @@ export function InvoicesBoard({
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [programmeFilter, setProgrammeFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState<"" | DisplayRow["group"]>("");
+  const [missingInfoFilter, setMissingInfoFilter] = useState(false);
   const [producerFilter, setProducerFilter] = useState("");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("");
   const [managerFilter, setManagerFilter] = useState("");
@@ -882,12 +892,12 @@ export function InvoicesBoard({
   // Push to recently used filters when any filter changes
   React.useEffect(() => {
     if (!hydrated) return;
-    const hasAny = search || departmentFilter || programmeFilter || groupFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo;
+    const hasAny = search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo;
     if (!hasAny) return;
-    const f = { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField: sortField || "", sortDir };
+    const f = { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField: sortField || "", sortDir };
     pushRecentFilter(f);
     setRecentFilters(loadFromStorage<SavedFilter["filters"][]>(RECENT_FILTERS_KEY, []));
-  }, [search, departmentFilter, programmeFilter, groupFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir, hydrated]);
+  }, [search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir, hydrated]);
 
   const rows = useMemo(() => {
     return invoices.map((inv) => {
@@ -947,6 +957,14 @@ export function InvoicesBoard({
       const paymentDate = wf?.paid_date ?? "—";
       const group = calcGroup(status, paymentType);
 
+      const missingFields: string[] = [];
+      if (!ext?.beneficiary_name || (accountNameRaw === "—" && !ext.beneficiary_name)) missingFields.push("Alacaklı");
+      if (!ext?.account_number || accountNumber === "—") missingFields.push("Hesap No");
+      if (!ext?.sort_code || sortCode === "—") missingFields.push("Sort Code");
+      if (!ext?.gross_amount || amount === "—") missingFields.push("Tutar");
+      if (!ext?.invoice_number) missingFields.push("Fatura No");
+      const hasMissingInfo = missingFields.length > 0 || ext?.needs_review === true;
+
       return {
         id: inv.id,
         submitterId: inv.submitter_user_id,
@@ -975,6 +993,8 @@ export function InvoicesBoard({
         rejectionReason: wf?.rejection_reason ?? "",
         createdAt: inv.created_at,
         group,
+        hasMissingInfo,
+        missingFields,
       } satisfies DisplayRow;
     });
   }, [invoices, departmentMap, programMap, profileMap]);
@@ -982,6 +1002,7 @@ export function InvoicesBoard({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let result = rows.filter((r) => {
+      if (missingInfoFilter && !r.hasMissingInfo) return false;
       if (departmentFilter && r.department !== departmentFilter) return false;
       if (programmeFilter && r.programme !== programmeFilter) return false;
       if (groupFilter && r.group !== groupFilter) return false;
@@ -1020,7 +1041,7 @@ export function InvoicesBoard({
     }
 
     return result;
-  }, [rows, search, departmentFilter, programmeFilter, groupFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [rows, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir]);
 
   const groups: DisplayRow["group"][] = [
     "pending_line_manager",
@@ -1321,20 +1342,21 @@ export function InvoicesBoard({
     if (!filterName.trim()) return;
     const f: SavedFilter = {
       name: filterName.trim(),
-      filters: { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField: sortField || "", sortDir },
+      filters: { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField: sortField || "", sortDir },
     };
     const next = [...savedFilters, f];
     setSavedFilters(next);
     localStorage.setItem("invoice_saved_filters", JSON.stringify(next));
     setFilterName("");
     setShowSaveFilter(false);
-  }, [filterName, search, departmentFilter, programmeFilter, groupFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir, savedFilters]);
+  }, [filterName, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir, savedFilters]);
 
   const applySavedFilter = useCallback((f: SavedFilter) => {
     setSearch(f.filters.search);
     setDepartmentFilter(f.filters.departmentFilter);
     setProgrammeFilter(f.filters.programmeFilter);
     setGroupFilter(f.filters.groupFilter as typeof groupFilter);
+    setMissingInfoFilter(f.filters.missingInfoFilter ?? false);
     setProducerFilter(f.filters.producerFilter);
     setPaymentTypeFilter(f.filters.paymentTypeFilter);
     setManagerFilter(f.filters.managerFilter);
@@ -1350,6 +1372,7 @@ export function InvoicesBoard({
     setDepartmentFilter(f.departmentFilter);
     setProgrammeFilter(f.programmeFilter as typeof groupFilter);
     setGroupFilter(f.groupFilter as typeof groupFilter);
+    setMissingInfoFilter((f as { missingInfoFilter?: boolean }).missingInfoFilter ?? false);
     setProducerFilter(f.producerFilter);
     setPaymentTypeFilter(f.paymentTypeFilter);
     setManagerFilter(f.managerFilter);
@@ -1474,7 +1497,10 @@ export function InvoicesBoard({
     const fieldLabels: Record<string, string> = { guest: "Guest", producer: "Producer", department: "Department", programme: "Programme", amount: "Amount", invoiceDate: "Date", accountName: "Account", invNumber: "INV#", status: "Status", paymentType: "Payment", topic: "Topic", tx1: "TX1", lineManager: "Manager", title: "Title" };
     const rows = data.map((r) => {
       const obj: Record<string, string> = {};
-      fields.forEach((f) => { obj[fieldLabels[f] ?? f] = (r as Record<string, string>)[f] ?? ""; });
+      fields.forEach((f) => {
+        const v = (r as Record<string, unknown>)[f];
+        obj[fieldLabels[f] ?? f] = v != null && typeof v !== "object" ? String(v) : "";
+      });
       return obj;
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -1834,6 +1860,10 @@ export function InvoicesBoard({
               className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#5034FF] focus:ring-2 focus:ring-[#5034FF]/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
             />
           </div>
+          <label className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400 cursor-pointer">
+            <input type="checkbox" checked={missingInfoFilter} onChange={(e) => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
+            Eksik bilgi
+          </label>
           <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value as "" | DisplayRow["group"])} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             <option value="">Status</option>
             {groups.map((g) => (<option key={g} value={g}>{sectionTitle(g)}</option>))}
@@ -1915,11 +1945,11 @@ export function InvoicesBoard({
               ★
             </button>
           )}
-          {(search || departmentFilter || programmeFilter || groupFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo || sortField) && (
+          {(search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo || sortField) && (
             <button
               onClick={() => {
                 setSearch(""); setDepartmentFilter(""); setProgrammeFilter(""); setGroupFilter("");
-                setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter("");
+                setMissingInfoFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter("");
                 setDateFrom(""); setDateTo(""); setSortField("");
               }}
               className="rounded-lg bg-gray-100 px-2 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-200"
@@ -1935,6 +1965,12 @@ export function InvoicesBoard({
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
                 &quot;{search}&quot;
                 <button onClick={() => setSearch("")} className="ml-0.5 hover:text-blue-900">✕</button>
+              </span>
+            )}
+            {missingInfoFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                Eksik bilgi
+                <button onClick={() => setMissingInfoFilter(false)} className="ml-0.5 hover:text-amber-900">✕</button>
               </span>
             )}
             {groupFilter && (
@@ -1994,7 +2030,7 @@ export function InvoicesBoard({
             <button
               onClick={() => {
                 setSearch(""); setDepartmentFilter(""); setProgrammeFilter(""); setGroupFilter("");
-                setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter("");
+                setMissingInfoFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter("");
                 setDateFrom(""); setDateTo(""); setSortField("");
               }}
               className="ml-auto rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-100"
