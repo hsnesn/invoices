@@ -86,6 +86,7 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
   const [uploading, setUploading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [reExtractingId, setReExtractingId] = useState<string | null>(null);
 
   const grouped = React.useMemo(() => {
     const byGroup: Record<string, SalaryRow[]> = { pending: [], needs_review: [], paid: [] };
@@ -167,6 +168,25 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
       setUploading(false);
     }
   }, [uploadFile, uploadEmployeeId, mutate]);
+
+  const handleReExtract = useCallback(async (id: string) => {
+    setReExtractingId(id);
+    try {
+      const res = await fetch(`/api/salaries/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "re_extract" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Re-extraction failed");
+      toast.success("Data re-extracted from payslip");
+      mutate();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setReExtractingId(null);
+    }
+  }, [mutate]);
 
   const handleMarkPaid = useCallback(async (id: string) => {
     setMarkingPaidId(id);
@@ -329,15 +349,26 @@ export function SalariesBoard({ employees }: { employees: { id: string; full_nam
                             )}
                           </td>
                           <td className="px-3 py-2">
-                            {s.status !== "paid" && (
-                              <button
-                                onClick={() => handleMarkPaid(s.id)}
-                                disabled={markingPaidId === s.id || !s.net_pay}
-                                className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                              >
-                                {markingPaidId === s.id ? "..." : "Mark Paid"}
-                              </button>
-                            )}
+                            <div className="flex flex-wrap gap-1">
+                              {s.payslip_storage_path && (
+                                <button
+                                  onClick={() => handleReExtract(s.id)}
+                                  disabled={reExtractingId === s.id}
+                                  className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                                >
+                                  {reExtractingId === s.id ? "..." : "Re-extract"}
+                                </button>
+                              )}
+                              {s.status !== "paid" && (
+                                <button
+                                  onClick={() => handleMarkPaid(s.id)}
+                                  disabled={markingPaidId === s.id || !s.net_pay}
+                                  className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                                >
+                                  {markingPaidId === s.id ? "..." : "Mark Paid"}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}

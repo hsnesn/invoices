@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
-import { createSalaryAuditEvent } from "@/lib/salary-extraction";
+import { createSalaryAuditEvent, runSalaryExtraction } from "@/lib/salary-extraction";
 import { sendSalaryPaymentConfirmationEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,55 @@ export async function PATCH(
 
     if (fetchError || !existing) {
       return NextResponse.json({ error: "Salary not found" }, { status: 404 });
+    }
+
+    if (action === "re_extract") {
+      const storagePath = (existing as { payslip_storage_path?: string }).payslip_storage_path;
+      if (!storagePath) {
+        return NextResponse.json({ error: "No payslip file to extract from" }, { status: 400 });
+      }
+      try {
+        await runSalaryExtraction(id, storagePath, session.user.id);
+      } catch (err) {
+        return NextResponse.json(
+          { error: (err as Error).message ?? "Extraction failed" },
+          { status: 500 }
+        );
+      }
+      const { data: afterExtract } = await supabase
+        .from("salaries")
+        .select("employee_name, employee_id")
+        .eq("id", id)
+        .single();
+      if (afterExtract?.employee_name && !afterExtract.employee_id) {
+        const { data: allEmployees } = await supabase
+          .from("employees")
+          .select("id, full_name, bank_account_number, sort_code");
+        const empList = allEmployees ?? [];
+        const extractedNorm = (afterExtract.employee_name ?? "").replace(/\b(Mr|Mrs|Ms|Dr)\.?\s*/gi, "").trim().toLowerCase();
+        for (let i = 0; i < empList.length; i++) {
+          const emp = empList[i];
+          const dbNorm = (emp?.full_name ?? "").trim().toLowerCase();
+          if (dbNorm === extractedNorm || extractedNorm.includes(dbNorm) || dbNorm.includes(extractedNorm)) {
+            await supabase
+              .from("salaries")
+              .update({
+                employee_id: emp?.id,
+                bank_account_number: emp?.bank_account_number ?? undefined,
+                sort_code: emp?.sort_code ?? undefined,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", id);
+            break;
+          }
+        }
+      }
+      const { data: updated } = await supabase
+        .from("salaries")
+        .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
+        .eq("id", id)
+        .single();
+      return NextResponse.json(updated ?? existing);
     }
 
     if (action === "mark_paid") {
