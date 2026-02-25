@@ -59,6 +59,37 @@ function looksLikeName(s: string | null | undefined): boolean {
   return /[A-Za-z]{2,}/.test(s.trim());
 }
 
+const BENEFICIARY_LABEL_PATTERNS = [
+  /^(appearance|invoice|payment|submission|transaction|due|service|delivery|effective)\s+date$/i,
+  /^date\s+(of|for)\b/i,
+  /^(invoice|payment|reference)\s+(number|no|#)$/i,
+  /^sort\s*code$/i,
+  /^account\s*(number|no)?$/i,
+  /^account\s+holder\s+name$/i,
+  /^name\s+on\s+account$/i,
+  /^beneficiary$/i,
+  /^payee$/i,
+  /^amount$/i,
+  /^total$/i,
+  /^vat$/i,
+  /^net$/i,
+  /^gross$/i,
+  /^currency$/i,
+  /^description$/i,
+  /^notes?$/i,
+  /^remarks?$/i,
+  /\s+date$/i,
+  /\s+number$/i,
+  /\s+code$/i,
+];
+
+function looksLikeFieldLabel(s: string | null | undefined): boolean {
+  if (!s?.trim()) return false;
+  const v = s.trim();
+  if (v.length < 3 || v.length > 50) return false;
+  return BENEFICIARY_LABEL_PATTERNS.some((p) => p.test(v));
+}
+
 function stripInternalRefs(s: string | null | undefined): string | null {
   if (!s?.trim()) return null;
   const v = s.trim().replace(/\bTRT\s*World\b/gi, "").replace(/\bTRTWORLD\b/gi, "").replace(/\bTRT\s*WORLD\b/gi, "").replace(/\bTRT\b/g, "").trim();
@@ -192,11 +223,11 @@ CRITICAL RULES - extract exactly as shown in the document:
 - invoice_number: Copy the exact invoice/reference number as printed (letters, numbers, slashes, hyphens). Do not invent or modify.
 - sort_code: UK format only - exactly 6 digits, no spaces or dashes (e.g. 123456). Extract from "Sort Code" or equivalent field.
 - account_number: Exactly as shown - typically 8 digits for UK, no spaces. Extract from "Account Number" or equivalent.
-- beneficiary_name: MUST be a person or company name - the payee TO RECEIVE payment. NEVER use a date, number, or non-name value.
-  * If a company exists: use the company name.
-  * If only a person (individual): use the person's full name.
-  * If both company and person: use the company name as primary beneficiary.
-  * REJECT: dates (e.g. 2024-01-15), numbers, invoice references. Use null if no valid name found.
+- beneficiary_name: The VALUE (not the label) next to bank account name fields. Extract ONLY the actual name.
+  * LOOK FOR labels like: "Your full name on bank account", "Account holder name", "Payee name", "Beneficiary", "Name on account", "Account name" - then take the VALUE written next to/under that label.
+  * If a company: use the company name. If a person: use the person's full name.
+  * NEVER use a field LABEL as beneficiary. REJECT: "Appearance Date", "Invoice Date", "Payment Date", "Submission Date", or any phrase ending in "Date", "Number", "Code", "Amount".
+  * REJECT: dates, numbers, invoice refs. Use null if no valid person/company name found.
 
 STRICT EXCLUSIONS - NEVER include in any field:
 - Do NOT include "TRT", "TRT World", "TRTWORLD", "TRT WORLD" or any variant in beneficiary_name, invoice_number, or any extracted field.
@@ -286,7 +317,12 @@ Other rules:
 
   if (parsed.beneficiary_name) {
     parsed.beneficiary_name = stripInternalRefs(parsed.beneficiary_name) ?? undefined;
-    if (parsed.beneficiary_name && (looksLikeDate(parsed.beneficiary_name) || !looksLikeName(parsed.beneficiary_name)))
+    if (
+      parsed.beneficiary_name &&
+      (looksLikeDate(parsed.beneficiary_name) ||
+        looksLikeFieldLabel(parsed.beneficiary_name) ||
+        !looksLikeName(parsed.beneficiary_name))
+    )
       parsed.beneficiary_name = undefined;
   }
   if (parsed.invoice_number) parsed.invoice_number = stripInternalRefs(parsed.invoice_number) ?? undefined;
