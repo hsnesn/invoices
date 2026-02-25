@@ -1,5 +1,5 @@
 -- Seed contractor templates from Contractor_Invoice_Submission_Paid_Invoices list
--- Admin can add, edit, delete via Setup > Freelancer tab
+-- Admin can add, edit, delete via Setup > Contractor tab
 
 INSERT INTO contractor_templates (name, name_aliases, account_number, sort_code, beneficiary_name, company_name, sort_order)
 VALUES

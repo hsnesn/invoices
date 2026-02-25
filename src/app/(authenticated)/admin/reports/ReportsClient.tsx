@@ -97,7 +97,7 @@ export function ReportsClient() {
   const years = useMemo(() => { const y = new Date().getFullYear(); return Array.from({ length: 5 }, (_, i) => y - i); }, []);
   const TABS = useMemo(() => {
     const t: { key: typeof activeTab; label: string }[] = [{ key: "overview", label: "Overview" }, { key: "producers", label: "Producers" }, { key: "guests", label: "Top Guests" }, { key: "rejections", label: "Rejections" }];
-    if (!report || report.invoiceType !== "guest") t.push({ key: "freelancer", label: "Freelancer" });
+    if (!report || report.invoiceType !== "guest") t.push({ key: "freelancer", label: "Contractor" });
     return t;
   }, [report]);
 
@@ -123,7 +123,7 @@ export function ReportsClient() {
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Invoice Type</label>
             <select value={invoiceType} onChange={e => setInvoiceType(e.target.value as typeof invoiceType)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-              <option value="all">All Invoices</option><option value="guest">Guest Only</option><option value="freelancer">Freelancer Only</option>
+              <option value="all">All Invoices</option><option value="guest">Guest Only</option><option value="freelancer">Contractor Only</option>
             </select>
           </div>
           {reportType !== "custom" && <div><label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Year</label><select value={year} onChange={e => setYear(Number(e.target.value))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div>}
@@ -388,7 +388,7 @@ function FreelancerTab({ report }: { report: ReportData }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card label="Freelancer Invoices" value={String(freelancer.total)} color="bg-teal-500" />
+        <Card label="Contractor Invoices" value={String(freelancer.total)} color="bg-teal-500" />
         <Card label="Total Amount" value={fmt(freelancer.totalAmount)} color="bg-cyan-500" />
         <Card label="Contractors" value={String(Object.keys(freelancer.byContractor).length)} color="bg-indigo-500" />
         <Card label="Avg/Invoice" value={freelancer.total > 0 ? fmt(freelancer.totalAmount / freelancer.total) : "—"} color="bg-violet-500" />

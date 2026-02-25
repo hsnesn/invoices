@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   invoices: "Guest Invoices",
-  "freelancer-invoices": "Freelancer Invoices",
+  "freelancer-invoices": "Contractor Invoices",
   salaries: "Salaries",
   profile: "Profile",
   admin: "Admin",

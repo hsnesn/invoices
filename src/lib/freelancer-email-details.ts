@@ -50,7 +50,7 @@ export function buildFreelancerEmailDetails(
   return {
     companyOrPerson,
     monthYear,
-    invoiceType: "Freelancer",
+    invoiceType: "Contractor",
     invoiceNumber: (ext?.invoice_number ?? "").trim() || "—",
     department: departmentName || "—",
     contractor: (fl?.contractor_name ?? "").trim() || "—",

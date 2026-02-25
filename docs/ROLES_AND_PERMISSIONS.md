@@ -24,10 +24,10 @@ This document lists all user roles and their access rights: what they can see, w
 | Role | Can Access |
 |------|------------|
 | admin | Full dashboard, all page cards |
-| operations | Guest Invoices, Freelancer Invoices, Salaries, Reports |
-| finance | Guest Invoices, Freelancer Invoices, Salaries, Reports |
+| operations | Guest Invoices, Contractor Invoices, Salaries, Reports |
+| finance | Guest Invoices, Contractor Invoices, Salaries, Reports |
 | manager | All pages (unless restricted by `allowed_pages`) |
-| viewer | Guest Invoices, Freelancer Invoices, Reports only |
+| viewer | Guest Invoices, Contractor Invoices, Reports only |
 | submitter | All pages (unless restricted by `allowed_pages`) |
 
 **Note:** If a user has `allowed_pages` set (non-null array), they only see those pages. `NULL` means default for the role.
@@ -47,7 +47,7 @@ This document lists all user roles and their access rights: what they can see, w
 
 ---
 
-### Freelancer Invoices (`/freelancer-invoices`)
+### Contractor Invoices (`/freelancer-invoices`)
 
 | Role | Can See | Can Do |
 |------|---------|--------|
@@ -80,7 +80,7 @@ This document lists all user roles and their access rights: what they can see, w
 | admin | Yes |
 | All others | No (redirected to dashboard) |
 
-**Setup includes:** Departments, Programmes, Freelancer setup items, Email templates, Contractor templates.
+**Setup includes:** Departments, Programmes, Contractor setup items, Email templates, Contractor templates.
 
 **Example:** Ünal Şahin (or any non-admin user) cannot open Setup because it is **admin-only**.
 
@@ -153,7 +153,7 @@ This document lists all user roles and their access rights: what they can see, w
 |----------------|-------|------------|---------|---------|--------|-----------|
 | Dashboard | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Guest Invoices | ✓ all | ✓ all | ✓ payment-stage | ✓ assigned | ✓ all (read) | ✓ own |
-| Freelancer Invoices | ✓ all | ✓ all | ✓ payment-stage | ✓ assigned | ✓ all (read) | ✓ own |
+| Contractor Invoices | ✓ all | ✓ all | ✓ payment-stage | ✓ assigned | ✓ all (read) | ✓ own |
 | Salaries | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | Setup | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Reports | ✓ | ✓ | ✓ | ✓* | ✓ | ✓* |

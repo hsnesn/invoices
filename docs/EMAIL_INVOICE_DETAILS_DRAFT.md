@@ -6,7 +6,7 @@ Tüm fatura e-postalarına ortak bir **Fatura Özeti** bloğu eklenecek. Red edi
 
 ## Ortak Fatura Özeti Bloğu (HTML)
 
-Her e-postada aşağıdaki tablo yer alacak. Guest ve Freelancer için alanlar farklı olacak.
+Her e-postada aşağıdaki tablo yer alacak. Guest ve Contractor için alanlar farklı olacak.
 
 ### Guest Fatura Özeti
 
@@ -21,11 +21,11 @@ Her e-postada aşağıdaki tablo yer alacak. Guest ve Freelancer için alanlar f
 | Fatura Tutarı | invoice_extracted_fields.gross_amount | £1,250.00 |
 | Producer | service_description (parsed: producer) | Jane Smith |
 
-### Freelancer Fatura Özeti
+### Contractor Fatura Özeti
 
 | Alan | Kaynak | Örnek |
 |------|--------|-------|
-| Fatura Tipi | invoice_type | Freelancer |
+| Fatura Tipi | invoice_type | Contractor |
 | Fatura No | invoice_extracted_fields.invoice_number | INV-2024-002 |
 | Bölüm | departments.name | Operations |
 | Yüklenici | freelancer_invoice_fields.contractor_name | Jane Smith |
@@ -84,7 +84,7 @@ and is now pending admin review.
 
 ┌─────────────────────────────────────────────────────────┐
 │ FATURA ÖZETİ                                            │
-│ (Guest veya Freelancer alanları)                        │
+│ (Guest veya Contractor alanları)                        │
 └─────────────────────────────────────────────────────────┘
 
 Status: [Approved by John Manager]

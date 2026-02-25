@@ -13,7 +13,7 @@ export type InvoiceStatus =
 export const ALL_PAGES = [
   { key: "guest_invoices", label: "Guest Invoices" },
   { key: "submit_invoice", label: "Submit Invoice" },
-  { key: "freelancer_invoices", label: "Freelancer Invoices" },
+  { key: "freelancer_invoices", label: "Contractor Invoices" },
   { key: "salaries", label: "Salaries" },
   { key: "setup", label: "Setup" },
   { key: "reports", label: "Reports" },

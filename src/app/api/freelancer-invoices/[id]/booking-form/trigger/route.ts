@@ -29,7 +29,7 @@ export async function POST(
       .single();
 
     if (!inv || (inv as { invoice_type?: string }).invoice_type !== "freelancer") {
-      return NextResponse.json({ error: "Freelancer invoice not found" }, { status: 404 });
+      return NextResponse.json({ error: "Contractor invoice not found" }, { status: 404 });
     }
 
     const { data: wf } = await supabase

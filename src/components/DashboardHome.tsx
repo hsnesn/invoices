@@ -40,7 +40,7 @@ const PAGES: PageCard[] = [
     ),
   },
   {
-    title: "Freelancer Invoices",
+    title: "Contractor Invoices",
     description: "Submit and track freelancer payment invoices and contractor billing.",
     href: "/freelancer-invoices",
     color: "text-teal-500",
@@ -188,14 +188,14 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             </Link>
           </div>
           <div className="rounded-xl border border-teal-200/80 bg-teal-50/80 p-4 shadow-sm dark:border-teal-800/60 dark:bg-teal-950/30">
-            <p className="text-xs font-medium uppercase tracking-wider text-teal-600 dark:text-teal-400">Freelancer Pending</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-teal-600 dark:text-teal-400">Contractor Pending</p>
             <p className="mt-1 text-2xl font-bold text-teal-800 dark:text-teal-200">{stats.freelancer.pending}</p>
             <Link href="/freelancer-invoices" className="mt-2 inline-block text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
               View →
             </Link>
           </div>
           <div className="rounded-xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
-            <p className="text-xs font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Freelancer Paid</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Contractor Paid</p>
             <p className="mt-1 text-2xl font-bold text-sky-800 dark:text-sky-200">{stats.freelancer.paid}</p>
             <Link href="/freelancer-invoices" className="mt-2 inline-block text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">
               View →
@@ -215,7 +215,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Bar dataKey="guest" fill="#3b82f6" name="Guest" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="freelancer" fill="#14b8a6" name="Freelancer" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="freelancer" fill="#14b8a6" name="Contractor" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -20,7 +20,7 @@ interface Program {
 
 const TABS = [
   { key: "guest", label: "Guest Invoices", color: "bg-blue-500" },
-  { key: "freelancer", label: "Freelancer Invoices", color: "bg-teal-500" },
+  { key: "freelancer", label: "Contractor Invoices", color: "bg-teal-500" },
   { key: "email", label: "Email", color: "bg-amber-500" },
   { key: "salaries", label: "Salaries", color: "bg-indigo-500" },
 ] as const;
@@ -771,7 +771,7 @@ function FreelancerSetup() {
       {deleteDeptId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="mx-4 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
-            <p className="mb-4 text-gray-800 dark:text-gray-200">Delete this department? This affects both Guest and Freelancer invoices.</p>
+            <p className="mb-4 text-gray-800 dark:text-gray-200">Delete this department? This affects both Guest and Contractor invoices.</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleteDeptId(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800">Cancel</button>
               <button onClick={deleteDept} disabled={loading} className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-500 disabled:opacity-50">Delete</button>
