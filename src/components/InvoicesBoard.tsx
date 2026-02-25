@@ -727,12 +727,12 @@ function InvoiceTable({
                 </div>
               </td>
               )}
-              {isCol("title") && <td className="px-4 py-3 text-sm text-gray-700">{r.title}</td>}
+              {isCol("title") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.title}>{r.title}</td>}
               {isCol("producer") && <td className="px-4 py-3 text-sm text-gray-700"><div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColor(r.producer)}`}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div></td>}
               {isCol("paymentType") && <td className="px-4 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span></td>}
               {isCol("department") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span></td>}
               {isCol("programme") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={programmeBadgeStyle(r.programme)}>{r.programme}</span></td>}
-              {isCol("topic") && <td className="max-w-[220px] truncate px-4 py-3 text-sm text-gray-700">{r.topic}</td>}
+              {isCol("topic") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.topic}>{r.topic}</td>}
               {isCol("tx1") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx1}</td>}
               {isCol("tx2") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx2}</td>}
               {isCol("tx3") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx3}</td>}
