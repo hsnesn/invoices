@@ -289,8 +289,7 @@ export function FreelancerBoard({
 
   /* ---------- State ---------- */
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [editModalRow, setEditModalRow] = useState<DisplayRow | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [timelineData, setTimelineData] = useState<TimelineEvent[]>([]);
@@ -310,10 +309,6 @@ export function FreelancerBoard({
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showMoveModal, setShowMoveModal] = useState(false);
 
-  const editingIdRef = useRef<string | null>(null);
-  const editDraftRef = useRef<EditDraft | null>(null);
-  editingIdRef.current = editingId;
-  editDraftRef.current = editDraft;
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewShowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -339,40 +334,51 @@ export function FreelancerBoard({
   }, [toggleExpandRow]);
   const handleRowDblClick = useCallback(() => { if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; } }, []);
 
-  const saveDraft = useCallback(async (invoiceId: string, draft: EditDraft) => {
-    try { await fetch(`/api/freelancer-invoices/${invoiceId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) }); } catch { /* */ }
-  }, []);
-
-  const finishEdit = useCallback(async () => {
-    const id = editingIdRef.current; const draft = editDraftRef.current;
-    if (!id || !draft) { setEditingId(null); setEditDraft(null); return; }
-    setEditingId(null); setEditDraft(null);
-    await saveDraft(id, draft);
-    refreshAndKeepVisible();
-  }, [saveDraft, refreshAndKeepVisible]);
-
   const onStartEdit = useCallback((row: DisplayRow) => {
-    const prevId = editingIdRef.current; const prevDraft = editDraftRef.current;
-    if (prevId && prevDraft && prevId !== row.id) void saveDraft(prevId, prevDraft);
-    handleRowDblClick(); setEditingId(row.id);
-    setEditDraft({
-      contractor: row.contractor === "—" ? "" : row.contractor, companyName: row.companyName === "—" ? "" : row.companyName,
-      additionalCost: row.additionalCost === "—" ? "" : row.additionalCost.replace(/[£$€,\s]/g, ""),
-      invNumber: row.invNumber === "—" ? "" : row.invNumber, beneficiary: row.beneficiary === "—" ? "" : row.beneficiary,
-      accountNumber: row.accountNumber === "—" ? "" : row.accountNumber, sortCode: row.sortCode === "—" ? "" : row.sortCode,
-      deptManagerId: row.deptManagerId, departmentId: row.departmentId,
-      department2: row.department2 === "—" ? "" : row.department2,
-      serviceDaysCount: row.serviceDaysCount === "—" ? "" : row.serviceDaysCount, days: row.days === "—" ? "" : row.days,
-      serviceRate: row.serviceRate === "—" ? "" : row.serviceRate.replace(/[£$€,\s]/g, ""),
-      month: row.month === "—" ? "" : row.month, bookedBy: row.bookedBy === "—" ? "" : row.bookedBy,
-      serviceDescription: row.serviceDescription === "—" ? "" : row.serviceDescription,
-      additionalCostReason: row.additionalCostReason === "—" ? "" : row.additionalCostReason,
-      submitterUserId: row.submitterId || undefined,
-    });
-  }, [saveDraft, handleRowDblClick]);
+    handleRowDblClick();
+    setEditModalRow(row);
+  }, [handleRowDblClick]);
 
-  const onCancelEdit = useCallback(() => { setEditingId(null); setEditDraft(null); }, []);
-  const onChangeDraft = useCallback((key: keyof EditDraft, value: string) => { setEditDraft(p => p ? { ...p, [key]: value } : p); }, []);
+  const handleEditModalSave = useCallback(async (draft: EditDraft, replaceFile?: File, addFiles?: File[]) => {
+    if (!editModalRow) return;
+    setActionLoadingId(editModalRow.id);
+    try {
+      if (replaceFile) {
+        const fd = new FormData();
+        fd.append("file", replaceFile);
+        const replaceRes = await fetch(`/api/invoices/${editModalRow.id}/replace-file`, { method: "POST", body: fd });
+        if (!replaceRes.ok) {
+          const data = await replaceRes.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error ?? "File replace failed");
+        }
+      }
+      await fetch(`/api/freelancer-invoices/${editModalRow.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
+      if (addFiles?.length) {
+        for (const f of addFiles) {
+          const fd = new FormData();
+          fd.append("file", f);
+          const addRes = await fetch(`/api/invoices/${editModalRow.id}/add-file`, { method: "POST", body: fd });
+          if (!addRes.ok) {
+            const data = await addRes.json().catch(() => ({}));
+            throw new Error((data as { error?: string }).error ?? "Add file failed");
+          }
+        }
+      }
+      if (editModalRow.status === "rejected") {
+        await fetch(`/api/invoices/${editModalRow.id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to_status: "pending_manager" }),
+        });
+      }
+      setEditModalRow(null);
+      refreshAndKeepVisible();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [editModalRow, refreshAndKeepVisible]);
 
   /* ---------- Status actions ---------- */
   const statusAction = useCallback(async (id: string, body: Record<string, unknown>) => {
@@ -721,20 +727,6 @@ export function FreelancerBoard({
     return () => { disposed = true; sub?.unsubscribe(); };
   }, []);
 
-  /* ---------- Auto-save on click outside ---------- */
-  useEffect(() => {
-    const kd = (e: KeyboardEvent) => { if (e.key === "Escape" && editingIdRef.current) onCancelEdit(); };
-    const md = (e: MouseEvent) => {
-      if (!editingIdRef.current) return;
-      const row = document.querySelector(`[data-row-id="${editingIdRef.current}"]`);
-      if (row && row.contains(e.target as Node)) return;
-      void finishEdit();
-    };
-    document.addEventListener("keydown", kd);
-    document.addEventListener("mousedown", md, true);
-    return () => { document.removeEventListener("keydown", kd); document.removeEventListener("mousedown", md, true); };
-  }, [onCancelEdit, finishEdit]);
-
   /* ---------- Export ---------- */
   const exportToExcel = useCallback(async (data: DisplayRow[]) => {
     const XLSX = await import("xlsx");
@@ -785,8 +777,7 @@ export function FreelancerBoard({
   }, [groupedRows]);
 
   /* ---------- Render cell ---------- */
-  const renderCell = (r: DisplayRow, col: string, isEditing: boolean) => {
-    const inp = (key: keyof EditDraft, type = "text") => <input type={type} value={editDraft?.[key] ?? ""} onChange={e => onChangeDraft(key, e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />;
+  const renderCell = (r: DisplayRow, col: string) => {
     const isSubmitter = r.submitterId === currentUserId;
     switch (col) {
       case "status": return (
@@ -797,7 +788,7 @@ export function FreelancerBoard({
           )}
         </div>
       );
-      case "contractor": return isEditing ? inp("contractor") : (
+      case "contractor": return (
         <span
           className="font-medium cursor-pointer"
           onMouseEnter={() => showPreviewOnHover(r.id)}
@@ -808,8 +799,8 @@ export function FreelancerBoard({
           {r.contractor}{r.status === "rejected" && r.rejectionReason && <div className="mt-1 rounded bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300"><span className="font-semibold">Rejection:</span> {r.rejectionReason}</div>}
         </span>
       );
-      case "submittedBy": return isEditing && currentRole === "admin" ? <select value={editDraft?.submitterUserId ?? ""} onChange={e => onChangeDraft("submitterUserId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">—</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <SubmitterBadge name={r.submittedBy} />;
-      case "companyName": return isEditing ? inp("companyName") : r.companyName;
+      case "submittedBy": return <SubmitterBadge name={r.submittedBy} />;
+      case "companyName": return r.companyName;
       case "submissionDate": return r.submissionDate;
       case "files": return (
         <FreelancerFilesCell
@@ -823,26 +814,23 @@ export function FreelancerBoard({
           contractorName={r.contractor}
         />
       );
-      case "additionalCost": return isEditing ? inp("additionalCost") : r.additionalCost;
-      case "amount": {
-        if (isEditing) { const d = parseFloat(editDraft?.serviceDaysCount ?? "0") || 0; const rt = parseFloat(editDraft?.serviceRate ?? "0") || 0; const ac = parseFloat(editDraft?.additionalCost ?? "0") || 0; const t = d * rt + ac; return <span className="font-semibold text-blue-700 dark:text-blue-300">{t > 0 ? fmtCurrency(t, r.currency) : "—"}</span>; }
-        return <span className="font-semibold text-gray-900 dark:text-white group/amt relative cursor-default">{r.amount}<span className="pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-normal text-white opacity-0 shadow-lg transition-opacity group-hover/amt:opacity-100 z-50">{r.serviceDaysCount} days × {r.serviceRate} + {r.additionalCost} add.</span></span>;
-      }
+      case "additionalCost": return r.additionalCost;
+      case "amount": return <span className="font-semibold text-gray-900 dark:text-white group/amt relative cursor-default">{r.amount}<span className="pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-normal text-white opacity-0 shadow-lg transition-opacity group-hover/amt:opacity-100 z-50">{r.serviceDaysCount} days × {r.serviceRate} + {r.additionalCost} add.</span></span>;
       case "currency": return <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{r.currency === "USD" ? "USD ($)" : r.currency === "EUR" ? "EUR (€)" : "GBP (£)"}</span>;
-      case "invNumber": return isEditing ? inp("invNumber") : <span className="max-w-[120px] truncate block" title={r.invNumber}>{r.invNumber}</span>;
-      case "beneficiary": return isEditing ? inp("beneficiary") : <span className="max-w-[120px] truncate block" title={r.beneficiary}>{r.beneficiary}</span>;
-      case "accountNumber": return isEditing ? inp("accountNumber") : <span className="max-w-[120px] truncate block" title={r.accountNumber}>{r.accountNumber}</span>;
-      case "sortCode": return isEditing ? inp("sortCode") : r.sortCode;
-      case "department": return isEditing ? <select value={editDraft?.departmentId ?? ""} onChange={e => onChangeDraft("departmentId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>;
-      case "department2": return isEditing ? inp("department2") : r.department2;
-      case "serviceDaysCount": return isEditing ? inp("serviceDaysCount", "number") : r.serviceDaysCount;
-      case "days": return isEditing ? inp("days") : <span className="max-w-[120px] truncate block" title={r.days}>{r.days}</span>;
-      case "serviceRate": return isEditing ? inp("serviceRate") : r.serviceRate;
-      case "month": return isEditing ? inp("month") : <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">{r.month}</span>;
-      case "bookedBy": return isEditing ? inp("bookedBy") : r.bookedBy;
-      case "serviceDescription": return isEditing ? inp("serviceDescription") : <span className="max-w-[180px] truncate block" title={r.serviceDescription}>{r.serviceDescription}</span>;
-      case "additionalCostReason": return isEditing ? inp("additionalCostReason") : r.additionalCostReason;
-      case "deptManager": return isEditing && currentRole === "admin" ? <select value={editDraft?.deptManagerId ?? ""} onChange={e => onChangeDraft("deptManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{(managerProfilePairs ?? profilePairs).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : r.deptManager;
+      case "invNumber": return <span className="max-w-[120px] truncate block" title={r.invNumber}>{r.invNumber}</span>;
+      case "beneficiary": return <span className="max-w-[120px] truncate block" title={r.beneficiary}>{r.beneficiary}</span>;
+      case "accountNumber": return <span className="max-w-[120px] truncate block" title={r.accountNumber}>{r.accountNumber}</span>;
+      case "sortCode": return r.sortCode;
+      case "department": return <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>;
+      case "department2": return r.department2;
+      case "serviceDaysCount": return r.serviceDaysCount;
+      case "days": return <span className="max-w-[120px] truncate block" title={r.days}>{r.days}</span>;
+      case "serviceRate": return r.serviceRate;
+      case "month": return <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">{r.month}</span>;
+      case "bookedBy": return r.bookedBy;
+      case "serviceDescription": return <span className="max-w-[180px] truncate block" title={r.serviceDescription}>{r.serviceDescription}</span>;
+      case "additionalCostReason": return r.additionalCostReason;
+      case "deptManager": return r.deptManager;
       case "bookingForm": {
         const hasBookingForm = ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
         const canSeeBookingForm = currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember;
@@ -860,7 +848,6 @@ export function FreelancerBoard({
         );
       }
       case "actions": {
-        if (editingId === r.id) return <div className="flex items-center gap-1"><span className="text-xs text-blue-600">Editing</span><button onClick={e => { e.stopPropagation(); onCancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600">✕</button></div>;
         const canRS = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
         const canSendEmails = currentRole === "admin" && ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
         return <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>{canRS && <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50">{actionLoadingId === r.id ? "…" : "↻ Resubmit"}</button>}{canSendEmails && <button onClick={() => void sendBookingFormEmails(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-violet-600 px-2 py-0.5 text-xs text-white hover:bg-violet-500 disabled:opacity-50" title="Send Booking Form emails to Line Manager and London Operations">{actionLoadingId === r.id ? "…" : "📧 Send"}</button>}</div>;
@@ -1047,13 +1034,12 @@ export function FreelancerBoard({
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                     {gRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
                     {gRows.map(r => {
-                      const isEditing = editingId === r.id;
                       const editable = canEditRow(r);
-                      const editTdCls = editable && !isEditing ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
+                      const editTdCls = editable ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
                       const isDuplicate = duplicates.has(r.id);
                       return (
                         <React.Fragment key={r.id}>
-                          <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : isEditing ? "bg-blue-50 ring-2 ring-blue-400 ring-inset dark:bg-blue-950/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => { if (!isEditing) handleRowClick(r.id); }} onDoubleClick={handleRowDblClick}>
+                          <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={editable ? () => { handleRowDblClick(); onStartEdit(r); } : handleRowDblClick}>
                             {currentRole === "admin" && <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
                                 <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" />
@@ -1063,8 +1049,8 @@ export function FreelancerBoard({
                             {COLUMNS.map(c => {
                               const noEdit = ["status", "files", "submissionDate", "amount", "actions", "bookingForm"].includes(c.key) || (c.key === "submittedBy" && currentRole !== "admin");
                               return (
-                                <td key={c.key} className={`px-3 py-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap${!noEdit ? editTdCls : ""}`} onDoubleClick={!noEdit && editable && !isEditing ? e => { e.stopPropagation(); e.preventDefault(); handleRowDblClick(); onStartEdit(r); } : undefined}>
-                                  {renderCell(r, c.key, isEditing)}
+                                <td key={c.key} className={`px-3 py-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap${!noEdit ? editTdCls : ""}`}>
+                                  {renderCell(r, c.key)}
                                 </td>
                               );
                             })}
@@ -1151,6 +1137,21 @@ export function FreelancerBoard({
         );
       })}
 
+      {/* Edit Contractor Invoice Modal */}
+      {editModalRow && (
+        <EditContractorInvoiceModal
+          row={editModalRow}
+          departmentPairs={departmentPairs}
+          profilePairs={profilePairs}
+          managerProfilePairs={managerProfilePairs}
+          currentRole={currentRole}
+          onSave={handleEditModalSave}
+          onClose={() => setEditModalRow(null)}
+          saving={actionLoadingId === editModalRow.id}
+          openFile={openFile}
+        />
+      )}
+
       {/* Rejection Modal */}
       {rejectModalId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setRejectModalId(null); setRejectReason(""); }}>
@@ -1226,6 +1227,214 @@ export function FreelancerBoard({
 /* ------------------------------------------------------------------ */
 /* SUB COMPONENTS                                                      */
 /* ------------------------------------------------------------------ */
+
+function EditContractorInvoiceModal({
+  row,
+  departmentPairs,
+  profilePairs,
+  managerProfilePairs,
+  currentRole,
+  onSave,
+  onClose,
+  saving,
+  openFile,
+}: {
+  row: DisplayRow;
+  departmentPairs: [string, string][];
+  profilePairs: [string, string][];
+  managerProfilePairs?: [string, string][];
+  currentRole: string;
+  onSave: (draft: EditDraft, replaceFile?: File, addFiles?: File[]) => Promise<void>;
+  onClose: () => void;
+  saving: boolean;
+  openFile: (id: string, path?: string, fileName?: string) => void;
+}) {
+  const [contractor, setContractor] = useState(row.contractor === "—" ? "" : row.contractor);
+  const [companyName, setCompanyName] = useState(row.companyName === "—" ? "" : row.companyName);
+  const [departmentId, setDepartmentId] = useState(row.departmentId);
+  const [department2, setDepartment2] = useState(row.department2 === "—" ? "" : row.department2);
+  const [serviceDescription, setServiceDescription] = useState(row.serviceDescription === "—" ? "" : row.serviceDescription);
+  const [serviceDaysCount, setServiceDaysCount] = useState(row.serviceDaysCount === "—" ? "" : row.serviceDaysCount);
+  const [days, setDays] = useState(row.days === "—" ? "" : row.days);
+  const [serviceRate, setServiceRate] = useState(row.serviceRate === "—" ? "" : row.serviceRate.replace(/[£$€,\s]/g, ""));
+  const [month, setMonth] = useState(row.month === "—" ? "" : row.month);
+  const [bookedBy, setBookedBy] = useState(row.bookedBy === "—" ? "" : row.bookedBy);
+  const [additionalCost, setAdditionalCost] = useState(row.additionalCost === "—" ? "" : row.additionalCost.replace(/[£$€,\s]/g, ""));
+  const [additionalCostReason, setAdditionalCostReason] = useState(row.additionalCostReason === "—" ? "" : row.additionalCostReason);
+  const [invNumber, setInvNumber] = useState(row.invNumber === "—" ? "" : row.invNumber);
+  const [beneficiary, setBeneficiary] = useState(row.beneficiary === "—" ? "" : row.beneficiary);
+  const [accountNumber, setAccountNumber] = useState(row.accountNumber === "—" ? "" : row.accountNumber);
+  const [sortCode, setSortCode] = useState(row.sortCode === "—" ? "" : row.sortCode);
+  const [deptManagerId, setDeptManagerId] = useState(row.deptManagerId);
+  const [submitterUserId, setSubmitterUserId] = useState(row.submitterId || "");
+  const [replaceFile, setReplaceFile] = useState<File | null>(null);
+  const [addFiles, setAddFiles] = useState<File[]>([]);
+
+  const draft: EditDraft = {
+    contractor,
+    companyName,
+    additionalCost,
+    invNumber,
+    beneficiary,
+    accountNumber,
+    sortCode,
+    deptManagerId,
+    departmentId,
+    department2,
+    serviceDaysCount,
+    days,
+    serviceRate,
+    month,
+    bookedBy,
+    serviceDescription,
+    additionalCostReason,
+    submitterUserId: submitterUserId || undefined,
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave(draft, replaceFile ?? undefined, addFiles.length ? addFiles : undefined);
+  };
+
+  const isRejected = row.status === "rejected";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Invoice</h2>
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Contractor</label>
+              <input type="text" value={contractor} onChange={(e) => setContractor(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
+              <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Service Description</label>
+            <input type="text" value={serviceDescription} onChange={(e) => setServiceDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Department</label>
+              <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="">Select...</option>
+                {departmentPairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Department 2</label>
+              <input type="text" value={department2} onChange={(e) => setDepartment2(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Booked by</label>
+              <input type="text" value={bookedBy} onChange={(e) => setBookedBy(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Month</label>
+              <input type="text" value={month} onChange={(e) => setMonth(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Service Days</label>
+              <input type="number" value={serviceDaysCount} onChange={(e) => setServiceDaysCount(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Days</label>
+              <input type="text" value={days} onChange={(e) => setDays(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Rate/Day</label>
+              <input type="text" value={serviceRate} onChange={(e) => setServiceRate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Additional Cost</label>
+              <input type="text" value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Additional Cost Reason</label>
+            <input type="text" value={additionalCostReason} onChange={(e) => setAdditionalCostReason(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">INV Number</label>
+              <input type="text" value={invNumber} onChange={(e) => setInvNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Beneficiary</label>
+              <input type="text" value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Code</label>
+              <input type="text" value={sortCode} onChange={(e) => setSortCode(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Number</label>
+              <input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          {(currentRole === "admin") && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Approver</label>
+                <select value={deptManagerId} onChange={(e) => setDeptManagerId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                  <option value="">Unassigned</option>
+                  {(managerProfilePairs ?? profilePairs).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Submitted by</label>
+                <select value={submitterUserId} onChange={(e) => setSubmitterUserId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                  <option value="">—</option>
+                  {profilePairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Invoice File</label>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => openFile(row.id)} className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4zM6 10h8v2H6v-2zm0 4h5v2H6v-2z"/></svg>
+                Open
+              </button>
+              <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-800/40">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                Replace
+                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) setReplaceFile(f); e.target.value = ""; }} />
+              </label>
+              {replaceFile && <span className="text-sm text-gray-600 dark:text-gray-400">{replaceFile.name}</span>}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Add Files</label>
+            <label className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-800/40">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              Add files
+              <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" multiple onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) setAddFiles(prev => [...prev, ...files]); e.target.value = ""; }} />
+            </label>
+            {addFiles.length > 0 && <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{addFiles.length} file(s) selected</span>}
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+              {saving ? (isRejected ? "Resubmitting..." : "Saving...") : (isRejected ? "Resubmit" : "Save")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
