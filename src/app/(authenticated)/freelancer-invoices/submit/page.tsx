@@ -224,6 +224,18 @@ export default function FreelancerSubmitPage() {
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency === "USD" ? "$" : currency === "EUR" ? "€" : "£"}</span>
             <input type="number" step="0.01" min={0} value={serviceRatePerDay} onChange={(e) => setServiceRatePerDay(e.target.value)} className={inputCls + " pl-7"} required />
           </div>
+          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={currency !== "GBP"} onChange={(e) => { setCurrency(e.target.checked ? "USD" : "GBP"); }} className="h-3 w-3 rounded border-gray-300 text-teal-600" />
+              <span>Currency is not GBP</span>
+            </label>
+            {currency !== "GBP" && (
+              <span className="flex gap-2">
+                <label className="flex items-center gap-1 cursor-pointer"><input type="radio" name="currency" value="USD" checked={currency === "USD"} onChange={() => setCurrency("USD")} className="h-3 w-3 text-teal-600" />USD ($)</label>
+                <label className="flex items-center gap-1 cursor-pointer"><input type="radio" name="currency" value="EUR" checked={currency === "EUR"} onChange={() => setCurrency("EUR")} className="h-3 w-3 text-teal-600" />EUR (€)</label>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 10. Additional Cost */}
@@ -263,26 +275,6 @@ export default function FreelancerSubmitPage() {
           <p className={hintCls}>Short number or code (e.g. INV-001, 123)</p>
           <input value={invNumber} onChange={(e) => setInvNumber(e.target.value.slice(0, 50))} placeholder="e.g. INV-001" maxLength={50} className={inputCls} required />
           <p className="text-right text-[11px] text-gray-400">{invNumber.length}/50</p>
-        </div>
-
-        {/* Currency */}
-        <div className="rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50 p-4">
-          <label className="flex items-center gap-2 cursor-pointer mb-2">
-            <input type="checkbox" checked={currency !== "GBP"} onChange={(e) => { setCurrency(e.target.checked ? "USD" : "GBP"); }} className="h-4 w-4 rounded border-gray-300 text-teal-600" />
-            <span className={labelCls + " mb-0"}>Currency is not GBP</span>
-          </label>
-          {currency !== "GBP" && (
-            <div className="mt-2 flex gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="currency" value="USD" checked={currency === "USD"} onChange={() => setCurrency("USD")} className="h-4 w-4 text-teal-600" />
-                <span className="text-sm font-medium">USD ($)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="currency" value="EUR" checked={currency === "EUR"} onChange={() => setCurrency("EUR")} className="h-4 w-4 text-teal-600" />
-                <span className="text-sm font-medium">EUR (€)</span>
-              </label>
-            </div>
-          )}
         </div>
 
         {/* 13. Submission Date */}
