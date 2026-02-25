@@ -1862,7 +1862,7 @@ export function InvoicesBoard({
           </div>
           <label className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400 cursor-pointer">
             <input type="checkbox" checked={missingInfoFilter} onChange={(e) => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
-            Eksik bilgi
+            Missing info
           </label>
           <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value as "" | DisplayRow["group"])} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             <option value="">Status</option>
@@ -1969,7 +1969,7 @@ export function InvoicesBoard({
             )}
             {missingInfoFilter && (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                Eksik bilgi
+                Missing info
                 <button onClick={() => setMissingInfoFilter(false)} className="ml-0.5 hover:text-amber-900">✕</button>
               </span>
             )}

@@ -846,7 +846,7 @@ export function FreelancerBoard({
           <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Months</option>{uniqueMonths.map(m => <option key={m} value={m}>{m}</option>)}</select>
           <label className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400 cursor-pointer">
             <input type="checkbox" checked={missingInfoFilter} onChange={e => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
-            Eksik bilgi
+            Missing info
           </label>
           <select value={groupFilter} onChange={e => setGroupFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Status</option>{GROUPS.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}</select>
           <select value={managerFilter} onChange={e => setManagerFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Managers</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>

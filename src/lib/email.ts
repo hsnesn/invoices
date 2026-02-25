@@ -6,7 +6,7 @@ function getResend() {
   return new Resend(key);
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "Invoice System <noreply@example.com>";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "TRT World UK Payment System <noreply@example.com>";
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Invoice Approval Workflow";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SalariesBoard } from "@/components/SalariesBoard";
 import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -29,10 +30,12 @@ export default async function SalariesPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <SalariesBoard
-        profile={profile}
-        employees={employees}
-      />
+      <Suspense fallback={<div className="animate-pulse rounded-xl bg-slate-200 h-64 dark:bg-slate-700" />}>
+        <SalariesBoard
+          profile={profile}
+          employees={employees}
+        />
+      </Suspense>
     </div>
   );
 }

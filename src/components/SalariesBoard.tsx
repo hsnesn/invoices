@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import useSWR from "swr";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { EmptyState } from "./EmptyState";
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -70,6 +73,32 @@ function statusToGroup(status: string): string {
 }
 
 const DEFAULT_BADGE_COLOR = "#64748b";
+
+const SALARY_COLUMNS = [
+  { key: "employee", label: "Employee" },
+  { key: "net_pay", label: "Net Pay" },
+  { key: "sort_code", label: "Sort Code" },
+  { key: "account", label: "Account" },
+  { key: "reference", label: "Reference" },
+  { key: "month", label: "Month" },
+  { key: "date", label: "Date" },
+  { key: "total_cost", label: "Total Cost" },
+  { key: "file", label: "File" },
+  { key: "actions", label: "Actions" },
+] as const;
+const DEFAULT_VISIBLE_COLUMNS = SALARY_COLUMNS.map((c) => c.key);
+const COL_STORAGE_KEY = "salaries_visible_columns";
+
+function getRowTooltip(s: SalaryRow, bank: { sortCode: string; account: string }): string {
+  const parts = [
+    `Net Pay: ${fmtCurrency(s.net_pay)}`,
+    `Reference: ${s.reference ?? "—"}`,
+    `Sort Code: ${bank.sortCode}`,
+    `Account: ${bank.account}`,
+    `Month: ${s.payment_month ?? "—"} ${s.payment_year ?? ""}`,
+  ];
+  return parts.join(" • ");
+}
 
 function EditSalaryModal({
   salary,
@@ -254,12 +283,30 @@ export function SalariesBoard({
   const { data: stats, error: statsError } = useSWR<{ pending: { count: number; netTotal: number; costTotal: number }; paid: { count: number; netTotal: number; costTotal: number }; monthlyTrend: { month: string; count: number; netTotal: number; costTotal: number }[] }>("/api/salaries/stats", fetcher);
 
   const salaries = Array.isArray(salariesRaw) ? salariesRaw : [];
+  const searchParams = useSearchParams();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
+  const [sortField, setSortField] = useState<"date" | "net_pay" | "employee">("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [urlSynced, setUrlSynced] = useState(false);
+  const [pageSize, setPageSize] = useState(50);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(COL_STORAGE_KEY);
+      if (s) {
+        const parsed = JSON.parse(s) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) setVisibleColumns(parsed);
+      }
+    } catch {}
+  }, []);
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<SalaryRow | null>(null);
@@ -305,9 +352,173 @@ export function SalariesBoard({
     });
   }, [salaries, search, statusFilter, monthFilter, yearFilter, nameFilter]);
 
+  const sortedRows = React.useMemo(() => {
+    const arr = [...filtered];
+    const mult = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      if (sortField === "date") {
+        const da = a.paid_date || a.process_date || a.created_at || "";
+        const db = b.paid_date || b.process_date || b.created_at || "";
+        return mult * (da.localeCompare(db) || 0);
+      }
+      if (sortField === "net_pay") {
+        const na = a.net_pay ?? 0;
+        const nb = b.net_pay ?? 0;
+        return mult * (na - nb);
+      }
+      if (sortField === "employee") {
+        const ea = (a.employee_name ?? "").toLowerCase();
+        const eb = (b.employee_name ?? "").toLowerCase();
+        return mult * ea.localeCompare(eb);
+      }
+      return 0;
+    });
+    return arr;
+  }, [filtered, sortField, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const paginatedRows = React.useMemo(
+    () => sortedRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
+    [sortedRows, currentPage, pageSize]
+  );
+
+  const filteredSummary = React.useMemo(() => {
+    const pending = filtered.filter((s) => statusToGroup(s.status) !== "paid");
+    const paid = filtered.filter((s) => s.status === "paid");
+    const netTotal = filtered.reduce((sum, s) => sum + (s.net_pay ?? 0), 0);
+    const pendingNet = pending.reduce((sum, s) => sum + (s.net_pay ?? 0), 0);
+    const costTotal = filtered.reduce((sum, s) => sum + (s.employer_total_cost ?? 0), 0);
+    const pendingCost = pending.reduce((sum, s) => sum + (s.employer_total_cost ?? 0), 0);
+    return { netTotal, pendingNet, costTotal, pendingCost, pendingCount: pending.length, paidCount: paid.length };
+  }, [filtered]);
+
+  const duplicateIds = React.useMemo(() => {
+    const key = (s: SalaryRow) => `${(s.employee_name ?? "").toLowerCase()}|${s.payment_month ?? ""}|${s.payment_year ?? ""}`;
+    const byKey = new Map<string, string[]>();
+    for (const s of salaries) {
+      const k = key(s);
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k)!.push(s.id);
+    }
+    const dupeIds = new Set<string>();
+    byKey.forEach((ids) => {
+      if (ids.length > 1) ids.forEach((id) => dupeIds.add(id));
+    });
+    return dupeIds;
+  }, [salaries]);
+
+  const recentActivity = React.useMemo(() => {
+    const withDate = salaries.map((s) => ({
+      ...s,
+      sortDate: s.paid_date || s.created_at || "",
+    }));
+    return [...withDate].sort((a, b) => b.sortDate.localeCompare(a.sortDate)).slice(0, 5);
+  }, [salaries]);
+
+  const toggleColumn = useCallback((key: string) => {
+    setVisibleColumns((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const isCol = (key: string) => visibleColumns.includes(key);
+
   const uniqueMonths = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.payment_month).filter(Boolean))).sort(), [salaries]);
   const uniqueYears = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.payment_year).filter(Boolean))).sort((a, b) => (b ?? 0) - (a ?? 0)), [salaries]);
   const uniqueEmployeeNames = React.useMemo(() => Array.from(new Set(salaries.map((s) => s.employee_name).filter(Boolean))).sort((a, b) => String(a ?? "").localeCompare(String(b ?? ""))), [salaries]);
+
+  const filterCount = [search, statusFilter, monthFilter, yearFilter, nameFilter].filter(Boolean).length;
+  const hasActiveFilters = filterCount > 0;
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    setStatusFilter("");
+    setMonthFilter("");
+    setYearFilter("");
+    setNameFilter("");
+  }, []);
+
+  const applyPreset = useCallback((preset: "this_month" | "pending" | "paid") => {
+    const now = new Date();
+    const thisMonth = MONTH_NAMES[now.getMonth()];
+    const thisYear = String(now.getFullYear());
+    if (preset === "this_month") {
+      setMonthFilter(thisMonth);
+      setYearFilter(thisYear);
+      setStatusFilter("");
+      setSearch("");
+      setNameFilter("");
+    } else if (preset === "pending") {
+      setStatusFilter("pending");
+      setMonthFilter("");
+      setYearFilter("");
+      setSearch("");
+      setNameFilter("");
+    } else if (preset === "paid") {
+      setStatusFilter("paid");
+      setMonthFilter("");
+      setYearFilter("");
+      setSearch("");
+      setNameFilter("");
+    }
+  }, []);
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    const status = searchParams.get("status");
+    const month = searchParams.get("month");
+    const year = searchParams.get("year");
+    const name = searchParams.get("name");
+    if (q != null) setSearch(q);
+    if (status != null) setStatusFilter(status);
+    if (month != null) setMonthFilter(month);
+    if (year != null) setYearFilter(year);
+    if (name != null) setNameFilter(name);
+    setUrlSynced(true);
+  }, []);
+
+  useEffect(() => {
+    if (!urlSynced) return;
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (statusFilter) params.set("status", statusFilter);
+    if (monthFilter) params.set("month", monthFilter);
+    if (yearFilter) params.set("year", yearFilter);
+    if (nameFilter) params.set("name", nameFilter);
+    const qs = params.toString();
+    const url = qs ? `/salaries?${qs}` : "/salaries";
+    window.history.replaceState(null, "", url);
+  }, [urlSynced, search, statusFilter, monthFilter, yearFilter, nameFilter]);
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [search, statusFilter, monthFilter, yearFilter, nameFilter]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (hasActiveFilters) clearFilters();
+        else if (focusedRowId) setFocusedRowId(null);
+        return;
+      }
+      const flatRows = sortedRows;
+      const idx = focusedRowId ? flatRows.findIndex((r) => r.id === focusedRowId) : -1;
+      if (e.key === "ArrowDown" && idx < flatRows.length - 1) {
+        e.preventDefault();
+        setFocusedRowId(flatRows[idx + 1].id);
+      } else if (e.key === "ArrowUp" && idx > 0) {
+        e.preventDefault();
+        setFocusedRowId(flatRows[idx - 1].id);
+      } else if (e.key === "Enter" && focusedRowId && canEdit) {
+        e.preventDefault();
+        const row = flatRows.find((r) => r.id === focusedRowId);
+        if (row) setShowEditModal(row);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasActiveFilters, clearFilters, focusedRowId, sortedRows, canEdit]);
 
   const nameToColor = React.useMemo(() => {
     const m = new Map<string, string>();
@@ -578,7 +789,7 @@ export function SalariesBoard({
         toast.error(errors.join("\n"));
         return;
       }
-      toast.success(`${selectedIds.size} record(s) deleted`);
+      toast.success(`${selectedIds.size} salar${selectedIds.size === 1 ? "y" : "ies"} deleted`);
       setSelectedIds(new Set());
       mutate();
     } finally {
@@ -613,7 +824,8 @@ export function SalariesBoard({
         toast.error(errors.join("\n"));
         return;
       }
-      toast.success(`${ids.length} record(s) moved`);
+      const groupLabel = groupKey === "paid" ? "Paid" : groupKey === "pending" ? "Pending" : "Needs Review";
+      toast.success(`${ids.length} salar${ids.length === 1 ? "y" : "ies"} moved to ${groupLabel}`);
       setSelectedIds(new Set());
       mutate();
     } finally {
@@ -731,16 +943,18 @@ export function SalariesBoard({
           <button
             onClick={() => void handleExportExcel()}
             disabled={exporting || salaries.length === 0}
+            title={filtered.length > 0 ? `Export ${filtered.length} record(s) to Excel` : "Export Excel"}
             className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
           >
-            {exporting ? "..." : "Export Excel"}
+            {exporting ? "..." : `Export Excel${filtered.length > 0 ? ` (${filtered.length})` : ""}`}
           </button>
           <button
             onClick={() => void handleExportPdf()}
             disabled={exporting || filtered.length === 0}
+            title={filtered.length > 0 ? `Export ${filtered.length} record(s) to PDF` : "Export PDF"}
             className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
           >
-            {exporting ? "..." : "Export PDF"}
+            {exporting ? "..." : `Export PDF${filtered.length > 0 ? ` (${filtered.length})` : ""}`}
           </button>
         </div>
       </div>
@@ -768,54 +982,157 @@ export function SalariesBoard({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3">
-        <input
-          type="text"
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="needs_review">Needs Review</option>
-          <option value="paid">Paid</option>
-        </select>
-        <select
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          <option value="">All months</option>
-          {uniqueMonths.map((m) => (
-            <option key={m!} value={m!}>{m}</option>
-          ))}
-        </select>
-        <select
-          value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          <option value="">All years</option>
-          {uniqueYears.map((y) => (
-            <option key={y!} value={y!}>{y}</option>
-          ))}
-        </select>
-        <select
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          <option value="">All employees</option>
-          {uniqueEmployeeNames.map((n) => (
-            <option key={n!} value={n!}>{n}</option>
-          ))}
-        </select>
+      {hasActiveFilters && filtered.length > 0 && (
+        <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-950/40">
+          <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Filtered summary</p>
+          <div className="mt-2 flex flex-wrap gap-4 text-sm">
+            <span>Net: {fmtCurrency(filteredSummary.netTotal)}</span>
+            <span>Pending cost: {fmtCurrency(filteredSummary.pendingCost)}</span>
+            <span>{filteredSummary.pendingCount} pending • {filteredSummary.paidCount} paid</span>
+          </div>
+        </div>
+      )}
+
+      {duplicateIds.size > 0 && (
+        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-900/30">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Duplicate detection</p>
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">Found {duplicateIds.size} salary record(s) with same employee + month + year. Please review.</p>
+        </div>
+      )}
+
+      {recentActivity.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Recent activity</p>
+          <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-400">
+            {recentActivity.map((s) => (
+              <li key={s.id} className="flex items-center gap-2">
+                <span className="font-medium">{s.employee_name ?? "—"}</span>
+                <span>{s.payment_month} {s.payment_year}</span>
+                <span>{s.status === "paid" ? "Paid" : s.status === "needs_review" ? "Needs Review" : "Pending"}</span>
+                <span>{s.paid_date ? `Paid ${s.paid_date}` : `Added ${s.created_at?.slice(0, 10)}`}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Presets:</span>
+          <button onClick={() => applyPreset("this_month")} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">This month</button>
+          <button onClick={() => applyPreset("pending")} className="rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-800">Pending</button>
+          <button onClick={() => applyPreset("paid")} className="rounded-lg bg-emerald-100 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-200 dark:hover:bg-emerald-800">Paid</button>
+          <span className="mx-1 text-slate-300 dark:text-slate-500">|</span>
+          <input
+            type="text"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="needs_review">Needs Review</option>
+            <option value="paid">Paid</option>
+          </select>
+          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="">All months</option>
+            {uniqueMonths.map((m) => <option key={m!} value={m!}>{m}</option>)}
+          </select>
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="">All years</option>
+            {uniqueYears.map((y) => <option key={y!} value={y!}>{y}</option>)}
+          </select>
+          <select value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="">All employees</option>
+            {uniqueEmployeeNames.map((n) => <option key={n!} value={n!}>{n}</option>)}
+          </select>
+          <select value={sortField} onChange={(e) => setSortField(e.target.value as typeof sortField)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="date">Sort: Date</option>
+            <option value="net_pay">Sort: Net Pay</option>
+            <option value="employee">Sort: Employee</option>
+          </select>
+          <button onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" title={sortDir === "asc" ? "Ascending" : "Descending"}>
+            {sortDir === "asc" ? "↑" : "↓"}
+          </button>
+          {hasActiveFilters && (
+            <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+              {filterCount} filter{filterCount !== 1 ? "s" : ""} active
+            </span>
+          )}
+          {hasActiveFilters && (
+            <button onClick={clearFilters} className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
+              Clear filters
+            </button>
+          )}
+          <button
+            onClick={(e) => { setShowColumnPicker((p) => !p); (e.target as HTMLElement).getBoundingClientRect(); }}
+            className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          >
+            Columns
+          </button>
+          <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value={25}>25/page</option>
+            <option value={50}>50/page</option>
+            <option value={100}>100/page</option>
+          </select>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} disabled={currentPage === 0} className="rounded border border-gray-300 px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-600">←</button>
+            <span className="text-xs text-gray-500">Page {currentPage + 1} of {totalPages}</span>
+            <button onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))} disabled={currentPage >= totalPages - 1} className="rounded border border-gray-300 px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-600">→</button>
+          </div>
+          <span className="text-xs text-gray-500">{filtered.length} of {salaries.length}</span>
+        </div>
+        {showColumnPicker && (
+          <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-100 pt-2 dark:border-gray-600">
+            <span className="text-xs font-medium text-gray-500">Toggle columns:</span>
+            {SALARY_COLUMNS.filter((c) => c.key !== "actions").map((c) => (
+              <label key={c.key} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={visibleColumns.includes(c.key)} onChange={() => toggleColumn(c.key)} className="rounded" />
+                {c.label}
+              </label>
+            ))}
+            <button onClick={() => { setVisibleColumns([...DEFAULT_VISIBLE_COLUMNS]); localStorage.removeItem(COL_STORAGE_KEY); }} className="text-xs text-gray-600 hover:underline dark:text-gray-400">Reset</button>
+          </div>
+        )}
+        {hasActiveFilters && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2 dark:border-gray-600">
+            {search && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                &quot;{search}&quot;
+                <button onClick={() => setSearch("")} className="ml-0.5 hover:text-blue-900 dark:hover:text-blue-100">✕</button>
+              </span>
+            )}
+            {statusFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                {statusFilter}
+                <button onClick={() => setStatusFilter("")} className="ml-0.5 hover:text-amber-900 dark:hover:text-amber-100">✕</button>
+              </span>
+            )}
+            {monthFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                {monthFilter}
+                <button onClick={() => setMonthFilter("")} className="ml-0.5 hover:text-emerald-900 dark:hover:text-emerald-100">✕</button>
+              </span>
+            )}
+            {yearFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                {yearFilter}
+                <button onClick={() => setYearFilter("")} className="ml-0.5 hover:text-purple-900 dark:hover:text-purple-100">✕</button>
+              </span>
+            )}
+            {nameFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-xs text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                {nameFilter}
+                <button onClick={() => setNameFilter("")} className="ml-0.5 hover:text-teal-900 dark:hover:text-teal-100">✕</button>
+              </span>
+            )}
+            <button onClick={clearFilters} className="ml-auto rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Click-outside overlay: clears selection when clicking empty space */}
@@ -863,7 +1180,7 @@ export function SalariesBoard({
       ) : (
         <div className="space-y-6">
           {GROUPS.map((g) => {
-            const rows = filtered.filter((r) => statusToGroup(r.status) === g.key);
+            const rows = paginatedRows.filter((r) => statusToGroup(r.status) === g.key);
             if (rows.length === 0) return null;
             return (
               <div key={g.key} className={`overflow-hidden rounded-2xl border-2 ${g.color} shadow-sm`}>
@@ -888,25 +1205,30 @@ export function SalariesBoard({
                             </div>
                           </th>
                         )}
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">Employee</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Net Pay</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sort Code</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Account</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Reference</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Month</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Date</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Cost</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">File</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">Actions</th>
+                        {isCol("employee") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">Employee</th>}
+                        {isCol("net_pay") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Net Pay</th>}
+                        {isCol("sort_code") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sort Code</th>}
+                        {isCol("account") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Account</th>}
+                        {isCol("reference") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Reference</th>}
+                        {isCol("month") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Month</th>}
+                        {isCol("date") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Date</th>}
+                        {isCol("total_cost") && <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Cost</th>}
+                        {isCol("file") && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">File</th>}
+                        {isCol("actions") && <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((s) => {
                         const bank = getBankDisplay(s);
+                        const isFocused = focusedRowId === s.id;
+                        const isDupe = duplicateIds.has(s.id);
                         return (
                         <tr
                           key={s.id}
-                          className="group cursor-pointer border-b-2 border-gray-200 transition-colors hover:bg-amber-50/50 dark:border-gray-600 dark:hover:bg-amber-950/20"
+                          title={getRowTooltip(s, bank)}
+                          tabIndex={0}
+                          onFocus={() => setFocusedRowId(s.id)}
+                          className={`group cursor-pointer border-b-2 border-gray-200 transition-colors hover:bg-amber-50/50 dark:border-gray-600 dark:hover:bg-amber-950/20 ${isFocused ? "ring-2 ring-indigo-500 ring-inset bg-amber-50/80 dark:bg-amber-950/30" : ""} ${isDupe ? "border-l-4 border-l-amber-500" : ""}`}
                           onClick={(e) => handleRowClick(s, e)}
                           onDoubleClick={() => handleRowDoubleClick(s)}
                         >
@@ -947,6 +1269,7 @@ export function SalariesBoard({
                               </div>
                             </td>
                           )}
+                          {isCol("employee") && (
                           <td className="whitespace-nowrap px-4 py-3">
                             <span
                               className="inline-flex rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm"
@@ -955,6 +1278,8 @@ export function SalariesBoard({
                               {s.employee_name ?? "—"}
                             </span>
                           </td>
+                          )}
+                          {isCol("net_pay") && (
                           <td
                             className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-gray-900 dark:text-gray-100 cursor-pointer"
                             onMouseEnter={() => showPreview(s)}
@@ -963,12 +1288,14 @@ export function SalariesBoard({
                           >
                             {fmtCurrency(s.net_pay)}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.sortCode}</td>
-                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.account}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200" title={s.reference ?? undefined}>{s.reference ?? "—"}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.payment_month ?? "—"}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.process_date ?? "—"}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100" title="GBP">{fmtCurrency(s.employer_total_cost)}</td>
+                          )}
+                          {isCol("sort_code") && <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.sortCode}</td>}
+                          {isCol("account") && <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.account}</td>}
+                          {isCol("reference") && <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200" title={s.reference ?? undefined}>{s.reference ?? "—"}</td>}
+                          {isCol("month") && <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.payment_month ?? "—"}</td>}
+                          {isCol("date") && <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.process_date ?? "—"}</td>}
+                          {isCol("total_cost") && <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100" title="GBP">{fmtCurrency(s.employer_total_cost)}</td>}
+                          {isCol("file") && (
                           <td
                             className="whitespace-nowrap px-4 py-3 cursor-pointer"
                             onClick={(e) => e.stopPropagation()}
@@ -997,6 +1324,8 @@ export function SalariesBoard({
                               "—"
                             )}
                           </td>
+                          )}
+                          {isCol("actions") && (
                           <td className="whitespace-nowrap px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-end gap-1.5">
                               {canEdit && s.payslip_storage_path && (
@@ -1019,6 +1348,7 @@ export function SalariesBoard({
                               )}
                             </div>
                           </td>
+                          )}
                         </tr>
                       );})}
                     </tbody>
