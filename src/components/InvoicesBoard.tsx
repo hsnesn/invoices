@@ -2383,19 +2383,25 @@ export function InvoicesBoard({
               Import paid and no payment needed invoices from Excel. Invoice files can be added manually later via the Edit button.
             </p>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-              Expected columns: Guest Name, Title, Producer, Payment Type (Paid/Unpaid), Department, Programme, Topic, Invoice Date, TX Date 1, TX Date 2, TX Date 3, Account Name, Amount, INV Number, Sort Code, Account Number, Payment Date (for paid).
+              Row 1: title, Row 2: section (Paid Invoices / No Payment Needed), Row 3: headers, Row 4+: data.
             </p>
             <button
               type="button"
               onClick={async () => {
                 const XLSX = await import("xlsx");
-                const template = [
-                  { "Guest Name": "Example Paid", "Title": "Title", "Producer": "Producer", "Payment Type": "Paid", "Department": "", "Programme": "", "Topic": "", "Invoice Date": "2025-01-15", "TX Date 1": "2025-01-15", "TX Date 2": "", "TX Date 3": "", "Account Name": "Account Name", "Amount": "1000", "INV Number": "INV-001", "Sort Code": "600923", "Account Number": "12345678", "Payment Date": "2025-01-31" },
-                  { "Guest Name": "Example Unpaid", "Title": "Title", "Producer": "Producer", "Payment Type": "Unpaid", "Department": "", "Programme": "", "Topic": "", "Invoice Date": "2025-01-15", "TX Date 1": "2025-01-15", "TX Date 2": "", "TX Date 3": "", "Account Name": "", "Amount": "0", "INV Number": "INV-002", "Sort Code": "", "Account Number": "", "Payment Date": "" },
+                const headers = ["Guest Name", "Subitems", "Title", "Producer", "Department", "Programme Name", "Topic", "Invoice Date", "TX Date", "2. TX Date", "3. TX Date", "Invoice File", "Account Name", "Amount", "INV Number", "Sort Code", "Account Number", "Line Manager", "Payment Date"];
+                const data = [
+                  ["Guest Invoice Submission", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                  ["Paid Invoices", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                  headers,
+                  ["Example Guest", "", "Title", "Producer", "Programmes", "Bigger Than Football", "Topic", "2025-01-15", "2025-01-15", "", "", "", "Account Name", "1000", "INV-001", "600923", "12345678", "", "2025-01-31"],
+                  ["No Payment Needed", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                  headers,
+                  ["Example Unpaid", "", "Title", "Producer", "Programmes", "Bigger Than Football", "Topic", "2025-01-15", "2025-01-15", "", "", "", "", "0", "INV-002", "", "", "", ""],
                 ];
-                const ws = XLSX.utils.json_to_sheet(template);
+                const ws = XLSX.utils.aoa_to_sheet(data);
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Import");
+                XLSX.utils.book_append_sheet(wb, ws, "guest invoice submission");
                 XLSX.writeFile(wb, "guest-invoices-import-template.xlsx");
               }}
               className="mt-2 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"

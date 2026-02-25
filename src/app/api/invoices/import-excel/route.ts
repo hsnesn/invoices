@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Excel file has no sheets" }, { status: 400 });
     }
     const ws = wb.Sheets[firstSheet];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+    // Skip title (row 1) and section header (row 2), use row 3 as column headers (0-indexed range: 2)
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { range: 2 });
 
     if (rows.length === 0) {
       return NextResponse.json({ error: "Excel file has no data rows" }, { status: 400 });
@@ -114,16 +115,30 @@ export async function POST(request: NextRequest) {
     const created: string[] = [];
     const errors: string[] = [];
 
+    let currentSectionPaymentType = "paid_guest";
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rowNum = i + 2;
+      const rowNum = i + 4;
+
+      const firstCell = String(Object.values(row)[0] ?? "").trim();
+      if (firstCell === "Paid Invoices" || firstCell === "paid invoices") {
+        currentSectionPaymentType = "paid_guest";
+        continue;
+      }
+      if (firstCell === "No Payment Needed" || firstCell === "no payment needed") {
+        currentSectionPaymentType = "unpaid_guest";
+        continue;
+      }
+      if (firstCell === "Guest Name" || firstCell === "guest name") continue;
 
       const guestName = getCell(row, "Guest Name", "guest name", "guest_name");
       const paymentTypeRaw = getCell(row, "Payment Type", "payment type", "payment_type");
-      const paymentType =
-        /unpaid|no payment/i.test(paymentTypeRaw) || paymentTypeRaw.toLowerCase() === "unpaid"
-          ? "unpaid_guest"
-          : "paid_guest";
+      const paymentType = paymentTypeRaw
+        ? (/unpaid|no payment/i.test(paymentTypeRaw) || paymentTypeRaw.toLowerCase() === "unpaid"
+            ? "unpaid_guest"
+            : "paid_guest")
+        : currentSectionPaymentType;
 
       if (!guestName) {
         errors.push(`Row ${rowNum}: Guest Name is required`);
@@ -131,7 +146,7 @@ export async function POST(request: NextRequest) {
       }
 
       const departmentName = getCell(row, "Department", "department name");
-      const programmeName = getCell(row, "Programme", "Programme Name", "programme name");
+      const programmeName = getCell(row, "Programme Name", "Programme", "programme name");
       let departmentId: string | null = null;
       let programId: string | null = null;
       if (departmentName) {
@@ -146,9 +161,9 @@ export async function POST(request: NextRequest) {
       const producer = getCell(row, "Producer", "producer name");
       const topic = getCell(row, "Topic", "topic");
       const invoiceDate = parseDate(getCell(row, "Invoice Date", "invoice date"));
-      const tx1 = parseDate(getCell(row, "TX Date 1", "TX Date", "tx date 1"));
-      const tx2 = parseDate(getCell(row, "TX Date 2", "2. TX Date"));
-      const tx3 = parseDate(getCell(row, "TX Date 3", "3. TX Date"));
+      const tx1 = parseDate(getCell(row, "TX Date", "TX Date 1", "tx date 1"));
+      const tx2 = parseDate(getCell(row, "2. TX Date", "TX Date 2", "tx date 2"));
+      const tx3 = parseDate(getCell(row, "3. TX Date", "TX Date 3", "tx date 3"));
       const accountName = getCell(row, "Account Name", "Beneficiary", "beneficiary_name");
       const amount = parseAmount(getCell(row, "Amount", "Gross Amount", "gross_amount"));
       const invNumber = getCell(row, "INV Number", "Invoice Number", "invoice_number");
