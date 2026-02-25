@@ -86,8 +86,6 @@ export async function POST(
     const isAdmin = profile.role === "admin";
     const isOperations = profile.role === "operations";
     const isFinance = profile.role === "finance" && ["ready_for_payment", "paid", "archived"].includes(wf.status);
-    const inDept = profile.role === "manager" && profile.department_id != null && inv.department_id === profile.department_id;
-    const inProg = profile.role === "manager" && (profile.program_ids ?? []).length > 0 && inv.program_id != null && (profile.program_ids ?? []).includes(inv.program_id);
 
     const { data: orMember } = await supabase
       .from("operations_room_members")
@@ -96,7 +94,7 @@ export async function POST(
       .single();
     const isOperationsRoom = !!orMember;
 
-    if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !inDept && !inProg && !isOperationsRoom) {
+    if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !isOperationsRoom) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

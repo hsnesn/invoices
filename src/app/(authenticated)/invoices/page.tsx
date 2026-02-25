@@ -27,11 +27,7 @@ function canUserSeeInvoice(
   const wf = Array.isArray(wfRaw) ? wfRaw[0] : wfRaw;
 
   if (role === "manager") {
-    if (wf?.manager_user_id === userId) return true;
-    if (userDepartmentId && inv.department_id === userDepartmentId) return true;
-    if (userProgramIds?.length && inv.program_id && userProgramIds.includes(inv.program_id))
-      return true;
-    return false;
+    return wf?.manager_user_id === userId;
   }
 
   if (role === "finance") {

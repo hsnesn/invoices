@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit";
+import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 
 const BUCKET = "invoices";
 const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
@@ -84,6 +85,14 @@ export async function POST(
       file_name: file.name,
       sort_order: nextOrder,
     });
+
+    if (isFirstFile) {
+      try {
+        await runInvoiceExtraction(invoiceId, session.user.id);
+      } catch {
+        /* non-fatal */
+      }
+    }
 
     await createAuditEvent({
       invoice_id: invoiceId,

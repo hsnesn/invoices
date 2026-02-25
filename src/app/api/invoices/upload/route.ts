@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       managerUserId = dm?.manager_user_id ?? null;
     }
-    if (!managerUserId) {
+    if (!managerUserId && safeProgramId) {
       const { data: managerProfiles } = await supabaseAdmin
         .from("profiles")
         .select("id,department_id,program_ids")
@@ -215,8 +215,11 @@ export async function POST(request: NextRequest) {
 
     const enabled = await isEmailStageEnabled("submission");
     if (enabled) {
-      const managerIds = (await supabaseAdmin.from("profiles").select("id").eq("role", "manager").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-      const managerEmails = await getFilteredEmailsForUserIds(managerIds);
+      const managerEmails: string[] = [];
+      if (managerUserId) {
+        const filtered = await getFilteredEmailsForUserIds([managerUserId]);
+        if (filtered.length > 0) managerEmails.push(filtered[0]);
+      }
       const submitterEmails = await getFilteredEmailsForUserIds([session.user.id]);
       const submitterEmail = submitterEmails[0];
       if (submitterEmail || managerEmails.length > 0) {

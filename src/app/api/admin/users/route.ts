@@ -48,6 +48,14 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    const validRoles = ["submitter", "manager", "admin", "finance", "viewer", "operations"];
+    if (role !== undefined && !validRoles.includes(role)) {
+      return NextResponse.json(
+        { error: `Invalid role. Allowed: ${validRoles.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     const supabase = createAdminClient();
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (role !== undefined) updates.role = role;
@@ -63,7 +71,12 @@ export async function PATCH(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message?.includes("app_role") || error.message?.includes("enum")
+        ? `${error.message}. Run migration 00020_add_operations_role.sql in Supabase SQL Editor.`
+        : error.message;
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
 
     await createAuditEvent({
       actor_user_id: profile.id,

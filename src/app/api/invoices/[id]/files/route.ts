@@ -10,7 +10,7 @@ async function canAccess(supabase: ReturnType<typeof createAdminClient>, invoice
   if (profile.role === "admin" || profile.role === "operations") return true;
   if (inv.submitter_user_id === userId) return true;
   const { data: wf } = await supabase.from("invoice_workflows").select("manager_user_id, status").eq("invoice_id", invoiceId).single();
-  if (profile.role === "manager" && (wf?.manager_user_id === userId || (profile.department_id && inv.department_id === profile.department_id))) return true;
+  if (profile.role === "manager" && wf?.manager_user_id === userId) return true;
   if (profile.role === "finance" && wf?.status && ["ready_for_payment", "paid", "archived"].includes(wf.status)) return true;
   const { data: or } = await supabase.from("operations_room_members").select("id").eq("user_id", userId).single();
   if (or) return true;

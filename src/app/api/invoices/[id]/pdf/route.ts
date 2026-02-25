@@ -39,11 +39,7 @@ async function canAccessInvoice(
     .single();
 
   if (profile.role === "manager") {
-    if (wf?.manager_user_id === userId) return true;
-    const pids = profile.program_ids as string[] | null;
-    if (profile.department_id && invoice.department_id === profile.department_id) return true;
-    if (pids?.length && invoice.program_id && pids.includes(invoice.program_id)) return true;
-    return false;
+    return wf?.manager_user_id === userId;
   }
 
   if (profile.role === "finance") {

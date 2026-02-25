@@ -48,6 +48,12 @@ function getOpenAIClient() {
   return new OpenAI({ apiKey });
 }
 
+function stripInternalRefs(s: string | null | undefined): string | null {
+  if (!s?.trim()) return null;
+  const v = s.trim().replace(/\bTRT\s*World\b/gi, "").replace(/\bTRTWORLD\b/gi, "").replace(/\bTRT\s*WORLD\b/gi, "").replace(/\bTRT\b/g, "").trim();
+  return v.length > 0 ? v : null;
+}
+
 function parseNumberLike(input: string | null | undefined): number | null {
   if (!input) return null;
   const cleaned = input.replace(/[, ]/g, "");
@@ -113,10 +119,10 @@ function regexExtractFromText(text: string) {
   }
 
   return {
-    beneficiary_name: beneficiary,
+    beneficiary_name: stripInternalRefs(beneficiary),
     account_number: accountNumber,
     sort_code: sortCodeRaw ? normalizeSortCode(sortCodeRaw) ?? sortCodeRaw : null,
-    invoice_number: invoiceNumber,
+    invoice_number: stripInternalRefs(invoiceNumber),
     invoice_date: date,
     net_amount: parseNumberLike(netRaw),
     vat_amount: parseNumberLike(vatRaw),
@@ -167,14 +173,26 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   } = {};
   let extractionError: string | null = null;
 
-  const extractionPrompt = `Extract invoice fields from this document.
+  const extractionPrompt = `Extract invoice fields from this document with high accuracy.
 Return a JSON object with exactly these keys:
 beneficiary_name, account_number, sort_code, invoice_number, invoice_date, net_amount, vat_amount, gross_amount, currency.
-Rules:
-- Use null when unknown
-- sort_code should be UK format (6 digits, no dashes)
-- invoice_date should be YYYY-MM-DD if available
-- amounts should be numeric`;
+
+CRITICAL RULES - extract exactly as shown in the document:
+- invoice_number: Copy the exact invoice/reference number as printed (letters, numbers, slashes, hyphens). Do not invent or modify.
+- sort_code: UK format only - exactly 6 digits, no spaces or dashes (e.g. 123456). Extract from "Sort Code" or equivalent field.
+- account_number: Exactly as shown - typically 8 digits for UK, no spaces. Extract from "Account Number" or equivalent.
+- beneficiary_name: The payee/beneficiary name - the person or company TO RECEIVE payment. NOT the payer. Extract exactly as written.
+
+STRICT EXCLUSIONS - NEVER include in any field:
+- Do NOT include "TRT", "TRT World", "TRTWORLD", "TRT WORLD" or any variant in beneficiary_name, invoice_number, or any extracted field.
+- These are internal/organizational references, not invoice data. Omit them entirely or use null.
+- If the document only shows such references for beneficiary, use null for beneficiary_name.
+
+Other rules:
+- Use null when unknown or ambiguous
+- invoice_date: YYYY-MM-DD format if available
+- amounts: numeric only, no currency symbols
+- Be precise: double-check numbers match the document exactly`;
 
   const isPdf = ext === "pdf";
 
@@ -250,6 +268,9 @@ Rules:
       parsed = regexParsed;
     }
   }
+
+  if (parsed.beneficiary_name) parsed.beneficiary_name = stripInternalRefs(parsed.beneficiary_name) ?? undefined;
+  if (parsed.invoice_number) parsed.invoice_number = stripInternalRefs(parsed.invoice_number) ?? undefined;
 
   const sortCode = parsed.sort_code ? normalizeSortCode(parsed.sort_code) : null;
   const net = parsed.net_amount ?? 0;

@@ -137,12 +137,15 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: userId, role: newRole }),
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role: newRole as never } : u))
       );
+      setEditingRole(null);
+    } else {
+      toast.error(data?.error ?? "Failed to update role. Run migration 00020 if using Operations role.");
     }
-    setEditingRole(null);
   };
 
   const openPermissions = (user: UserRow) => {

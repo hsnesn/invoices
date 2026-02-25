@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       managerUserId = dm?.manager_user_id ?? null;
     }
-    if (!managerUserId) {
+    if (!managerUserId && safeProgId) {
       managerUserId = pickManager((managerProfiles ?? []) as ManagerProfile[], safeDeptId, safeProgId);
     }
 
@@ -200,12 +200,13 @@ export async function POST(request: NextRequest) {
 
     if (await isEmailStageEnabled("submission")) {
       const submitterUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
-      const managerIds = (await supabase.from("profiles").select("id").eq("role", "manager").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-      const filteredManagerIds = await filterUserIdsByEmailPreference(managerIds);
       const managerEmails: string[] = [];
-      for (const id of filteredManagerIds) {
-        const u = (await supabase.auth.admin.getUserById(id)).data?.user;
-        if (u?.email) managerEmails.push(u.email);
+      if (managerUserId) {
+        const filteredManagerIds = await filterUserIdsByEmailPreference([managerUserId]);
+        for (const id of filteredManagerIds) {
+          const u = (await supabase.auth.admin.getUserById(id)).data?.user;
+          if (u?.email) managerEmails.push(u.email);
+        }
       }
       const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(session.user.id));
       if (submitterWants || managerEmails.length > 0) {

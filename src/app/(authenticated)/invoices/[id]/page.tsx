@@ -40,17 +40,8 @@ export default async function InvoicePage({
   const isFinance =
     profile.role === "finance" &&
     ["ready_for_payment", "paid", "archived"].includes(wfCheck?.status ?? "");
-  const inDeptScope =
-    profile.role === "manager" &&
-    profile.department_id != null &&
-    invoice.department_id === profile.department_id;
-  const inProgScope =
-    profile.role === "manager" &&
-    (profile.program_ids ?? []).length > 0 &&
-    invoice.program_id != null &&
-    (profile.program_ids ?? []).includes(invoice.program_id);
 
-  if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !inDeptScope && !inProgScope) {
+  if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance) {
     notFound();
   }
 
