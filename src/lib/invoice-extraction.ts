@@ -240,113 +240,83 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   } = {};
   let extractionError: string | null = null;
 
-  const extractionPrompt = `Extract invoice fields from this document. Return a JSON object with exactly these keys (use null for missing fields):
-beneficiary_name, company_name, account_number, sort_code, invoice_number, invoice_date, net_amount, vat_amount, gross_amount, currency.
-
-IMPORTANT: Extract ALL fields you can find. Do not return empty - use null only when a field is truly not present. Scan the entire document carefully.
-
-CRITICAL RULES - extract exactly as shown in the document:
-- invoice_number: Copy the exact invoice/reference number as printed (letters, numbers, slashes, hyphens). Do not invent or modify.
-- sort_code: UK format only - exactly 6 digits, no spaces or dashes (e.g. 123456). Extract from "Sort Code" or equivalent field.
-- account_number: Exactly as shown - typically 8 digits for UK, no spaces. Extract from "Account Number" or equivalent.
-- beneficiary_name: The VALUE (not the label) next to bank account name fields. Extract ONLY the actual name - NO address.
-  * LOOK FOR labels like: "Your full name on bank account", "Account holder name", "Payee name", "Beneficiary", "Name on account", "Account name" - then take the VALUE written next to/under that label.
-  * If a company: use the company name. If a person: use the person's full name.
-  * NEVER include address: no street, road, avenue, postcode, city, country, building number. Name ONLY.
-  * NEVER use a field LABEL as beneficiary. REJECT: "Appearance Date", "Invoice Date", "Payment Date", "Submission Date", or any phrase ending in "Date", "Number", "Code", "Amount".
-  * REJECT: dates, numbers, invoice refs. Use null if no valid person/company name found.
-- company_name: The company/business name if the payee is a company. Look for "Company name", "Business name", "Trading as", "Ltd", "Inc", "LLC" etc.
-  * If the payee is SELF-EMPLOYED (no company): use null for company_name. The person's name goes in beneficiary_name only.
-  * If a company exists: extract the exact company name. If both company and person appear, company_name = company, beneficiary_name = person or company (who receives payment).
-- gross_amount: The TOTAL amount to pay - CRITICAL, must be found. Look everywhere:
-  * Labels: "Grand Total", "Total", "Total Amount", "Amount Due", "Balance Due", "Invoice Total", "Total Payable", "Amount Payable", "Payment Due", "Sum", "Gross", "Net + VAT", "Final Total", "Amount to Pay", "Invoice Value"
-  * The total is usually: at the bottom of the document, in a payment/bank details section, the LARGEST amount on the invoice, or in a row labeled "Total"
-  * Format: numeric only, e.g. 1250.00 or 1,250.00. Include decimals if present. No currency symbols.
-  * If multiple amounts: use the one labeled "Total"/"Grand Total"/"Amount Due", NOT subtotals or line items. If unclear, use the LARGEST amount.
-- net_amount: Subtotal before VAT/tax. Labels: "Net", "Subtotal", "Sub total".
-- vat_amount: VAT/tax amount. Labels: "VAT", "Tax", "GST".
-
-STRICT EXCLUSIONS - NEVER include in any field:
-- Do NOT include "TRT", "TRT World", "TRTWORLD", "TRT WORLD" or any variant in beneficiary_name, invoice_number, or any extracted field.
-- These are internal/organizational references, not invoice data. Omit them entirely or use null.
-- If the document only shows such references for beneficiary, use null for beneficiary_name.
-
-Other rules:
-- Use null when unknown or ambiguous
-- invoice_date: YYYY-MM-DD format if available
-- amounts: numeric only, no currency symbols (strip £ $ € ,)
-- gross_amount is the most important amount - scan the entire document if needed to find the total payable
-- Be precise: double-check numbers match the document exactly`;
-
   const hasText = text.trim().length > 30;
+
+  const CERTAIN_SUFFIX = ` Return JSON: {"value": "..." or number, "certain": true/false}. Set "certain": true ONLY when you clearly see the value in the document and are confident. Set "certain": false or omit if unsure.`;
+
+  const FIELD_PROMPTS: Record<string, string> = {
+    beneficiary_name: `Extract ONLY the beneficiary/account holder name from this invoice. Person or company who receives payment. Look for "Account holder name", "Payee name", "Beneficiary", "Name on account". NO address. NEVER use date, invoice number, or amount. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
+    company_name: `Extract ONLY the company/business name if the payee is a company. Look for "Company name", "Trading as", "Ltd", "Inc". If self-employed, return null.` + CERTAIN_SUFFIX,
+    account_number: `Extract ONLY the bank account number. Typically 8 digits for UK. Look for "Account Number". Digits only, no spaces.` + CERTAIN_SUFFIX,
+    sort_code: `Extract ONLY the UK sort code. Exactly 6 digits. Look for "Sort Code". No spaces or dashes.` + CERTAIN_SUFFIX,
+    invoice_number: `Extract ONLY the invoice/reference number. Copy exactly - letters, numbers, slashes, hyphens. Look for "Invoice Number", "Reference", "Ref". NEVER use a date.` + CERTAIN_SUFFIX,
+    invoice_date: `Extract ONLY the invoice date. Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
+    gross_amount: `Extract ONLY the final total amount to pay. Look for "Grand Total", "Total", "Amount Due", "Total Payable". NOT subtotals. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
+    currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP.` + CERTAIN_SUFFIX,
+  };
+
+  async function extractSingleField(
+    fieldKey: string,
+    docText: string,
+    client: OpenAI
+  ): Promise<{ value: string | number | null; certain: boolean }> {
+    const prompt = FIELD_PROMPTS[fieldKey];
+    if (!prompt) return { value: null, certain: false };
+    try {
+      const extractionModel = process.env.EXTRACTION_MODEL || "gpt-4o";
+      const completion = await client.chat.completions.create({
+        model: extractionModel,
+        messages: [{ role: "user", content: `${prompt}\n\nDOCUMENT:\n${docText}` }],
+        response_format: { type: "json_object" },
+      });
+      const raw = completion.choices[0]?.message?.content;
+      if (!raw) return { value: null, certain: false };
+      const obj = JSON.parse(raw) as { value?: string | number | null; certain?: boolean };
+      const v = obj?.value;
+      const certain = obj?.certain === true;
+      if (v == null || v === "") return { value: null, certain: false };
+      if (typeof v === "number") return { value: v, certain };
+      return { value: String(v).trim() || null, certain };
+    } catch {
+      return { value: null, certain: false };
+    }
+  }
+
+  function applyFieldResult(key: string, result: { value: string | number | null; certain: boolean }) {
+    if (!result.certain || result.value == null || result.value === "") return;
+    const val = result.value;
+    if (key === "gross_amount") {
+      (parsed as Record<string, unknown>)[key] = typeof val === "number" ? val : parseNumberLike(String(val));
+    } else {
+      (parsed as Record<string, unknown>)[key] = val;
+    }
+  }
 
   try {
     if (!openai) throw new Error("OPENAI_API_KEY missing");
 
     if (hasText) {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${text}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
-      const raw = completion.choices[0]?.message?.content;
-      if (!raw) throw new Error("No extraction result");
-      parsed = JSON.parse(raw) as typeof parsed;
-    } else if (ext === "pdf" && openai) {
-      const apiKey = process.env.OPENAI_API_KEY!;
-      const base64Pdf = fileBuffer.toString("base64");
-      const res = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          input: [
-            {
-              role: "user",
-              content: [
-                { type: "input_text", text: extractionPrompt },
-                { type: "input_file", filename: "invoice.pdf", file_data: `data:application/pdf;base64,${base64Pdf}` },
-              ],
-            },
-          ],
-          text: { format: { type: "json_object" } },
-        }),
-      });
-      if (!res.ok) {
-        const errBody = await res.text();
-        throw new Error(`OpenAI Responses API error: ${res.status} ${errBody}`);
+      const fields = Object.keys(FIELD_PROMPTS);
+      const results = await Promise.all(
+        fields.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
+      );
+      for (const { key, result } of results) {
+        applyFieldResult(key, result);
       }
-      const data = (await res.json()) as { output_text?: string };
-      const raw = data.output_text;
-      if (!raw) throw new Error("No extraction result");
-      parsed = JSON.parse(raw) as typeof parsed;
     } else {
-      throw new Error("Document has no extractable text. Scanned/image-based PDFs require PDF format.");
+      extractionError = "Document has no extractable text. Text-based PDFs only (no scanned images).";
+      parsed = regexParsed;
     }
   } catch (err) {
     try {
       if (openai && text.trim().length > 20) {
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "user",
-              content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${text}`,
-            },
-          ],
-          response_format: { type: "json_object" },
-        });
-        const raw = completion.choices[0]?.message?.content;
-        if (!raw) throw new Error("No extraction result from text fallback");
-        parsed = JSON.parse(raw) as typeof parsed;
+        const fields = Object.keys(FIELD_PROMPTS);
+        const results = await Promise.all(
+          fields.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
+        );
+        for (const { key, result } of results) {
+          applyFieldResult(key, result);
+        }
         extractionError = null;
       } else {
         parsed = regexParsed;
@@ -388,7 +358,7 @@ Other rules:
   const net = parsed.net_amount ?? 0;
   const vat = parsed.vat_amount ?? 0;
   const gross = parsed.gross_amount ?? 0;
-  const amountsOk = amountsConsistent(net, vat, gross);
+  const amountsOk = gross > 0 && (net === 0 && vat === 0 ? true : amountsConsistent(net, vat, gross));
   const invoiceNumberEmpty = !parsed.invoice_number?.trim();
   const needsReview = Boolean(extractionError) || !amountsOk || invoiceNumberEmpty;
 
