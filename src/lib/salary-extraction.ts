@@ -388,6 +388,57 @@ function simpleSimilarity(a: string, b: string): number {
   return wordsA.length + wordsB.size > 0 ? (2 * matches) / (wordsA.length + wordsB.size) : 0;
 }
 
+/** Fallback: parse UK payslip text with regex when OpenAI is unavailable */
+function parsePayslipTextFallback(text: string): Partial<ExtractedSalaryFields> {
+  const result: Partial<ExtractedSalaryFields> = {};
+  const t = text.replace(/\r\n/g, "\n");
+
+  const nameMatch = t.match(/((?:Mr\.|Mrs\.|Ms\.|Dr\.)\s*[A-Z][A-Za-z\s]+?)(?=\d{2}\/\d{2}\/\d{4}|\n|$)/);
+  if (nameMatch) {
+    const full = (nameMatch[1] ?? "").replace(/\s+/g, " ").trim();
+    if (full.length > 3) result.employee_name = full;
+  }
+  if (!result.employee_name) {
+    const alt = t.match(/(?:Employee Name|Name)\s*\n?\s*(?:Mr\.|Mrs\.|Ms\.|Dr\.)?\s*([A-Z][A-Za-z\s]+?)(?:\n|$)/i);
+    if (alt?.[1]) result.employee_name = alt[1].trim();
+  }
+
+  const dateMatch = t.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (dateMatch) {
+    const [, d, m, y] = dateMatch;
+    result.process_date = `${y}-${m}-${d}`;
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const monthNum = parseInt(m ?? "1", 10);
+    if (monthNum >= 1 && monthNum <= 12) result.payment_month = months[monthNum - 1] ?? null;
+    result.payment_year = parseInt(y ?? "0", 10) || null;
+  }
+
+  const niMatch = t.match(/([A-Z]{2}\d{6}[A-Za-z])(?:\s|\n|$)/);
+  if (niMatch) result.ni_number = niMatch[1] ?? null;
+
+  const netPayMatch = t.match(/Net\s*Pay[\s\S]*?(\d+(?:\.\d{2})?)\s*Tax Code/i)
+    ?? t.match(/(\d+(?:\.\d{2})?)\s*Tax Code/i);
+  if (netPayMatch) {
+    const n = parseNumberLike(netPayMatch[1] ?? "");
+    if (n != null && n > 0) result.net_pay = n;
+  }
+
+  const grossMatch = t.match(/Total\s*Gross\s*Pay\s*(\d+(?:\.\d{2})?)/i)
+    ?? t.match(/Basic\s*Gross\s*Salary\s*[\d.]+\s+(\d+(?:\.\d{2})?)/i);
+  if (grossMatch) {
+    const g = parseNumberLike(grossMatch[1] ?? "");
+    if (g != null && g > 0) result.total_gross_pay = g;
+  }
+
+  const payeMatch = t.match(/PAYE\s*Tax\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i);
+  if (payeMatch) result.paye_tax = parseNumberLike(payeMatch[1] ?? "");
+
+  const niDedMatch = t.match(/National\s*Insurance\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i);
+  if (niDedMatch) result.employee_ni = parseNumberLike(niDedMatch[1] ?? "");
+
+  return result;
+}
+
 function matchEmployeeByName(
   extractedName: string,
   employees: { id: string; full_name: string | null; bank_account_number?: string | null; sort_code?: string | null; ni_number?: string | null }[]
@@ -448,6 +499,25 @@ export async function runSalaryExtraction(
   let extractionError: string | null = null;
   const hasText = text.trim().length > 30;
   const isPdfOrDoc = ext === "pdf" || ext === "docx" || ext === "doc";
+
+  if (hasText && isPdfOrDoc) {
+    const fallback = parsePayslipTextFallback(text);
+    for (const [k, v] of Object.entries(fallback)) {
+      if (v != null && v !== "") (parsed as Record<string, unknown>)[k] = v;
+    }
+    if (parsed.employee_name) {
+      const supabase = createAdminClient();
+      const { data: employees } = await supabase
+        .from("employees")
+        .select("id, full_name, bank_account_number, sort_code, ni_number");
+      const matched = matchEmployeeByName(parsed.employee_name, employees ?? []);
+      if (matched && (!parsed.bank_account_number || !parsed.sort_code)) {
+        parsed.bank_account_number = parsed.bank_account_number ?? matched.bank_account_number ?? null;
+        parsed.sort_code = parsed.sort_code ?? (matched.sort_code ? (normalizeSortCode(matched.sort_code) ?? matched.sort_code) : null);
+        parsed.ni_number = parsed.ni_number ?? matched.ni_number ?? null;
+      }
+    }
+  }
 
   if (openai && hasText) {
     if (isPdfOrDoc) {

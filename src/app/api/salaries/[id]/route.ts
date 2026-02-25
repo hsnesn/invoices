@@ -10,7 +10,7 @@ function canEdit(role: string): boolean {
   return role === "admin" || role === "operations";
 }
 function canMarkPaid(role: string): boolean {
-  return role === "admin" || role === "operations" || role === "finance";
+  return role === "admin" || role === "finance";
 }
 function canDelete(role: string): boolean {
   return role === "admin" || role === "operations";

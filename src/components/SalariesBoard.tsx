@@ -226,7 +226,7 @@ export function SalariesBoard({
   employees: { id: string; full_name: string | null; badge_color: string | null }[];
 }) {
   const canEdit = profile.role === "admin" || profile.role === "operations";
-  const canMarkPaid = canEdit || profile.role === "finance";
+  const canMarkPaid = profile.role === "admin" || profile.role === "finance";
 
   const { data: salaries = [], mutate } = useSWR<SalaryRow[]>("/api/salaries", fetcher);
   const { data: stats } = useSWR<{ pending: { count: number; netTotal: number; costTotal: number }; paid: { count: number; netTotal: number; costTotal: number }; monthlyTrend: { month: string; count: number; netTotal: number; costTotal: number }[] }>("/api/salaries/stats", fetcher);
