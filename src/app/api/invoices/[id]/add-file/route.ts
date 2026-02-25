@@ -90,12 +90,17 @@ export async function POST(
       await supabase.from("invoices").update({ storage_path: storagePath }).eq("id", invoiceId);
     }
 
-    await supabase.from("invoice_files").insert({
+    const { error: insertErr } = await supabase.from("invoice_files").insert({
       invoice_id: invoiceId,
       storage_path: storagePath,
       file_name: file.name,
       sort_order: nextOrder,
     });
+
+    if (insertErr) {
+      await supabase.storage.from(BUCKET).remove([storagePath]);
+      return NextResponse.json({ error: "Failed to save file record: " + insertErr.message }, { status: 500 });
+    }
 
     if (isFirstFile) {
       try {

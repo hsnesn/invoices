@@ -1232,9 +1232,10 @@ function FreelancerFilesCell({
   actionLoadingId: string | null;
   contractorName: string;
 }) {
+  const filesFetcher = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json());
   const { data: files, isLoading, mutate } = useSWR<{ storage_path: string; file_name: string }[]>(
     `/api/invoices/${invoiceId}/files`,
-    fetcher,
+    filesFetcher,
     { revalidateOnFocus: false }
   );
   const loading = actionLoadingId === invoiceId;
@@ -1244,7 +1245,7 @@ function FreelancerFilesCell({
     const selected = Array.from(e.target.files ?? []);
     e.target.value = "";
     for (const f of selected) {
-      await onAddFile(invoiceId, f, () => void mutate());
+      await onAddFile(invoiceId, f);
     }
     void mutate();
   };
@@ -1259,7 +1260,7 @@ function FreelancerFilesCell({
         <div className="flex flex-wrap gap-0.5">
           {list.map((f, i) => (
             <button
-              key={i}
+              key={f.storage_path || `${i}-${f.file_name}`}
               onClick={() => void openFile(invoiceId, f.storage_path, f.file_name)}
               onMouseEnter={() => showFilePreviewOnHover(invoiceId, f.storage_path, f.file_name)}
               className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-400 dark:hover:bg-sky-800/60 transition-colors"
