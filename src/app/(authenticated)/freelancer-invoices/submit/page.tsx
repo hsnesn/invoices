@@ -81,6 +81,11 @@ export default function FreelancerSubmitPage() {
     if (selectedDays.size === 0) { setError("Please select at least one day"); return; }
     if (!bookedBy) { setError("Booked by is required"); return; }
     if (!invNumber.trim()) { setError("INV Number is required"); return; }
+    const addCostNum = parseFloat(additionalCost) || 0;
+    if (addCostNum > 0 && !additionalCostReasonCustom.trim()) {
+      setError("When Additional Cost is entered, Additional Cost Reason is required.");
+      return;
+    }
     setLoading(true); setError("");
 
     const fd = new FormData();
@@ -250,8 +255,8 @@ export default function FreelancerSubmitPage() {
 
         {/* 11. Additional Cost Reason */}
         <div>
-          <label className={labelCls}>11. Additional Cost Reason</label>
-          <input value={additionalCostReasonCustom} onChange={(e) => setAdditionalCostReasonCustom(e.target.value.slice(0, 75))} placeholder="Describe the reason for additional cost..." maxLength={75} className={inputCls} />
+          <label className={labelCls}>11. Additional Cost Reason {(parseFloat(additionalCost) || 0) > 0 ? <span className="text-red-500">*</span> : null}</label>
+          <input value={additionalCostReasonCustom} onChange={(e) => setAdditionalCostReasonCustom(e.target.value.slice(0, 75))} placeholder="Describe the reason for additional cost..." maxLength={75} className={inputCls} required={(parseFloat(additionalCost) || 0) > 0} />
           {additionalCostReasonCustom.length > 0 && <p className="text-right text-[11px] text-gray-400 mt-0.5">{additionalCostReasonCustom.length}/75</p>}
         </div>
 
