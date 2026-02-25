@@ -286,6 +286,9 @@ function InvoiceTable({
   onMoveToArchived,
   onReplaceFile,
   openPdf,
+  showPreviewOnHover,
+  hidePreviewOnHover,
+  openPdfInNewTab,
   editingId,
   editDraft,
   onStartEdit,
@@ -327,6 +330,9 @@ function InvoiceTable({
   onMoveToArchived: (id: string) => Promise<void>;
   onReplaceFile: (id: string, file: File) => Promise<void>;
   openPdf: (id: string) => Promise<void>;
+  showPreviewOnHover: (id: string) => void;
+  hidePreviewOnHover: () => void;
+  openPdfInNewTab: (id: string) => void;
   editingId: string | null;
   editDraft: EditDraft | null;
   onStartEdit: (row: DisplayRow) => void;
@@ -503,8 +509,8 @@ function InvoiceTable({
                 )}
               {isDuplicate && <div className="mt-0.5 text-[9px] font-bold text-yellow-600" title="Possible duplicate">⚠ DUP</div>}
               {r.hasMissingInfo && (
-                <div className="mt-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400" title={r.missingFields.length ? `Eksik: ${r.missingFields.join(", ")}` : "Eksik veya hatalı bilgi"}>
-                  ⚠ Eksik
+                <div className="mt-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400" title={r.missingFields.length ? `Missing: ${r.missingFields.join(", ")}` : "Missing or invalid info"}>
+                  ⚠ Missing
                 </div>
               )}
               </td>
@@ -515,7 +521,15 @@ function InvoiceTable({
                   <input autoFocus value={editDraft?.guest ?? ""} onChange={(e) => onChangeDraft("guest", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" />
                 ) : (
                   <div>
-                    <span>{r.guest}</span>
+                    <span
+                      className="cursor-pointer"
+                      onMouseEnter={() => showPreviewOnHover(r.id)}
+                      onMouseLeave={hidePreviewOnHover}
+                      onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
+                      title="Hover to preview, double-click to open in new tab"
+                    >
+                      {r.guest}
+                    </span>
                     {r.status === "rejected" && r.rejectionReason && (
                       <div className="mt-1 rounded-lg bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300">
                         <span className="font-semibold">Rejection reason:</span> {r.rejectionReason}
@@ -819,6 +833,8 @@ export function InvoicesBoard({
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("");
+  const previewShowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
@@ -1119,7 +1135,7 @@ export function InvoicesBoard({
     }
   };
 
-  const openPdf = async (invoiceId: string) => {
+  const openPdf = useCallback(async (invoiceId: string) => {
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/pdf`);
       const data = await res.json();
@@ -1131,7 +1147,46 @@ export function InvoicesBoard({
     } catch {
       // silently fail
     }
-  };
+  }, [rows]);
+
+  const showPreviewOnHover = useCallback((id: string) => {
+    if (previewHideRef.current) {
+      clearTimeout(previewHideRef.current);
+      previewHideRef.current = null;
+    }
+    if (previewShowRef.current) clearTimeout(previewShowRef.current);
+    previewShowRef.current = setTimeout(() => {
+      void openPdf(id);
+      previewShowRef.current = null;
+    }, 400);
+  }, [openPdf]);
+
+  const hidePreviewOnHover = useCallback(() => {
+    if (previewShowRef.current) {
+      clearTimeout(previewShowRef.current);
+      previewShowRef.current = null;
+    }
+    if (previewHideRef.current) clearTimeout(previewHideRef.current);
+    previewHideRef.current = setTimeout(() => {
+      setPreviewUrl(null);
+      previewHideRef.current = null;
+    }, 200);
+  }, []);
+
+  const cancelHidePreview = useCallback(() => {
+    if (previewHideRef.current) {
+      clearTimeout(previewHideRef.current);
+      previewHideRef.current = null;
+    }
+  }, []);
+
+  const openPdfInNewTab = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/invoices/${id}/pdf`);
+      const data = await res.json();
+      if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch { /* */ }
+  }, []);
 
   const onDeleteInvoice = async (invoiceId: string) => {
     const ok = window.confirm("Are you sure you want to delete this invoice?");
@@ -2108,6 +2163,9 @@ export function InvoicesBoard({
               onMoveToArchived={onMoveToArchived}
               onReplaceFile={onReplaceFile}
               openPdf={openPdf}
+              showPreviewOnHover={showPreviewOnHover}
+              hidePreviewOnHover={hidePreviewOnHover}
+              openPdfInNewTab={openPdfInNewTab}
               editingId={editingId}
               editDraft={editDraft}
               onStartEdit={onStartEdit}
@@ -2173,7 +2231,12 @@ export function InvoicesBoard({
 
       {previewUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setPreviewUrl(null)}>
-          <div className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+            onMouseEnter={cancelHidePreview}
+            onMouseLeave={hidePreviewOnHover}
+          >
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-800 truncate dark:text-white">{previewName}</h3>
               <div className="flex items-center gap-2">

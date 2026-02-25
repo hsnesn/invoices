@@ -290,6 +290,8 @@ export function FreelancerBoard({
   editingIdRef.current = editingId;
   editDraftRef.current = editDraft;
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewShowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ---------- Callbacks ---------- */
   const toggleGroup = useCallback((key: string) => { setCollapsedGroups(p => { const n = new Set(p); if (n.has(key)) n.delete(key); else n.add(key); return n; }); }, []);
@@ -437,6 +439,45 @@ export function FreelancerBoard({
     } catch { /* */ }
     finally { setPreviewLoading(false); }
   }, [rows]);
+
+  const showPreviewOnHover = useCallback((id: string) => {
+    if (previewHideRef.current) {
+      clearTimeout(previewHideRef.current);
+      previewHideRef.current = null;
+    }
+    if (previewShowRef.current) clearTimeout(previewShowRef.current);
+    previewShowRef.current = setTimeout(() => {
+      void openFile(id);
+      previewShowRef.current = null;
+    }, 400);
+  }, [openFile]);
+
+  const hidePreviewOnHover = useCallback(() => {
+    if (previewShowRef.current) {
+      clearTimeout(previewShowRef.current);
+      previewShowRef.current = null;
+    }
+    if (previewHideRef.current) clearTimeout(previewHideRef.current);
+    previewHideRef.current = setTimeout(() => {
+      closePreview();
+      previewHideRef.current = null;
+    }, 200);
+  }, [closePreview]);
+
+  const cancelHidePreview = useCallback(() => {
+    if (previewHideRef.current) {
+      clearTimeout(previewHideRef.current);
+      previewHideRef.current = null;
+    }
+  }, []);
+
+  const openPdfInNewTab = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/invoices/${id}/pdf`);
+      const data = await res.json();
+      if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch { /* */ }
+  }, []);
 
   const downloadFile = useCallback(async (url: string, name: string) => {
     try { const res = await fetch(url); const blob = await res.blob(); const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
@@ -714,11 +755,21 @@ export function FreelancerBoard({
         <div>
           <StatusCell r={r} canApprove={canApprove(r)} isSubmitter={isSubmitter} currentRole={currentRole} isOperationsRoomMember={isOperationsRoomMember} actionLoadingId={actionLoadingId} onManagerApprove={onManagerApprove} onAdminApprove={onAdminApprove} onResubmit={onResubmit} onMarkPaid={onMarkPaid} openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }} />
           {r.hasMissingInfo && (
-            <div className="mt-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400" title={r.missingFields.length ? `Eksik: ${r.missingFields.join(", ")}` : "Eksik veya hatalı bilgi"}>⚠ Eksik</div>
+            <div className="mt-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400" title={r.missingFields.length ? `Missing: ${r.missingFields.join(", ")}` : "Missing or invalid info"}>⚠ Missing</div>
           )}
         </div>
       );
-      case "contractor": return isEditing ? inp("contractor") : <span className="font-medium">{r.contractor}{r.status === "rejected" && r.rejectionReason && <div className="mt-1 rounded bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300"><span className="font-semibold">Rejection:</span> {r.rejectionReason}</div>}</span>;
+      case "contractor": return isEditing ? inp("contractor") : (
+        <span
+          className="font-medium cursor-pointer"
+          onMouseEnter={() => showPreviewOnHover(r.id)}
+          onMouseLeave={hidePreviewOnHover}
+          onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
+          title="Hover to preview, double-click to open in new tab"
+        >
+          {r.contractor}{r.status === "rejected" && r.rejectionReason && <div className="mt-1 rounded bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300"><span className="font-semibold">Rejection:</span> {r.rejectionReason}</div>}
+        </span>
+      );
       case "submittedBy": return isEditing && currentRole === "admin" ? <select value={editDraft?.submitterUserId ?? ""} onChange={e => onChangeDraft("submitterUserId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">—</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <SubmitterBadge name={r.submittedBy} />;
       case "companyName": return isEditing ? inp("companyName") : r.companyName;
       case "submissionDate": return r.submissionDate;
@@ -1078,7 +1129,12 @@ export function FreelancerBoard({
 
       {(previewUrl || previewHtml || previewLoading) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closePreview}>
-          <div className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900" onClick={e => e.stopPropagation()}>
+          <div
+            className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
+            onClick={e => e.stopPropagation()}
+            onMouseEnter={cancelHidePreview}
+            onMouseLeave={hidePreviewOnHover}
+          >
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-800 truncate dark:text-white">{previewName || (previewLoading ? "Loading..." : "")}</h3>
               <div className="flex items-center gap-2">
