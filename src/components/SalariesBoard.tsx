@@ -464,15 +464,20 @@ export function SalariesBoard({
     }
   }, [mutate]);
 
-  const handleReject = useCallback(async (id: string) => {
-    const reason = window.prompt("Rejection reason (optional):");
-    if (reason === null) return;
+  const [rejectModalId, setRejectModalId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const handleReject = useCallback(async (id: string, reason: string) => {
+    if (!reason?.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
     setRejectingId(id);
     try {
       const res = await fetch(`/api/salaries/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "set_needs_review", rejection_reason: reason?.trim() || null }),
+        body: JSON.stringify({ action: "set_needs_review", rejection_reason: reason.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to reject");
@@ -482,8 +487,19 @@ export function SalariesBoard({
       toast.error((e as Error).message);
     } finally {
       setRejectingId(null);
+      setRejectModalId(null);
+      setRejectReason("");
     }
   }, [mutate]);
+
+  const openRejectModal = useCallback((id: string) => {
+    setRejectModalId(id);
+    setRejectReason("");
+  }, []);
+
+  const submitReject = useCallback(() => {
+    if (rejectModalId) handleReject(rejectModalId, rejectReason);
+  }, [rejectModalId, rejectReason, handleReject]);
 
   const onToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -799,14 +815,18 @@ export function SalariesBoard({
                   <table className="w-full min-w-[800px] text-sm">
                     <thead>
                       <tr className="border-b-2 border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/80">
-                        {canEdit && (
-                          <th className="w-10 px-2 py-3">
-                            <input
-                              type="checkbox"
-                              checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
-                              onChange={(e) => onToggleAll(rows.map((r) => r.id), e.target.checked)}
-                              className="h-4 w-4 rounded border-2 border-gray-400 text-indigo-600 accent-indigo-600"
-                            />
+                        {(canEdit || canMarkPaid) && (
+                          <th className="w-20 px-2 py-3">
+                            <div className="flex items-center gap-1">
+                              {canEdit && (
+                                <input
+                                  type="checkbox"
+                                  checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+                                  onChange={(e) => onToggleAll(rows.map((r) => r.id), e.target.checked)}
+                                  className="h-4 w-4 rounded border-2 border-gray-400 text-indigo-600 accent-indigo-600"
+                                />
+                              )}
+                            </div>
                           </th>
                         )}
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">Employee</th>
@@ -831,14 +851,41 @@ export function SalariesBoard({
                           onClick={(e) => handleRowClick(s, e)}
                           onDoubleClick={() => handleRowDoubleClick(s)}
                         >
-                          {canEdit && (
+                          {(canEdit || canMarkPaid) && (
                             <td className="whitespace-nowrap px-2 py-3" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(s.id)}
-                                onChange={() => onToggleSelect(s.id)}
-                                className="h-4 w-4 rounded border-2 border-gray-400 text-indigo-600 accent-indigo-600"
-                              />
+                              <div className="flex items-center gap-1">
+                                {canEdit && (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIds.has(s.id)}
+                                    onChange={() => onToggleSelect(s.id)}
+                                    className="h-4 w-4 rounded border-2 border-gray-400 text-indigo-600 accent-indigo-600"
+                                  />
+                                )}
+                                {canMarkPaid && s.status !== "paid" && (
+                                  <>
+                                    <button
+                                      onClick={() => handleMarkPaid(s.id)}
+                                      disabled={markingPaidId === s.id || !s.net_pay}
+                                      title={s.net_pay ? `Net Pay: ${fmtCurrency(s.net_pay)} — Click to mark paid` : "Mark as paid"}
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                                    >
+                                      {markingPaidId === s.id ? "…" : "£"}
+                                    </button>
+                                    <button
+                                      onClick={() => openRejectModal(s.id)}
+                                      disabled={rejectingId === s.id}
+                                      title="Reject (reason required)"
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow-sm hover:bg-red-600 disabled:opacity-50 transition-colors"
+                                    >
+                                      {rejectingId === s.id ? "…" : "✗"}
+                                    </button>
+                                  </>
+                                )}
+                                {canMarkPaid && s.status === "paid" && (
+                                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xs font-bold" title="Paid">✓</span>
+                                )}
+                              </div>
                             </td>
                           )}
                           <td className="whitespace-nowrap px-4 py-3">
@@ -902,26 +949,6 @@ export function SalariesBoard({
                                   {reExtractingId === s.id ? "..." : "Re-extract"}
                                 </button>
                               )}
-                              {canMarkPaid && s.status !== "paid" && (
-                                <button
-                                  onClick={() => handleMarkPaid(s.id)}
-                                  disabled={markingPaidId === s.id || !s.net_pay}
-                                  className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                                  title="Mark as paid (GBP)"
-                                >
-                                  {markingPaidId === s.id ? "..." : s.net_pay ? `${fmtCurrency(s.net_pay)} Pay` : "£ Mark Paid"}
-                                </button>
-                              )}
-                              {canMarkPaid && s.status !== "paid" && (
-                                <button
-                                  onClick={() => handleReject(s.id)}
-                                  disabled={rejectingId === s.id}
-                                  className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
-                                  title="Reject payment"
-                                >
-                                  {rejectingId === s.id ? "..." : "✗"} Reject
-                                </button>
-                              )}
                               {canEdit && (
                                 <button
                                   onClick={() => handleDelete(s.id)}
@@ -975,6 +1002,41 @@ export function SalariesBoard({
           onClose={() => setShowEditModal(null)}
           saving={savingEdit}
         />
+      )}
+
+      {rejectModalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRejectModalId(null)}>
+          <div
+            className="mx-4 w-full max-w-md rounded-xl border-2 border-gray-300 bg-white p-6 shadow-xl dark:border-gray-600 dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Reject Payment</h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">Rejection reason is required.</p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Enter rejection reason..."
+              rows={3}
+              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-red-500 focus:ring-1 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setRejectModalId(null); setRejectReason(""); }}
+                className="rounded-lg border-2 border-gray-400 px-4 py-2 font-medium text-gray-800 hover:bg-gray-100 dark:border-gray-500 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitReject}
+                disabled={!rejectReason.trim() || rejectingId === rejectModalId}
+                className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {rejectingId === rejectModalId ? "Rejecting..." : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {auditSalaryId && (
