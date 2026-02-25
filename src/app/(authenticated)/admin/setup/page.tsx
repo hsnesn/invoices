@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { DepartmentManagersSection } from "@/components/DepartmentManagersSection";
 import { EmailSetupSection } from "@/components/EmailSetupSection";
+import { ContractorTemplatesSection } from "@/components/ContractorTemplatesSection";
 
 interface Department {
   id: string;
@@ -624,6 +625,7 @@ function FreelancerSetup() {
 
   return (
     <div className="space-y-6">
+      <ContractorTemplatesSection />
       <div className="flex justify-end">
         <button type="button" onClick={restoreDefaults} disabled={loading} className="rounded-lg border border-teal-500/50 bg-teal-500/10 px-4 py-2 text-sm text-teal-700 hover:bg-teal-500/20 dark:text-teal-200 disabled:opacity-50">
           Restore defaults

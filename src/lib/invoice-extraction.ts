@@ -231,11 +231,50 @@ async function fetchFileBuffer(storagePath: string): Promise<Buffer> {
   return Buffer.from(await data.arrayBuffer());
 }
 
+function normalizeForMatch(s: string | null | undefined): string {
+  if (!s?.trim()) return "";
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\w\s]/g, "");
+}
+
+type ContractorTemplate = {
+  name: string;
+  name_aliases?: string[] | null;
+  account_number?: string | null;
+  sort_code?: string | null;
+  beneficiary_name?: string | null;
+  company_name?: string | null;
+};
+
+function findMatchingTemplate(
+  templates: ContractorTemplate[],
+  namesToMatch: (string | null | undefined)[],
+  documentText?: string
+): ContractorTemplate | null {
+  const normalized = namesToMatch.filter(Boolean).map((n) => normalizeForMatch(n!));
+  const docNorm = documentText ? normalizeForMatch(documentText) : "";
+  for (const t of templates) {
+    const templateNames = [t.name, ...(t.name_aliases ?? [])].filter(Boolean);
+    for (const tn of templateNames) {
+      const tnNorm = normalizeForMatch(tn);
+      if (!tnNorm || tnNorm.length < 3) continue;
+      for (const n of normalized) {
+        if (n && (n.includes(tnNorm) || tnNorm.includes(n))) return t;
+      }
+      if (docNorm && docNorm.includes(tnNorm)) return t;
+    }
+  }
+  return null;
+}
+
 export async function runInvoiceExtraction(invoiceId: string, actorUserId: string | null) {
   const supabase = createAdminClient();
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("storage_path")
+    .select("storage_path, invoice_type")
     .eq("id", invoiceId)
     .single();
 
@@ -365,6 +404,21 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
           : "Extraction failed";
       parsed = regexParsed;
     }
+  }
+
+  const { data: templates } = await supabase.from("contractor_templates").select("name, name_aliases, account_number, sort_code, beneficiary_name, company_name");
+  let contractorFromDb: string | null = null;
+  if ((invoice as { invoice_type?: string })?.invoice_type === "freelancer") {
+    const { data: fl } = await supabase.from("freelancer_invoice_fields").select("contractor_name").eq("invoice_id", invoiceId).single();
+    contractorFromDb = (fl as { contractor_name?: string } | null)?.contractor_name ?? null;
+  }
+  const namesToMatch = [parsed.beneficiary_name, parsed.company_name, contractorFromDb];
+  const matched = templates?.length ? findMatchingTemplate(templates as ContractorTemplate[], namesToMatch, text) : null;
+  if (matched) {
+    if (matched.account_number) parsed.account_number = matched.account_number;
+    if (matched.sort_code) parsed.sort_code = matched.sort_code;
+    if (matched.beneficiary_name) parsed.beneficiary_name = matched.beneficiary_name;
+    if (matched.company_name) parsed.company_name = matched.company_name;
   }
 
   if (parsed.beneficiary_name) {
