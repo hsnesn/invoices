@@ -393,14 +393,18 @@ function parsePayslipTextFallback(text: string): Partial<ExtractedSalaryFields> 
   const result: Partial<ExtractedSalaryFields> = {};
   const t = text.replace(/\r\n/g, "\n");
 
-  const nameMatch = t.match(/((?:Mr\.|Mrs\.|Ms\.|Dr\.)\s*[A-Z][A-Za-z\s]+?)(?=\d{2}\/\d{2}\/\d{4}|\n|$)/);
+  const nameMatch = t.match(/((?:Mr\.|Mrs\.|Ms\.|Dr\.)\s*[A-Z][A-Za-z\s\-']+?)(?=\d{2}\/\d{2}\/\d{4}|\n|$)/);
   if (nameMatch) {
     const full = (nameMatch[1] ?? "").replace(/\s+/g, " ").trim();
     if (full.length > 3) result.employee_name = full;
   }
   if (!result.employee_name) {
-    const alt = t.match(/(?:Employee Name|Name)\s*\n?\s*(?:Mr\.|Mrs\.|Ms\.|Dr\.)?\s*([A-Z][A-Za-z\s]+?)(?:\n|$)/i);
+    const alt = t.match(/(?:Employee Name|Name)\s*\n?\s*(?:Mr\.|Mrs\.|Ms\.|Dr\.)?\s*([A-Z][A-Za-z\s\-']+?)(?:\n|$)/i);
     if (alt?.[1]) result.employee_name = alt[1].trim();
+  }
+  if (!result.employee_name) {
+    const lineMatch = t.match(/(?:Ref\.\s*)?Employee Name\s+[^\n]*\n[^\n]*\n\d+\s+((?:Mr\.|Mrs\.|Ms\.|Dr\.)\s*[A-Z][A-Za-z\s\-']+?)\s+\d{2}\/\d{2}\/\d{4}/i);
+    if (lineMatch?.[1]) result.employee_name = lineMatch[1].replace(/\s+/g, " ").trim();
   }
 
   const dateMatch = t.match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -439,19 +443,29 @@ function parsePayslipTextFallback(text: string): Partial<ExtractedSalaryFields> 
   return result;
 }
 
+function normalizeNameForMatch(name: string): string {
+  return name
+    .replace(/\b(Mr|Mrs|Ms|Dr)\.?\s*/gi, "")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function matchEmployeeByName(
   extractedName: string,
   employees: { id: string; full_name: string | null; bank_account_number?: string | null; sort_code?: string | null; ni_number?: string | null }[]
 ): (typeof employees)[number] | null {
-  const extractedNorm = extractedName.replace(/\b(Mr|Mrs|Ms|Dr)\.?\s*/gi, "").trim().toLowerCase();
+  const extractedNorm = normalizeNameForMatch(extractedName);
   let matched: (typeof employees)[number] | null = null;
   for (const emp of employees) {
-    const dbNorm = (emp.full_name ?? "").trim().toLowerCase();
+    const dbNorm = normalizeNameForMatch(emp.full_name ?? "");
+    if (!dbNorm) continue;
     if (dbNorm === extractedNorm || extractedNorm.includes(dbNorm) || dbNorm.includes(extractedNorm)) {
       return emp;
     }
-    const sim = simpleSimilarity(extractedNorm, dbNorm);
-    if (sim >= 0.5 && (!matched || sim > simpleSimilarity(extractedNorm, (matched.full_name ?? "").toLowerCase()))) {
+    const sim = simpleSimilarity(extractedNorm.replace(/-/g, " "), dbNorm.replace(/-/g, " "));
+    if (sim >= 0.5 && (!matched || sim > simpleSimilarity(extractedNorm.replace(/-/g, " "), normalizeNameForMatch(matched.full_name ?? "").replace(/-/g, " ")))) {
       matched = emp;
     }
   }
