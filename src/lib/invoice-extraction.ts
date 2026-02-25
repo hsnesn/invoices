@@ -48,6 +48,17 @@ function getOpenAIClient() {
   return new OpenAI({ apiKey });
 }
 
+function looksLikeDate(s: string | null | undefined): boolean {
+  if (!s?.trim()) return false;
+  const v = s.trim();
+  return /^\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}$/.test(v) || /^\d{1,2}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(v) || /^\d{6,8}$/.test(v);
+}
+
+function looksLikeName(s: string | null | undefined): boolean {
+  if (!s?.trim()) return false;
+  return /[A-Za-z]{2,}/.test(s.trim());
+}
+
 function stripInternalRefs(s: string | null | undefined): string | null {
   if (!s?.trim()) return null;
   const v = s.trim().replace(/\bTRT\s*World\b/gi, "").replace(/\bTRTWORLD\b/gi, "").replace(/\bTRT\s*WORLD\b/gi, "").replace(/\bTRT\b/g, "").trim();
@@ -181,7 +192,11 @@ CRITICAL RULES - extract exactly as shown in the document:
 - invoice_number: Copy the exact invoice/reference number as printed (letters, numbers, slashes, hyphens). Do not invent or modify.
 - sort_code: UK format only - exactly 6 digits, no spaces or dashes (e.g. 123456). Extract from "Sort Code" or equivalent field.
 - account_number: Exactly as shown - typically 8 digits for UK, no spaces. Extract from "Account Number" or equivalent.
-- beneficiary_name: The payee/beneficiary name - the person or company TO RECEIVE payment. NOT the payer. Extract exactly as written.
+- beneficiary_name: MUST be a person or company name - the payee TO RECEIVE payment. NEVER use a date, number, or non-name value.
+  * If a company exists: use the company name.
+  * If only a person (individual): use the person's full name.
+  * If both company and person: use the company name as primary beneficiary.
+  * REJECT: dates (e.g. 2024-01-15), numbers, invoice references. Use null if no valid name found.
 
 STRICT EXCLUSIONS - NEVER include in any field:
 - Do NOT include "TRT", "TRT World", "TRTWORLD", "TRT WORLD" or any variant in beneficiary_name, invoice_number, or any extracted field.
@@ -269,7 +284,11 @@ Other rules:
     }
   }
 
-  if (parsed.beneficiary_name) parsed.beneficiary_name = stripInternalRefs(parsed.beneficiary_name) ?? undefined;
+  if (parsed.beneficiary_name) {
+    parsed.beneficiary_name = stripInternalRefs(parsed.beneficiary_name) ?? undefined;
+    if (parsed.beneficiary_name && (looksLikeDate(parsed.beneficiary_name) || !looksLikeName(parsed.beneficiary_name)))
+      parsed.beneficiary_name = undefined;
+  }
   if (parsed.invoice_number) parsed.invoice_number = stripInternalRefs(parsed.invoice_number) ?? undefined;
 
   const sortCode = parsed.sort_code ? normalizeSortCode(parsed.sort_code) : null;
