@@ -108,7 +108,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Excel file has no sheets" }, { status: 400 });
     }
     const ws = wb.Sheets[firstSheet];
-    // Skip title (row 1) and section header (row 2), use row 3 as column headers (0-indexed range: 2)
+    const sectionCell = (ws["A2"] as { v?: string } | undefined)?.v ?? "";
+    const initialSection =
+      /no payment (needed|required)/i.test(String(sectionCell))
+        ? "unpaid_guest"
+        : "paid_guest";
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { range: 2 });
 
     if (rows.length === 0) {
@@ -137,7 +141,7 @@ export async function POST(request: NextRequest) {
     const created: string[] = [];
     const errors: string[] = [];
 
-    let currentSectionPaymentType = "paid_guest";
+    let currentSectionPaymentType = initialSection;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -148,7 +152,12 @@ export async function POST(request: NextRequest) {
         currentSectionPaymentType = "paid_guest";
         continue;
       }
-      if (firstCell === "No Payment Needed" || firstCell === "no payment needed") {
+      if (
+        firstCell === "No Payment Needed" ||
+        firstCell === "no payment needed" ||
+        firstCell === "No Payment Required" ||
+        firstCell === "no payment required"
+      ) {
         currentSectionPaymentType = "unpaid_guest";
         continue;
       }
