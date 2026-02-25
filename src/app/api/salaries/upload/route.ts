@@ -3,7 +3,20 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { runSalaryExtraction } from "@/lib/salary-extraction";
-import stringSimilarity from "string-similarity";
+
+function simpleSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const sa = a.toLowerCase();
+  const sb = b.toLowerCase();
+  if (sa === sb) return 1;
+  const wordsA = sa.split(/\s+/).filter((w) => w.length > 1);
+  const wordsB = new Set(sb.split(/\s+/));
+  let matches = 0;
+  for (let i = 0; i < wordsA.length; i++) {
+    if (wordsB.has(wordsA[i])) matches++;
+  }
+  return wordsA.length + wordsB.size > 0 ? (2 * matches) / (wordsA.length + wordsB.size) : 0;
+}
 
 const BUCKET = "invoices";
 const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
@@ -137,8 +150,8 @@ export async function POST(request: NextRequest) {
           matched = emp;
           break;
         }
-        const sim = stringSimilarity.compareTwoStrings(extractedNorm, dbNorm);
-        if (sim >= 0.75 && (!matched || sim > stringSimilarity.compareTwoStrings(extractedNorm, (matched.full_name ?? "").toLowerCase()))) {
+        const sim = simpleSimilarity(extractedNorm, dbNorm);
+        if (sim >= 0.5 && (!matched || sim > simpleSimilarity(extractedNorm, (matched.full_name ?? "").toLowerCase()))) {
           matched = emp;
         }
       }
