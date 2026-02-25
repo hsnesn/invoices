@@ -160,6 +160,201 @@ function daysSince(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function EditGuestInvoiceModal({
+  row,
+  departmentPairs,
+  programPairs,
+  profilePairs,
+  managerProfilePairs,
+  onSave,
+  onClose,
+  saving,
+  onReplaceFile,
+  openPdf,
+}: {
+  row: DisplayRow;
+  departmentPairs: [string, string][];
+  programPairs: [string, string][];
+  profilePairs: [string, string][];
+  managerProfilePairs?: [string, string][];
+  onSave: (draft: EditDraft, file?: File) => Promise<void>;
+  onClose: () => void;
+  saving: boolean;
+  onReplaceFile: (id: string, file: File) => Promise<void>;
+  openPdf: (id: string) => Promise<void>;
+}) {
+  const [guest, setGuest] = useState(row.guest === "—" ? "" : row.guest);
+  const [title, setTitle] = useState(row.title === "—" ? "" : row.title);
+  const [producer, setProducer] = useState(row.producer === "—" ? "" : row.producer);
+  const [paymentType, setPaymentType] = useState(row.paymentType === "—" ? "paid guest" : row.paymentType);
+  const [departmentId, setDepartmentId] = useState(row.departmentId);
+  const [programmeId, setProgrammeId] = useState(row.programmeId);
+  const [topic, setTopic] = useState(row.topic === "—" ? "" : row.topic);
+  const [tx1, setTx1] = useState(row.tx1 === "—" ? "" : row.tx1);
+  const [tx2, setTx2] = useState(row.tx2 === "—" ? "" : row.tx2);
+  const [tx3, setTx3] = useState(row.tx3 === "—" ? "" : row.tx3);
+  const [invoiceDate, setInvoiceDate] = useState(row.invoiceDate === "—" ? "" : row.invoiceDate);
+  const [accountName, setAccountName] = useState(row.accountName === "—" ? "" : row.accountName);
+  const [amount, setAmount] = useState(row.amount === "—" ? "" : row.amount);
+  const [invNumber, setInvNumber] = useState(row.invNumber === "—" ? "" : row.invNumber);
+  const [sortCode, setSortCode] = useState(row.sortCode === "—" ? "" : row.sortCode);
+  const [accountNumber, setAccountNumber] = useState(row.accountNumber === "—" ? "" : row.accountNumber);
+  const [lineManagerId, setLineManagerId] = useState(row.lineManagerId);
+  const [replaceFile, setReplaceFile] = useState<File | null>(null);
+
+  const draft: EditDraft = {
+    guest,
+    title,
+    producer,
+    paymentType,
+    departmentId,
+    programmeId,
+    topic,
+    tx1,
+    tx2,
+    tx3,
+    invoiceDate,
+    accountName,
+    amount,
+    invNumber,
+    sortCode,
+    accountNumber,
+    lineManagerId,
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave(draft, replaceFile ?? undefined);
+  };
+
+  const isRejected = row.status === "rejected";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Invoice</h2>
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Guest Name</label>
+              <input type="text" value={guest} onChange={(e) => setGuest(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Producer</label>
+              <input type="text" value={producer} onChange={(e) => setProducer(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Type</label>
+              <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="paid guest">Paid Guest</option>
+                <option value="unpaid guest">Unpaid Guest</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Department</label>
+              <select value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setProgrammeId(""); }} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="">Select...</option>
+                {departmentPairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Programme</label>
+              <select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="">Select...</option>
+                {programPairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Topic</label>
+            <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">TX Date</label>
+              <input type="date" value={tx1} onChange={(e) => setTx1(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">2. TX Date</label>
+              <input type="date" value={tx2} onChange={(e) => setTx2(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">3. TX Date</label>
+              <input type="date" value={tx3} onChange={(e) => setTx3(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Invoice Date</label>
+              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Name</label>
+              <input type="text" value={accountName} onChange={(e) => setAccountName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+              <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">INV Number</label>
+              <input type="text" value={invNumber} onChange={(e) => setInvNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Line Manager</label>
+              <select value={lineManagerId} onChange={(e) => setLineManagerId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="">Unassigned</option>
+                {(managerProfilePairs ?? profilePairs).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Code</label>
+              <input type="text" value={sortCode} onChange={(e) => setSortCode(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Number</label>
+              <input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Invoice File</label>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => void openPdf(row.id)} className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4zM6 10h8v2H6v-2zm0 4h5v2H6v-2z"/></svg>
+                Open
+              </button>
+              <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-800/40">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                Replace
+                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" onChange={(e) => { const f = e.target.files?.[0]; if (f) setReplaceFile(f); e.target.value = ""; }} />
+              </label>
+              {replaceFile && <span className="text-sm text-gray-600 dark:text-gray-400">{replaceFile.name}</span>}
+            </div>
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+              {saving ? (isRejected ? "Resubmitting..." : "Saving...") : (isRejected ? "Resubmit" : "Save")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 type EditDraft = {
   guest: string;
   title: string;
@@ -289,12 +484,7 @@ function InvoiceTable({
   showPreviewOnHover,
   hidePreviewOnHover,
   openPdfInNewTab,
-  editingId,
-  editDraft,
   onStartEdit,
-  onCancelEdit,
-  onChangeDraft,
-  onSaveEdit,
   actionLoadingId,
   visibleColumns,
   expandedRowId,
@@ -333,12 +523,7 @@ function InvoiceTable({
   showPreviewOnHover: (id: string) => void;
   hidePreviewOnHover: () => void;
   openPdfInNewTab: (id: string) => void;
-  editingId: string | null;
-  editDraft: EditDraft | null;
   onStartEdit: (row: DisplayRow) => void;
-  onCancelEdit: () => void;
-  onChangeDraft: (key: keyof EditDraft, value: string) => void;
-  onSaveEdit: (id: string) => Promise<void>;
   actionLoadingId: string | null;
   visibleColumns: string[];
   expandedRowId: string | null;
@@ -413,11 +598,10 @@ function InvoiceTable({
               const isDuplicate = duplicates.has(r.id);
               const pendingDays = (r.status === "pending_manager" || r.status === "submitted") ? daysSince(r.createdAt) : 0;
               const canEditRow = currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status));
-              const editableTdClass = canEditRow && editingId !== r.id ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
-              const startEditOnDblClick = (e: React.MouseEvent) => { if (canEditRow && editingId !== r.id) { e.stopPropagation(); e.preventDefault(); handleRowDblClick(); onStartEdit(r); } };
+              const startEditOnDblClick = (e: React.MouseEvent) => { handleRowDblClick(); if (canEditRow) { e.stopPropagation(); e.preventDefault(); onStartEdit(r); } };
               return (
               <React.Fragment key={r.id}>
-              <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : editingId === r.id ? "bg-blue-50 dark:bg-blue-950/30 ring-2 ring-blue-400 ring-inset" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => { if (editingId !== r.id) handleRowClick(r.id); }} onDoubleClick={handleRowDblClick}>
+              <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={startEditOnDblClick}>
               {isCol("checkbox") && currentRole === "admin" && (
               <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                 <input
@@ -516,39 +700,35 @@ function InvoiceTable({
               </td>
               )}
               {isCol("guest") && (
-              <td className={`px-4 py-3 text-sm font-medium text-gray-900${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>
-                {editingId === r.id ? (
-                  <input autoFocus value={editDraft?.guest ?? ""} onChange={(e) => onChangeDraft("guest", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" />
-                ) : (
-                  <div>
-                    <span
-                      className="cursor-pointer"
-                      onMouseEnter={() => showPreviewOnHover(r.id)}
-                      onMouseLeave={hidePreviewOnHover}
-                      onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
-                      title="Hover to preview, double-click to open in new tab"
-                    >
-                      {r.guest}
-                    </span>
-                    {r.status === "rejected" && r.rejectionReason && (
-                      <div className="mt-1 rounded-lg bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300">
-                        <span className="font-semibold">Rejection reason:</span> {r.rejectionReason}
-                      </div>
-                    )}
-                  </div>
-                )}
+              <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                <div>
+                  <span
+                    className="cursor-pointer"
+                    onMouseEnter={() => showPreviewOnHover(r.id)}
+                    onMouseLeave={hidePreviewOnHover}
+                    onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
+                    title="Hover to preview, double-click to open in new tab"
+                  >
+                    {r.guest}
+                  </span>
+                  {r.status === "rejected" && r.rejectionReason && (
+                    <div className="mt-1 rounded-lg bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300">
+                      <span className="font-semibold">Rejection reason:</span> {r.rejectionReason}
+                    </div>
+                  )}
+                </div>
               </td>
               )}
-              {isCol("title") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.title ?? ""} onChange={(e) => onChangeDraft("title", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.title}</td>}
-              {isCol("producer") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.producer ?? ""} onChange={(e) => onChangeDraft("producer", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : <div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColor(r.producer)}`}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div>}</td>}
-              {isCol("paymentType") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.paymentType ?? "paid guest"} onChange={(e) => onChangeDraft("paymentType", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"><option value="paid guest">Paid Guest</option><option value="unpaid guest">Unpaid Guest</option></select> : <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span>}</td>}
-              {isCol("department") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.departmentId ?? ""} onChange={(e) => { onChangeDraft("departmentId", e.target.value); onChangeDraft("programmeId", ""); }} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>}</td>}
-              {isCol("programme") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.programmeId ?? ""} onChange={(e) => onChangeDraft("programmeId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{programPairs.filter(([, ]) => true).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={programmeBadgeStyle(r.programme)}>{r.programme}</span>}</td>}
-              {isCol("topic") && <td className={`max-w-[220px] truncate px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.topic ?? ""} onChange={(e) => onChangeDraft("topic", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.topic}</td>}
-              {isCol("tx1") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx1 ?? ""} onChange={(e) => onChangeDraft("tx1", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx1}</td>}
-              {isCol("tx2") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx2 ?? ""} onChange={(e) => onChangeDraft("tx2", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx2}</td>}
-              {isCol("tx3") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx3 ?? ""} onChange={(e) => onChangeDraft("tx3", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx3}</td>}
-              {isCol("invoiceDate") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.invoiceDate ?? ""} onChange={(e) => onChangeDraft("invoiceDate", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.invoiceDate}</td>}
+              {isCol("title") && <td className="px-4 py-3 text-sm text-gray-700">{r.title}</td>}
+              {isCol("producer") && <td className="px-4 py-3 text-sm text-gray-700"><div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColor(r.producer)}`}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div></td>}
+              {isCol("paymentType") && <td className="px-4 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span></td>}
+              {isCol("department") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span></td>}
+              {isCol("programme") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={programmeBadgeStyle(r.programme)}>{r.programme}</span></td>}
+              {isCol("topic") && <td className="max-w-[220px] truncate px-4 py-3 text-sm text-gray-700">{r.topic}</td>}
+              {isCol("tx1") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx1}</td>}
+              {isCol("tx2") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx2}</td>}
+              {isCol("tx3") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx3}</td>}
+              {isCol("invoiceDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.invoiceDate}</td>}
               {isCol("file") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1">
                 <button onClick={() => void openPdf(r.id)} className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"><svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4zM6 10h8v2H6v-2zm0 4h5v2H6v-2z"/></svg>Open</button>
@@ -560,30 +740,18 @@ function InvoiceTable({
                 )}
                 </div>
               </td>}
-              {isCol("accountName") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.accountName ?? ""} onChange={(e) => onChangeDraft("accountName", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.accountName}</td>}
-              {isCol("amount") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.amount ?? ""} onChange={(e) => onChangeDraft("amount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.amount}</td>}
-              {isCol("invNumber") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.invNumber ?? ""} onChange={(e) => onChangeDraft("invNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.invNumber}</td>}
-              {isCol("sortCode") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.sortCode ?? ""} onChange={(e) => onChangeDraft("sortCode", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.sortCode}</td>}
-              {isCol("accountNumber") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.accountNumber ?? ""} onChange={(e) => onChangeDraft("accountNumber", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.accountNumber}</td>}
-              {isCol("lineManager") && <td className={`px-4 py-3 text-sm text-gray-600${currentRole === "admin" ? editableTdClass : ""}`} onDoubleClick={currentRole === "admin" && editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id && currentRole === "admin" ? <select value={editDraft?.lineManagerId ?? ""} onChange={(e) => onChangeDraft("lineManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{(managerProfilePairs ?? profilePairs).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : r.lineManager}</td>}
+              {isCol("accountName") && <td className="px-4 py-3 text-sm text-gray-700">{r.accountName}</td>}
+              {isCol("amount") && <td className="px-4 py-3 text-sm text-gray-700">{r.amount}</td>}
+              {isCol("invNumber") && <td className="px-4 py-3 text-sm text-gray-700">{r.invNumber}</td>}
+              {isCol("sortCode") && <td className="px-4 py-3 text-sm text-gray-700">{r.sortCode}</td>}
+              {isCol("accountNumber") && <td className="px-4 py-3 text-sm text-gray-700">{r.accountNumber}</td>}
+              {isCol("lineManager") && <td className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>}
               {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
               {isCol("actions") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 {(() => {
                   const submitterCanEdit = isSubmitter && (r.status === "pending_manager" || r.status === "submitted");
                   const submitterCanResubmit = isSubmitter && r.status === "rejected" && currentRole !== "viewer";
                   const managerOrAdmin = currentRole === "manager" || currentRole === "admin";
-
-                  if (editingId === r.id) {
-                    return (
-                      <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-                          <svg className="h-3.5 w-3.5 animate-pulse" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
-                          Editing
-                        </span>
-                        <button onClick={onCancelEdit} className="rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300" title="Discard changes (Esc)">✕</button>
-                      </div>
-                    );
-                  }
 
                   if (managerOrAdmin) {
                     const inPaymentStage = ["ready_for_payment", "approved_by_manager", "pending_admin"].includes(r.status);
@@ -826,8 +994,7 @@ export function InvoicesBoard({
   const [sortField, setSortField] = useState<"" | "guest" | "invoiceDate" | "amount" | "producer" | "programme">("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [editModalRow, setEditModalRow] = useState<DisplayRow | null>(null);
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -1680,122 +1847,74 @@ export function InvoicesBoard({
     XLSX.writeFile(wb, `invoices-${new Date().toISOString().split("T")[0]}.xlsx`);
   }, []);
 
-  const editingIdRef = useRef<string | null>(null);
-  const editDraftRef = useRef<EditDraft | null>(null);
-  editingIdRef.current = editingId;
-  editDraftRef.current = editDraft;
-
   const saveDraft = useCallback(async (invoiceId: string, draft: EditDraft) => {
-    try {
-      await fetch(`/api/invoices/${invoiceId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guest_name: draft.guest,
-          title: draft.title,
-          producer: draft.producer,
-          payment_type: draft.paymentType.replace(/\s+/g, "_"),
-          department_id: draft.departmentId || null,
-          program_id: draft.programmeId || null,
-          topic: draft.topic,
-          invoice_date: draft.invoiceDate,
-          tx_date_1: draft.tx1,
-          tx_date_2: draft.tx2,
-          tx_date_3: draft.tx3,
-          beneficiary_name: draft.accountName,
-          gross_amount: draft.amount,
-          invoice_number: draft.invNumber,
-          sort_code: draft.sortCode,
-          account_number: draft.accountNumber,
-          extracted_currency: "GBP",
-          manager_user_id: draft.lineManagerId || null,
-        }),
-      });
-    } catch { /* silent */ }
-  }, []);
-
-  const finishEdit = useCallback(async () => {
-    const id = editingIdRef.current;
-    const draft = editDraftRef.current;
-    if (id && draft) {
-      setEditingId(null);
-      setEditDraft(null);
-      await saveDraft(id, draft);
-      window.location.reload();
-    } else {
-      setEditingId(null);
-      setEditDraft(null);
+    const res = await fetch(`/api/invoices/${invoiceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        guest_name: draft.guest,
+        title: draft.title,
+        producer: draft.producer,
+        payment_type: draft.paymentType.replace(/\s+/g, "_"),
+        department_id: draft.departmentId || null,
+        program_id: draft.programmeId || null,
+        topic: draft.topic,
+        invoice_date: draft.invoiceDate,
+        tx_date_1: draft.tx1,
+        tx_date_2: draft.tx2,
+        tx_date_3: draft.tx3,
+        beneficiary_name: draft.accountName,
+        gross_amount: draft.amount,
+        invoice_number: draft.invNumber,
+        sort_code: draft.sortCode,
+        account_number: draft.accountNumber,
+        extracted_currency: "GBP",
+        manager_user_id: draft.lineManagerId || null,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error ?? "Save failed");
     }
-  }, [saveDraft]);
+  }, []);
 
   const onStartEdit = useCallback((row: DisplayRow) => {
-    const prevId = editingIdRef.current;
-    const prevDraft = editDraftRef.current;
-    if (prevId && prevDraft && prevId !== row.id) {
-      void saveDraft(prevId, prevDraft);
-    }
-    setEditingId(row.id);
-    setEditDraft({
-      guest: row.guest === "—" ? "" : row.guest,
-      title: row.title === "—" ? "" : row.title,
-      producer: row.producer === "—" ? "" : row.producer,
-      paymentType: row.paymentType === "—" ? "paid guest" : row.paymentType,
-      departmentId: row.departmentId,
-      programmeId: row.programmeId,
-      topic: row.topic === "—" ? "" : row.topic,
-      tx1: row.tx1 === "—" ? "" : row.tx1,
-      tx2: row.tx2 === "—" ? "" : row.tx2,
-      tx3: row.tx3 === "—" ? "" : row.tx3,
-      invoiceDate: row.invoiceDate === "—" ? "" : row.invoiceDate,
-      accountName: row.accountName === "—" ? "" : row.accountName,
-      amount: row.amount === "—" ? "" : row.amount,
-      invNumber: row.invNumber === "—" ? "" : row.invNumber,
-      sortCode: row.sortCode === "—" ? "" : row.sortCode,
-      accountNumber: row.accountNumber === "—" ? "" : row.accountNumber,
-      lineManagerId: row.lineManagerId,
-    });
-  }, [saveDraft]);
-
-  const onCancelEdit = useCallback(() => {
-    setEditingId(null);
-    setEditDraft(null);
+    setEditModalRow(row);
   }, []);
 
-  const onChangeDraft = useCallback((key: keyof EditDraft, value: string) => {
-    setEditDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }, []);
-
-  const onSaveEdit = useCallback(async (invoiceId: string) => {
-    if (!editDraftRef.current) return;
-    setActionLoadingId(invoiceId);
+  const handleEditModalSave = useCallback(async (draft: EditDraft, file?: File) => {
+    if (!editModalRow) return;
+    setActionLoadingId(editModalRow.id);
     try {
-      await saveDraft(invoiceId, editDraftRef.current);
+      if (file) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const replaceRes = await fetch(`/api/invoices/${editModalRow.id}/replace-file`, { method: "POST", body: fd });
+        if (!replaceRes.ok) {
+          const data = await replaceRes.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error ?? "File replace failed");
+        }
+      }
+      await saveDraft(editModalRow.id, draft);
+      if (editModalRow.status === "rejected") {
+        const statusRes = await fetch(`/api/invoices/${editModalRow.id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to_status: "pending_manager" }),
+        });
+        if (!statusRes.ok) {
+          const data = await statusRes.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error ?? "Resubmit failed");
+        }
+      }
+      setEditModalRow(null);
       window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setActionLoadingId(null);
     }
-  }, [saveDraft]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && editingIdRef.current) {
-        onCancelEdit();
-      }
-    };
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!editingIdRef.current) return;
-      const target = e.target as HTMLElement;
-      const editingRow = document.querySelector(`[data-row-id="${editingIdRef.current}"]`);
-      if (editingRow && editingRow.contains(target)) return;
-      void finishEdit();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handleClickOutside, true);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handleClickOutside, true);
-    };
-  }, [onCancelEdit, finishEdit]);
+  }, [editModalRow, saveDraft]);
 
   useEffect(() => {
     let disposed = false;
@@ -2192,6 +2311,7 @@ export function InvoicesBoard({
                 onRejectInvoice={onRejectInvoice}
                 onResubmit={onResubmit}
                 onMarkPaid={onMarkPaid}
+                onStartEdit={onStartEdit}
                 openPdf={openPdf}
                 actionLoadingId={actionLoadingId}
               />
@@ -2216,12 +2336,7 @@ export function InvoicesBoard({
               showPreviewOnHover={showPreviewOnHover}
               hidePreviewOnHover={hidePreviewOnHover}
               openPdfInNewTab={openPdfInNewTab}
-              editingId={editingId}
-              editDraft={editDraft}
               onStartEdit={onStartEdit}
-              onCancelEdit={onCancelEdit}
-              onChangeDraft={onChangeDraft}
-              onSaveEdit={onSaveEdit}
               actionLoadingId={actionLoadingId}
               visibleColumns={currentRole === "admin" ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
               expandedRowId={expandedRowId}
@@ -2246,6 +2361,21 @@ export function InvoicesBoard({
           </section>
         );
       })}
+
+      {editModalRow && (
+        <EditGuestInvoiceModal
+          row={editModalRow}
+          departmentPairs={departmentPairs}
+          programPairs={programPairs}
+          profilePairs={profilePairs}
+          managerProfilePairs={managerProfilePairs}
+          onSave={handleEditModalSave}
+          onClose={() => setEditModalRow(null)}
+          saving={actionLoadingId === editModalRow.id}
+          onReplaceFile={onReplaceFile}
+          openPdf={openPdf}
+        />
+      )}
 
       {rejectModalId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -2280,7 +2410,11 @@ export function InvoicesBoard({
       )}
 
       {(previewUrl || previewHtml || previewLoading) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closePreview}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={closePreview}
+          onMouseEnter={cancelHidePreview}
+        >
           <div
             className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
             onClick={(e) => e.stopPropagation()}

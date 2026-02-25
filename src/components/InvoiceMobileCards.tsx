@@ -9,7 +9,9 @@ type DisplayRow = {
   producer: string;
   paymentType: string;
   department: string;
+  departmentId: string;
   programme: string;
+  programmeId: string;
   topic: string;
   tx1: string;
   tx2: string;
@@ -21,11 +23,15 @@ type DisplayRow = {
   sortCode: string;
   accountNumber: string;
   lineManager: string;
+  lineManagerId: string;
   paymentDate: string;
   status: string;
   rejectionReason: string;
   submitterId: string;
   createdAt: string;
+  group: "pending_line_manager" | "ready_for_payment" | "paid_invoices" | "no_payment_needed" | "rejected";
+  hasMissingInfo: boolean;
+  missingFields: string[];
 };
 
 function statusLabel(s: string): string {
@@ -47,6 +53,7 @@ export function InvoiceMobileCards({
   onRejectInvoice,
   onResubmit,
   onMarkPaid,
+  onStartEdit,
   openPdf,
   actionLoadingId,
 }: {
@@ -57,6 +64,7 @@ export function InvoiceMobileCards({
   onRejectInvoice: (id: string) => void;
   onResubmit: (id: string) => void;
   onMarkPaid: (id: string) => void;
+  onStartEdit?: (row: DisplayRow) => void;
   openPdf: (id: string) => void;
   actionLoadingId: string | null;
 }) {
@@ -91,6 +99,7 @@ export function InvoiceMobileCards({
           const canApprove = currentRole === "admin" || (!isSubmitter && currentRole === "manager");
           const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
           const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
+          const canEdit = (currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status))) && onStartEdit;
           const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
           return (
           <div
@@ -146,6 +155,14 @@ export function InvoiceMobileCards({
               )}
 
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                {canEdit && (
+                  <button
+                    onClick={() => onStartEdit?.(r)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                  >
+                    Edit
+                  </button>
+                )}
                 <button
                   onClick={() => void openPdf(r.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-sky-100 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"

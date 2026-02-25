@@ -1128,7 +1128,11 @@ export function FreelancerBoard({
       )}
 
       {(previewUrl || previewHtml || previewLoading) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closePreview}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={closePreview}
+          onMouseEnter={cancelHidePreview}
+        >
           <div
             className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
             onClick={e => e.stopPropagation()}
