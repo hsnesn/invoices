@@ -399,6 +399,86 @@ export async function sendAdminApprovedEmail(params: {
 }
 
 /* ------------------------------------------------------------------ */
+/* Salary payment confirmation                                         */
+/* ------------------------------------------------------------------ */
+
+export type SalaryForEmail = {
+  employee_name: string | null;
+  net_pay: number | null;
+  total_gross_pay: number | null;
+  paye_tax: number | null;
+  employee_ni: number | null;
+  employer_pension: number | null;
+  paid_date: string | null;
+  reference: string | null;
+  payment_month: string | null;
+};
+
+function fmtCurrency(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return `£${Number(v).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export async function sendSalaryPaymentConfirmationEmail(params: {
+  to: string;
+  salary: SalaryForEmail;
+  payslipBuffer?: Buffer | null;
+  payslipFilename?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const s = params.salary;
+  const month = s.payment_month ?? "Salary";
+  const subject = `${month} Salary Payment Confirmation`;
+
+  const rows = [
+    ["Employee", fmt(s.employee_name)],
+    ["Net Pay", fmtCurrency(s.net_pay)],
+    ["Gross Pay", fmtCurrency(s.total_gross_pay)],
+    ["Tax Deducted", fmtCurrency(s.paye_tax)],
+    ["NI Deducted", fmtCurrency(s.employee_ni)],
+    ["Employer Pension", fmtCurrency(s.employer_pension)],
+    ["Payment Date", fmt(s.paid_date)],
+    ["Reference", fmt(s.reference)],
+  ];
+  const tableRows = rows
+    .map(
+      ([label, val]) =>
+        `<tr><td style="padding:6px 12px;font-weight:600;color:#475569;width:40%">${label}</td><td style="padding:6px 12px;color:#1e293b">${val}</td></tr>`
+    )
+    .join("");
+  const detailsBlock = `<div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table style="width:100%;border-collapse:collapse;font-size:13px">${tableRows}</table>
+</div>`;
+
+  const html = wrap(
+    "Salary Payment Confirmation",
+    `
+    <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your salary payment has been processed successfully.</p>
+    ${detailsBlock}
+    <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Paid", "#d1fae5", "#065f46")}</p>
+  `
+  );
+
+  if (params.payslipBuffer && params.payslipBuffer.length > 0) {
+    const attachments = [
+      {
+        filename: params.payslipFilename ?? "payslip.pdf",
+        content: params.payslipBuffer,
+      },
+    ];
+    const result = await sendEmailWithAttachment({
+      to: params.to,
+      subject,
+      html,
+      attachments,
+    });
+    return { success: result.success, error: result.error as string | undefined };
+  }
+
+  const result = await sendEmail({ to: params.to, subject, html });
+  return { success: result.success, error: result.error as string | undefined };
+}
+
+/* ------------------------------------------------------------------ */
 /* Password reset                                                      */
 /* ------------------------------------------------------------------ */
 
