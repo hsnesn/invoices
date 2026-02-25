@@ -22,16 +22,16 @@ export function BulkMoveModal({
   }, [groups, search]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+        className="w-full max-w-md rounded-2xl border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-slate-800"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-600">
+        <div className="flex items-center justify-between border-b-2 border-gray-300 px-4 py-3 dark:border-slate-600">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white">Choose group</h3>
           <button
             onClick={onClose}
-            className="rounded-lg px-3 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700"
+            className="rounded-lg px-3 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-slate-700"
           >
             Back
           </button>
@@ -58,7 +58,7 @@ export function BulkMoveModal({
                 <button
                   key={g.key}
                   onClick={() => onSelect(g.key)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 dark:text-gray-200 dark:hover:bg-slate-700"
+                  className="flex w-full items-center gap-3 rounded-lg border-2 border-transparent px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:border-blue-400 hover:bg-blue-100 dark:text-gray-100 dark:hover:border-blue-500 dark:hover:bg-slate-700"
                 >
                   <span
                     className={`h-3 w-3 shrink-0 rounded-full ${!g.bgHex ? (g.color ?? "bg-gray-400") : ""}`}

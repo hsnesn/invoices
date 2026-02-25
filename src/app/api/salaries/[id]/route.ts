@@ -130,6 +130,60 @@ export async function PATCH(
       return NextResponse.json(updated ?? existing);
     }
 
+    if (action === "set_pending") {
+      if (!canEdit(profile.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const { error: updateError } = await supabase
+        .from("salaries")
+        .update({ status: "pending", paid_date: null, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+      await createSalaryAuditEvent({
+        salary_id: id,
+        actor_user_id: session.user.id,
+        event_type: "salary_status_changed",
+        from_status: existing.status,
+        to_status: "pending",
+        payload: {},
+      });
+      const { data: updated } = await supabase
+        .from("salaries")
+        .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
+        .eq("id", id)
+        .single();
+      return NextResponse.json(updated ?? existing);
+    }
+
+    if (action === "set_needs_review") {
+      if (!canEdit(profile.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const { error: updateError } = await supabase
+        .from("salaries")
+        .update({ status: "needs_review", paid_date: null, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+      await createSalaryAuditEvent({
+        salary_id: id,
+        actor_user_id: session.user.id,
+        event_type: "salary_status_changed",
+        from_status: existing.status,
+        to_status: "needs_review",
+        payload: {},
+      });
+      const { data: updated } = await supabase
+        .from("salaries")
+        .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
+        .eq("id", id)
+        .single();
+      return NextResponse.json(updated ?? existing);
+    }
+
     if (action === "mark_paid") {
       if (!canMarkPaid(profile.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

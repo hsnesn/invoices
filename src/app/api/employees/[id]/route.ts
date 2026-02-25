@@ -4,6 +4,33 @@ import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+/** DELETE /api/employees/[id] - Delete employee (admin, operations) */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { profile } = await requireAuth();
+    if (profile.role !== "admin" && profile.role !== "operations") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const supabase = createAdminClient();
+
+    const { error } = await supabase.from("employees").delete().eq("id", id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
+
 /** PATCH /api/employees/[id] - Update employee (admin, operations) */
 export async function PATCH(
   request: NextRequest,

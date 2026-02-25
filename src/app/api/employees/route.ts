@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         ni_number: (body.ni_number as string)?.trim() || null,
         bank_account_number: (body.bank_account_number as string)?.trim() || null,
         sort_code: (body.sort_code as string)?.trim() || null,
-        email_address: (body.email_address as string)?.trim() || "hasanesen@gmail.com",
+        email_address: (body.email_address as string)?.trim() || null,
         default_payment_method: body.default_payment_method || "bank_transfer",
         status: body.status || "active",
       })

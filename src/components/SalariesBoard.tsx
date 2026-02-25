@@ -4,6 +4,7 @@ import React, { useState, useCallback } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { EmptyState } from "./EmptyState";
+import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -37,10 +38,20 @@ type SalaryRow = {
 };
 
 const GROUPS = [
-  { key: "pending", label: "Pending", color: "border-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", textColor: "text-amber-700 dark:text-amber-400" },
-  { key: "needs_review", label: "Needs Review", color: "border-orange-500", headerBg: "bg-orange-50 dark:bg-orange-950/30", textColor: "text-orange-700 dark:text-orange-400" },
-  { key: "paid", label: "Paid", color: "border-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", textColor: "text-emerald-700 dark:text-emerald-400" },
+  { key: "pending", label: "Pending", color: "border-amber-600", headerBg: "bg-amber-100 dark:bg-amber-900/50", textColor: "text-amber-900 dark:text-amber-100" },
+  { key: "needs_review", label: "Needs Review", color: "border-orange-600", headerBg: "bg-orange-100 dark:bg-orange-900/50", textColor: "text-orange-900 dark:text-orange-100" },
+  { key: "paid", label: "Paid", color: "border-emerald-600", headerBg: "bg-emerald-100 dark:bg-emerald-900/50", textColor: "text-emerald-900 dark:text-emerald-100" },
 ];
+
+const SALARY_MOVE_GROUPS: MoveGroup[] = [
+  { key: "pending", label: "Pending", color: "border-amber-500", bgHex: "#fef3c7" },
+  { key: "needs_review", label: "Needs Review", color: "border-orange-500", bgHex: "#ffedd5" },
+  { key: "paid", label: "Paid", color: "border-emerald-500", bgHex: "#d1fae5" },
+];
+
+function getSalaryMoveGroups(canMarkPaid: boolean): MoveGroup[] {
+  return canMarkPaid ? SALARY_MOVE_GROUPS : SALARY_MOVE_GROUPS.filter((g) => g.key !== "paid");
+}
 
 function fmtCurrency(v: number | null | undefined): string {
   if (v == null) return "—";
@@ -255,6 +266,9 @@ export function SalariesBoard({
   const [savingEdit, setSavingEdit] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [auditSalaryId, setAuditSalaryId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const grouped = React.useMemo(() => {
     const byGroup: Record<string, SalaryRow[]> = { pending: [], needs_review: [], paid: [] };
@@ -439,6 +453,84 @@ export function SalariesBoard({
     }
   }, [mutate]);
 
+  const onToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
+
+  const onToggleAll = useCallback((ids: string[], checked: boolean) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      for (const id of ids) {
+        if (checked) n.add(id);
+        else n.delete(id);
+      }
+      return n;
+    });
+  }, []);
+
+  const bulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} salary record(s)? This cannot be undone.`)) return;
+    setActionLoadingId("bulk");
+    try {
+      const errors: string[] = [];
+      for (const id of Array.from(selectedIds)) {
+        const res = await fetch(`/api/salaries/${id}`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) errors.push((data as { error?: string }).error ?? "Delete failed");
+      }
+      if (errors.length > 0) {
+        toast.error(errors.join("\n"));
+        return;
+      }
+      toast.success(`${selectedIds.size} record(s) deleted`);
+      setSelectedIds(new Set());
+      mutate();
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [selectedIds, mutate]);
+
+  const bulkMoveToGroup = useCallback(async (groupKey: string) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setShowMoveModal(false);
+
+    let action: string;
+    if (groupKey === "pending") action = "set_pending";
+    else if (groupKey === "needs_review") action = "set_needs_review";
+    else if (groupKey === "paid") action = "mark_paid";
+    else return;
+
+    setActionLoadingId("bulk");
+    try {
+      const errors: string[] = [];
+      for (const id of ids) {
+        const res = await fetch(`/api/salaries/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) errors.push((data as { error?: string }).error ?? "Update failed");
+      }
+      if (errors.length > 0) {
+        toast.error(errors.join("\n"));
+        return;
+      }
+      toast.success(`${ids.length} record(s) moved`);
+      setSelectedIds(new Set());
+      mutate();
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [selectedIds, mutate]);
+
   const clickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRowClick = useCallback((s: SalaryRow, e: React.MouseEvent) => {
     if (e.detail === 2) {
@@ -511,23 +603,23 @@ export function SalariesBoard({
 
       {stats && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Pending</p>
-            <p className="mt-1 text-xl font-bold text-amber-900 dark:text-amber-100">{stats.pending?.count ?? 0}</p>
-            <p className="text-xs text-amber-600 dark:text-amber-500">Net: {fmtCurrency(stats.pending?.netTotal)}</p>
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-100 p-4 dark:border-amber-600 dark:bg-amber-900/50">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Pending</p>
+            <p className="mt-1 text-xl font-bold text-amber-950 dark:text-amber-50">{stats.pending?.count ?? 0}</p>
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">Net: {fmtCurrency(stats.pending?.netTotal)}</p>
           </div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30">
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Paid</p>
-            <p className="mt-1 text-xl font-bold text-emerald-900 dark:text-emerald-100">{stats.paid?.count ?? 0}</p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-500">Net: {fmtCurrency(stats.paid?.netTotal)}</p>
+          <div className="rounded-xl border-2 border-emerald-400 bg-emerald-100 p-4 dark:border-emerald-600 dark:bg-emerald-900/50">
+            <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Paid</p>
+            <p className="mt-1 text-xl font-bold text-emerald-950 dark:text-emerald-50">{stats.paid?.count ?? 0}</p>
+            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">Net: {fmtCurrency(stats.paid?.netTotal)}</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Pending Cost</p>
-            <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{fmtCurrency(stats.pending?.costTotal)}</p>
+          <div className="rounded-xl border-2 border-slate-600 bg-slate-100 p-4 dark:border-slate-500 dark:bg-slate-800">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Total Pending Cost</p>
+            <p className="mt-1 text-xl font-bold text-slate-950 dark:text-slate-50">{fmtCurrency(stats.pending?.costTotal)}</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Paid Cost</p>
-            <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{fmtCurrency(stats.paid?.costTotal)}</p>
+          <div className="rounded-xl border-2 border-slate-600 bg-slate-100 p-4 dark:border-slate-500 dark:bg-slate-800">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Total Paid Cost</p>
+            <p className="mt-1 text-xl font-bold text-slate-950 dark:text-slate-50">{fmtCurrency(stats.paid?.costTotal)}</p>
           </div>
         </div>
       )}
@@ -572,6 +664,43 @@ export function SalariesBoard({
         </select>
       </div>
 
+      {/* Click-outside overlay: clears selection when clicking empty space */}
+      {selectedIds.size > 0 && canEdit && (
+        <div
+          className="fixed inset-0 z-30 cursor-default"
+          onClick={() => setSelectedIds(new Set())}
+          aria-hidden
+        />
+      )}
+      {/* Bulk action bar - Fixed at bottom */}
+      {selectedIds.size > 0 && canEdit && (
+        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 flex-wrap items-center gap-3 rounded-2xl border-2 border-indigo-600 bg-indigo-50 px-4 py-3 shadow-xl dark:border-indigo-500 dark:bg-indigo-950/60" onClick={(e) => e.stopPropagation()}>
+          <span className="flex items-center gap-2 text-sm font-semibold text-indigo-800 dark:text-indigo-200">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">{selectedIds.size}</span>
+            Salary selected
+          </span>
+          <button onClick={() => void bulkDelete()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            Delete
+          </button>
+          <button onClick={() => setShowMoveModal(true)} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            Move
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg bg-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500">
+            ✕ Close
+          </button>
+        </div>
+      )}
+
+      {showMoveModal && (
+        <BulkMoveModal
+          groups={getSalaryMoveGroups(canMarkPaid)}
+          onSelect={(key) => void bulkMoveToGroup(key)}
+          onClose={() => setShowMoveModal(false)}
+        />
+      )}
+
       {filtered.length === 0 ? (
         <EmptyState
           title="No payslips yet"
@@ -583,15 +712,25 @@ export function SalariesBoard({
             const rows = filtered.filter((r) => statusToGroup(r.status) === g.key);
             if (rows.length === 0) return null;
             return (
-              <div key={g.key} className={`overflow-hidden rounded-2xl border ${g.color} shadow-sm`}>
+              <div key={g.key} className={`overflow-hidden rounded-2xl border-2 ${g.color} shadow-sm`}>
                 <div className={`px-5 py-3 ${g.headerBg} ${g.textColor} text-sm font-semibold`}>
                   {g.label} ({rows.length})
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[800px] text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200/80 bg-white/80 dark:border-gray-700/80 dark:bg-gray-900/50">
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Employee</th>
+                      <tr className="border-b-2 border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/80">
+                        {canEdit && (
+                          <th className="w-10 px-2 py-3">
+                            <input
+                              type="checkbox"
+                              checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+                              onChange={(e) => onToggleAll(rows.map((r) => r.id), e.target.checked)}
+                              className="h-4 w-4 rounded border-2 border-gray-400 text-indigo-600 accent-indigo-600"
+                            />
+                          </th>
+                        )}
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">Employee</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Net Pay</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sort Code</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Account</th>
@@ -599,8 +738,8 @@ export function SalariesBoard({
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Month</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Date</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Cost</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">File</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">File</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -609,10 +748,20 @@ export function SalariesBoard({
                         return (
                         <tr
                           key={s.id}
-                          className="group cursor-pointer border-b border-gray-100/80 transition-colors hover:bg-gray-50/70 dark:border-gray-700/50 dark:hover:bg-gray-800/40"
+                          className="group cursor-pointer border-b-2 border-gray-200 transition-colors hover:bg-amber-50/50 dark:border-gray-600 dark:hover:bg-amber-950/20"
                           onClick={(e) => handleRowClick(s, e)}
                           onDoubleClick={() => handleRowDoubleClick(s)}
                         >
+                          {canEdit && (
+                            <td className="whitespace-nowrap px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(s.id)}
+                                onChange={() => onToggleSelect(s.id)}
+                                className="h-4 w-4 rounded border-2 border-gray-400 text-indigo-600 accent-indigo-600"
+                              />
+                            </td>
+                          )}
                           <td className="whitespace-nowrap px-4 py-3">
                             <span
                               className="inline-flex rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm"
@@ -622,12 +771,12 @@ export function SalariesBoard({
                             </span>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.net_pay)}</td>
-                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.sortCode}</td>
-                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{bank.account}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300" title={s.reference ?? undefined}>{s.reference ?? "—"}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{s.payment_month ?? "—"}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{s.process_date ?? "—"}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.employer_total_cost)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.sortCode}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.account}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200" title={s.reference ?? undefined}>{s.reference ?? "—"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.payment_month ?? "—"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.process_date ?? "—"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100" title="GBP">{fmtCurrency(s.employer_total_cost)}</td>
                           <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             {s.payslip_storage_path ? (
                               <div className="flex gap-2">

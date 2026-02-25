@@ -18,12 +18,14 @@ export function SalariesSetupSection() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ full_name: string; bank_account_number: string; sort_code: string }>({
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{ full_name: string; bank_account_number: string; sort_code: string; email_address: string }>({
     full_name: "",
     bank_account_number: "",
     sort_code: "",
+    email_address: "",
   });
-  const [newEmployee, setNewEmployee] = useState({ full_name: "", bank_account_number: "", sort_code: "" });
+  const [newEmployee, setNewEmployee] = useState({ full_name: "", bank_account_number: "", sort_code: "", email_address: "" });
 
   const refresh = useCallback(() => {
     fetch("/api/employees")
@@ -42,6 +44,7 @@ export function SalariesSetupSection() {
       full_name: emp.full_name ?? "",
       bank_account_number: emp.bank_account_number ?? "",
       sort_code: emp.sort_code ?? "",
+      email_address: emp.email_address ?? "",
     });
   };
 
@@ -58,6 +61,7 @@ export function SalariesSetupSection() {
           full_name: editForm.full_name.trim() || undefined,
           bank_account_number: editForm.bank_account_number.trim() || null,
           sort_code: editForm.sort_code.trim() || null,
+          email_address: editForm.email_address.trim() || null,
         }),
       });
       const data = await res.json();
@@ -69,6 +73,28 @@ export function SalariesSetupSection() {
         setMessage({ type: "error", text: data.error ?? "Update failed." });
       }
     } catch {
+      setMessage({ type: "error", text: "Connection error." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteEmployee = async () => {
+    if (!deleteId) return;
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/employees/${deleteId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      setDeleteId(null);
+      if (res.ok) {
+        setEmployees((prev) => prev.filter((e) => e.id !== deleteId));
+        setMessage({ type: "success", text: "Employee deleted." });
+      } else {
+        setMessage({ type: "error", text: (data as { error?: string }).error ?? "Delete failed." });
+      }
+    } catch {
+      setDeleteId(null);
       setMessage({ type: "error", text: "Connection error." });
     } finally {
       setLoading(false);
@@ -91,12 +117,13 @@ export function SalariesSetupSection() {
           full_name: newEmployee.full_name.trim(),
           bank_account_number: newEmployee.bank_account_number.trim() || null,
           sort_code: newEmployee.sort_code.trim() || null,
+          email_address: newEmployee.email_address.trim() || null,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setEmployees((prev) => [...prev, data]);
-        setNewEmployee({ full_name: "", bank_account_number: "", sort_code: "" });
+        setNewEmployee({ full_name: "", bank_account_number: "", sort_code: "", email_address: "" });
         setMessage({ type: "success", text: "Employee added." });
       } else {
         setMessage({ type: "error", text: data.error ?? "Add failed." });
@@ -113,13 +140,13 @@ export function SalariesSetupSection() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border-2 border-indigo-500/30 border-l-4 border-l-indigo-500 bg-indigo-500/5 p-6 dark:bg-indigo-500/10">
-        <h2 className="mb-1 flex items-center gap-2 font-medium text-gray-900 dark:text-white">
+      <div className="rounded-xl border-2 border-indigo-600 border-l-4 border-l-indigo-600 bg-indigo-50 p-6 dark:border-indigo-500 dark:bg-indigo-950/40">
+        <h2 className="mb-1 flex items-center gap-2 font-semibold text-gray-900 dark:text-white">
           <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
           Employee Bank Details
           <span className="text-xs font-normal text-gray-400">({employees.length})</span>
         </h2>
-        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+        <p className="mb-4 text-sm font-medium text-gray-700 dark:text-gray-300">
           Enter official names and bank details. When a payslip PDF is uploaded and the name is read, these details will be used automatically.
         </p>
 
@@ -157,6 +184,13 @@ export function SalariesSetupSection() {
             placeholder="Account number"
             className={`w-36 ${inputCls}`}
           />
+          <input
+            type="email"
+            value={newEmployee.email_address}
+            onChange={(e) => setNewEmployee((p) => ({ ...p, email_address: e.target.value }))}
+            placeholder="Email"
+            className={`min-w-[200px] flex-1 ${inputCls}`}
+          />
           <button type="submit" disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
             Add
           </button>
@@ -165,18 +199,19 @@ export function SalariesSetupSection() {
         <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900/80">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
-                <th className="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Official Name</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Sort Code</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Account Number</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700 dark:text-gray-300">Actions</th>
+              <tr className="border-b-2 border-gray-300 bg-gray-100 dark:border-gray-600 dark:bg-gray-800">
+                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Official Name</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Email</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Sort Code</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Account Number</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-200">Actions</th>
               </tr>
             </thead>
             <tbody>
               {employees.map((emp) => (
-                <tr key={emp.id} className="border-b border-gray-100 dark:border-gray-700/50">
+                <tr key={emp.id} className="border-b-2 border-gray-200 dark:border-gray-600">
                   {editingId === emp.id ? (
-                    <td colSpan={4} className="px-4 py-3">
+                    <td colSpan={5} className="px-4 py-3">
                       <form onSubmit={saveEdit} className="flex flex-wrap gap-3">
                         <input
                           type="text"
@@ -185,6 +220,13 @@ export function SalariesSetupSection() {
                           placeholder="Official full name"
                           className={`min-w-[180px] flex-1 ${inputCls}`}
                           required
+                        />
+                        <input
+                          type="email"
+                          value={editForm.email_address}
+                          onChange={(e) => setEditForm((p) => ({ ...p, email_address: e.target.value }))}
+                          placeholder="Email"
+                          className={`min-w-[180px] flex-1 ${inputCls}`}
                         />
                         <input
                           type="text"
@@ -203,7 +245,7 @@ export function SalariesSetupSection() {
                         <button type="submit" disabled={loading} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50">
                           Save
                         </button>
-                        <button type="button" onClick={() => setEditingId(null)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800">
+                        <button type="button" onClick={() => setEditingId(null)} className="rounded-lg border-2 border-gray-400 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:border-gray-500 dark:text-gray-200 dark:hover:bg-gray-700">
                           Cancel
                         </button>
                       </form>
@@ -211,19 +253,32 @@ export function SalariesSetupSection() {
                   ) : (
                     <>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{emp.full_name ?? "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{emp.sort_code ?? "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-600 dark:text-gray-300">{emp.bank_account_number ?? "—"}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-gray-700 dark:text-gray-300">{emp.email_address ?? "—"}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-700 dark:text-gray-300">{emp.sort_code ?? "—"}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-700 dark:text-gray-300">{emp.bank_account_number ?? "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(emp)}
-                          className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-indigo-600 dark:hover:bg-gray-700 dark:hover:text-indigo-400"
-                          title="Edit"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(emp)}
+                            className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-indigo-600 dark:hover:bg-gray-700 dark:hover:text-indigo-400"
+                            title="Edit"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteId(emp.id)}
+                            className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-400"
+                            title="Delete"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </>
                   )}
@@ -236,6 +291,31 @@ export function SalariesSetupSection() {
           )}
         </div>
       </div>
+
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="mx-4 w-full max-w-sm rounded-xl border-2 border-gray-300 bg-white p-6 shadow-xl dark:border-gray-600 dark:bg-gray-900">
+            <p className="mb-4 font-medium text-gray-900 dark:text-gray-100">
+              Delete this employee? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="rounded-lg border-2 border-gray-400 px-4 py-2 font-medium text-gray-800 hover:bg-gray-100 dark:border-gray-500 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteEmployee}
+                disabled={loading}
+                className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {loading ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
