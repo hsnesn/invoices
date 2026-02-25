@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const { session, profile } = await requireAuth();
     const { id: invoiceId } = await params;
     const supabase = createAdminClient();
 
@@ -33,6 +33,16 @@ export async function GET(
     const ext = (Array.isArray(extRaw) ? extRaw[0] : extRaw) as Record<string, unknown> | null;
 
     const managerUserId = (wf as Record<string, unknown> | null)?.manager_user_id as string | null;
+
+    const isAdmin = profile.role === "admin";
+    const isOperations = profile.role === "operations";
+    const isFinance = profile.role === "finance";
+    const isAssignedManager = profile.role === "manager" && managerUserId === session.user.id;
+    const { data: orMember } = await supabase.from("operations_room_members").select("id").eq("user_id", session.user.id).maybeSingle();
+    const isOpsRoomMember = !!orMember;
+
+    const canAccess = isAdmin || isOperations || isFinance || isAssignedManager || isOpsRoomMember;
+    if (!canAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     let approverName = "—";
     if (managerUserId) {
       const { data: mp } = await supabase.from("profiles").select("full_name").eq("id", managerUserId).single();

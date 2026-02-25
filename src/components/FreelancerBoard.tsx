@@ -24,7 +24,7 @@ type ExtShape = { invoice_number: string | null; beneficiary_name: string | null
 type FlShape = { contractor_name: string | null; company_name: string | null; service_description: string | null; service_days_count: number | null; service_days: string | null; service_rate_per_day: number | null; service_month: string | null; additional_cost: number | null; additional_cost_reason: string | null; booked_by: string | null; department_2: string | null; istanbul_team: string | null };
 
 type FreelancerInvoiceRow = {
-  id: string; submitter_user_id: string; service_description: string | null; currency: string; created_at: string;
+  id: string; submitter_user_id: string; service_description: string | null; currency: string; created_at: string; storage_path?: string | null;
   service_date_from: string | null; service_date_to: string | null; department_id: string | null; program_id: string | null; invoice_type: string;
   invoice_workflows: WfShape[] | WfShape | null;
   invoice_extracted_fields: ExtShape[] | ExtShape | null;
@@ -81,7 +81,6 @@ const ALL_COLUMNS = [
   { key: "contractor", label: "Contractor" },
   { key: "submittedBy", label: "Submitted by" },
   { key: "companyName", label: "Company Name" },
-  { key: "submissionDate", label: "Submission Date" },
   { key: "files", label: "Files" },
   { key: "serviceDescription", label: "Service Desc." },
   { key: "department", label: "Department" },
@@ -97,9 +96,10 @@ const ALL_COLUMNS = [
   { key: "currency", label: "Currency" },
   { key: "beneficiary", label: "Beneficiary" },
   { key: "sortCode", label: "Sort Code" },
-  { key: "accountNumber", label: "Account No." },
+  { key: "accountNumber", label: "Account No" },
   { key: "invNumber", label: "INV Number" },
   { key: "deptManager", label: "Approver" },
+  { key: "submissionDate", label: "Submission Date" },
   { key: "bookingForm", label: "Booking Form" },
   { key: "actions", label: "" },
 ];
@@ -188,11 +188,24 @@ export function FreelancerBoard({
       paidDate: wf?.paid_date ?? "", group: statusToGroup(status),
       ...(function () {
         const m: string[] = [];
+        const c = fl?.contractor_name ?? ""; if (!c || c === "—") m.push("Contractor");
+        if (!profMap[inv.submitter_user_id]) m.push("Submitted by");
+        const cn = (() => { const x = fl?.company_name ?? ""; const p = fl?.contractor_name ?? "—"; if (!x || /trt/i.test(x)) return p; return x; })(); if (!cn || cn === "—") m.push("Company Name");
+        if (!inv.created_at) m.push("Submission Date");
+        if (!(inv as { storage_path?: string | null }).storage_path) m.push("Files");
+        if (!fl?.service_description || fl.service_description === "—") m.push("Service Desc.");
+        if (!inv.department_id) m.push("Department");
+        if (!fl?.booked_by || fl.booked_by === "—") m.push("Booked by");
+        if (fl?.service_days_count == null || fl.service_days_count === 0) m.push("Service Days");
+        if (!fl?.service_month || fl.service_month === "—") m.push("Month");
+        if (!fl?.service_days || fl.service_days === "—") m.push("Days");
+        if (fl?.service_rate_per_day == null || fl.service_rate_per_day === 0) m.push("Rate/Day");
+        if (computedAmount <= 0) m.push("Amount");
+        if (!ext?.invoice_number) m.push("INV Number");
         if (!ext?.beneficiary_name) m.push("Beneficiary");
         if (!ext?.account_number) m.push("Account No");
         if (!ext?.sort_code) m.push("Sort Code");
-        if (!ext?.invoice_number) m.push("INV No");
-        return { hasMissingInfo: m.length > 0 || ext?.needs_review === true, missingFields: m };
+        return { hasMissingInfo: m.length > 0, missingFields: m };
       })(),
     };
   }), [invoices, deptMap, profMap]);
@@ -732,7 +745,7 @@ export function FreelancerBoard({
       "Service Days": r.serviceDaysCount, Month: r.month, Days: r.days, "Rate/Day": r.serviceRate,
       "Additional Cost": r.additionalCost, "Add. Cost Reason": r.additionalCostReason,
       Amount: r.amount,
-      Beneficiary: r.beneficiary, "Sort Code": r.sortCode, "Account No.": r.accountNumber, "INV Number": r.invNumber,
+      Beneficiary: r.beneficiary, "Sort Code": r.sortCode, "Account No": r.accountNumber, "INV Number": r.invNumber,
       Approver: r.deptManager, Status: r.status,
       "Rejection Reason": r.rejectionReason, "Paid Date": r.paidDate,
     }));
@@ -832,7 +845,8 @@ export function FreelancerBoard({
       case "deptManager": return isEditing && currentRole === "admin" ? <select value={editDraft?.deptManagerId ?? ""} onChange={e => onChangeDraft("deptManagerId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Unassigned</option>{(managerProfilePairs ?? profilePairs).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : r.deptManager;
       case "bookingForm": {
         const hasBookingForm = ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
-        if (!hasBookingForm) return <span className="text-gray-400">—</span>;
+        const canSeeBookingForm = currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember;
+        if (!hasBookingForm || !canSeeBookingForm) return <span className="text-gray-400">—</span>;
         return (
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button onClick={() => void viewBookingForm(r.id, r.contractor, r.month)} className="rounded bg-indigo-600 px-2 py-0.5 text-xs text-white hover:bg-indigo-500 flex items-center gap-1" title="View Booking Form">

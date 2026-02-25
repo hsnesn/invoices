@@ -51,6 +51,7 @@ export default async function FreelancerInvoicesPage() {
       service_description,
       currency,
       created_at,
+      storage_path,
       service_date_from,
       service_date_to,
       department_id,

@@ -182,7 +182,7 @@ export function FreelancerMobileCards({
                   </svg>
                   View File
                 </button>
-                {["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status) && (
+                {["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status) && (currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember) && (
                   <>
                     <button
                       onClick={() => void viewBookingForm(r.id, r.contractor, r.month)}
