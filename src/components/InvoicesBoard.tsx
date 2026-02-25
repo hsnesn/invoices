@@ -1006,6 +1006,7 @@ export function InvoicesBoard({
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("");
@@ -1714,6 +1715,34 @@ export function InvoicesBoard({
     window.location.reload();
   }, [selectedIds]);
 
+  const bulkAssignManager = useCallback(async (managerId: string | null) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setShowAssignManagerModal(false);
+    setActionLoadingId("bulk");
+    try {
+      const errors: string[] = [];
+      for (const id of ids) {
+        const res = await fetch(`/api/invoices/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ manager_user_id: managerId || null }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) errors.push(`Invoice ${id}: ${data.error ?? res.statusText}`);
+      }
+      if (errors.length > 0) {
+        toast.error(errors.join("\n"));
+        return;
+      }
+      toast.success(managerId ? `Assigned ${ids.length} invoice(s) to line manager` : `Unassigned ${ids.length} invoice(s)`);
+      setSelectedIds(new Set());
+      window.location.reload();
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [selectedIds]);
+
   const bulkMoveToGroup = useCallback(async (groupKey: string) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -2056,6 +2085,10 @@ export function InvoicesBoard({
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
             Move
           </button>
+          <button onClick={() => setShowAssignManagerModal(true)} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            Assign Dept EP
+          </button>
           <button onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
             ✕ Close
           </button>
@@ -2068,6 +2101,64 @@ export function InvoicesBoard({
           onSelect={(key) => void bulkMoveToGroup(key)}
           onClose={() => setShowMoveModal(false)}
         />
+      )}
+
+      {showAssignManagerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowAssignManagerModal(false)}>
+          <div
+            className="w-full max-w-md rounded-2xl border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-2 border-gray-300 px-4 py-3 dark:border-slate-600">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Assign Dept EP</h3>
+              <button
+                onClick={() => setShowAssignManagerModal(false)}
+                className="rounded-lg px-3 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-slate-700"
+              >
+                Back
+              </button>
+            </div>
+            <div className="p-4">
+              <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                Assign {selectedIds.size} invoice(s) to a line manager (Dept EP).
+              </p>
+              <select
+                id="bulk-manager-select"
+                className="mb-4 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="">Select line manager...</option>
+                <option value="__unassign__">Unassigned</option>
+                {(managerProfilePairs ?? profilePairs).map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+              </select>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowAssignManagerModal(false)}
+                  className="rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const sel = document.getElementById("bulk-manager-select") as HTMLSelectElement | null;
+                    const val = sel?.value?.trim();
+                    if (!val) {
+                      toast.error("Please select a line manager");
+                      return;
+                    }
+                    const managerId = val === "__unassign__" ? null : val;
+                    void bulkAssignManager(managerId);
+                  }}
+                  disabled={actionLoadingId === "bulk"}
+                  className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                >
+                  {actionLoadingId === "bulk" ? "Assigning..." : "Assign"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Recently Used Filters */}
