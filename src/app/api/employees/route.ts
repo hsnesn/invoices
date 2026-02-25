@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         bank_account_number: (body.bank_account_number as string)?.trim() || null,
         sort_code: (body.sort_code as string)?.trim() || null,
         email_address: (body.email_address as string)?.trim() || null,
+        badge_color: (body.badge_color as string)?.trim() || null,
         default_payment_method: body.default_payment_method || "bank_transfer",
         status: body.status || "active",
       })

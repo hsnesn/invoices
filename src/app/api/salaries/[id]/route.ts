@@ -158,9 +158,10 @@ export async function PATCH(
     }
 
     if (action === "set_needs_review") {
-      if (!canEdit(profile.role)) {
+      if (!canEdit(profile.role) && !canMarkPaid(profile.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
+      const rejectionReason = (body.rejection_reason as string)?.trim() || null;
       const { error: updateError } = await supabase
         .from("salaries")
         .update({ status: "needs_review", paid_date: null, updated_at: new Date().toISOString() })
@@ -171,10 +172,10 @@ export async function PATCH(
       await createSalaryAuditEvent({
         salary_id: id,
         actor_user_id: session.user.id,
-        event_type: "salary_status_changed",
+        event_type: "salary_rejected",
         from_status: existing.status,
         to_status: "needs_review",
-        payload: {},
+        payload: rejectionReason ? { rejection_reason: rejectionReason } : {},
       });
       const { data: updated } = await supabase
         .from("salaries")

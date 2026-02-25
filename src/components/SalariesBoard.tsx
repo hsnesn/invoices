@@ -268,6 +268,7 @@ export function SalariesBoard({
   const [uploading, setUploading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [reExtractingId, setReExtractingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -276,6 +277,9 @@ export function SalariesBoard({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [previewSalary, setPreviewSalary] = useState<SalaryRow | null>(null);
+  const previewShowRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewHideRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const grouped = React.useMemo(() => {
     const byGroup: Record<string, SalaryRow[]> = { pending: [], needs_review: [], paid: [] };
@@ -460,6 +464,27 @@ export function SalariesBoard({
     }
   }, [mutate]);
 
+  const handleReject = useCallback(async (id: string) => {
+    const reason = window.prompt("Rejection reason (optional):");
+    if (reason === null) return;
+    setRejectingId(id);
+    try {
+      const res = await fetch(`/api/salaries/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_needs_review", rejection_reason: reason?.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to reject");
+      toast.success("Moved to Needs Review.");
+      mutate();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRejectingId(null);
+    }
+  }, [mutate]);
+
   const onToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const n = new Set(prev);
@@ -560,6 +585,37 @@ export function SalariesBoard({
     }
     if (canEdit) setShowEditModal(s);
   }, [canEdit]);
+
+  const showPreview = useCallback((s: SalaryRow) => {
+    if (previewHideRef.current) {
+      clearTimeout(previewHideRef.current);
+      previewHideRef.current = null;
+    }
+    if (previewShowRef.current) clearTimeout(previewShowRef.current);
+    previewShowRef.current = setTimeout(() => {
+      if (s.payslip_storage_path) setPreviewSalary(s);
+      previewShowRef.current = null;
+    }, 400);
+  }, []);
+
+  const hidePreview = useCallback(() => {
+    if (previewShowRef.current) {
+      clearTimeout(previewShowRef.current);
+      previewShowRef.current = null;
+    }
+    if (previewHideRef.current) clearTimeout(previewHideRef.current);
+    previewHideRef.current = setTimeout(() => {
+      setPreviewSalary(null);
+      previewHideRef.current = null;
+    }, 200);
+  }, []);
+
+  const cancelHidePreview = useCallback(() => {
+    if (previewHideRef.current) {
+      clearTimeout(previewHideRef.current);
+      previewHideRef.current = null;
+    }
+  }, []);
 
   const downloadPayslip = useCallback(async (path: string, name: string) => {
     try {
@@ -793,14 +849,27 @@ export function SalariesBoard({
                               {s.employee_name ?? "—"}
                             </span>
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-gray-900 dark:text-gray-100">{fmtCurrency(s.net_pay)}</td>
+                          <td
+                            className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-gray-900 dark:text-gray-100 cursor-pointer"
+                            onMouseEnter={() => showPreview(s)}
+                            onMouseLeave={hidePreview}
+                            title="Hover to preview payslip"
+                          >
+                            {fmtCurrency(s.net_pay)}
+                          </td>
                           <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.sortCode}</td>
                           <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-800 dark:text-gray-200">{bank.account}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200" title={s.reference ?? undefined}>{s.reference ?? "—"}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.payment_month ?? "—"}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-gray-800 dark:text-gray-200">{s.process_date ?? "—"}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100" title="GBP">{fmtCurrency(s.employer_total_cost)}</td>
-                          <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <td
+                            className="whitespace-nowrap px-4 py-3 cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseEnter={() => showPreview(s)}
+                            onMouseLeave={hidePreview}
+                            title="Hover to preview payslip"
+                          >
                             {s.payslip_storage_path ? (
                               <div className="flex gap-2">
                                 <a
@@ -838,8 +907,19 @@ export function SalariesBoard({
                                   onClick={() => handleMarkPaid(s.id)}
                                   disabled={markingPaidId === s.id || !s.net_pay}
                                   className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                                  title="Mark as paid (GBP)"
                                 >
-                                  {markingPaidId === s.id ? "..." : "Mark Paid"}
+                                  {markingPaidId === s.id ? "..." : s.net_pay ? `${fmtCurrency(s.net_pay)} Pay` : "£ Mark Paid"}
+                                </button>
+                              )}
+                              {canMarkPaid && s.status !== "paid" && (
+                                <button
+                                  onClick={() => handleReject(s.id)}
+                                  disabled={rejectingId === s.id}
+                                  className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                                  title="Reject payment"
+                                >
+                                  {rejectingId === s.id ? "..." : "✗"} Reject
                                 </button>
                               )}
                               {canEdit && (
@@ -903,6 +983,43 @@ export function SalariesBoard({
           employeeName={salaries.find((s) => s.id === auditSalaryId)?.employee_name ?? null}
           onClose={() => setAuditSalaryId(null)}
         />
+      )}
+
+      {previewSalary?.payslip_storage_path && (
+        <div
+          className="fixed right-4 top-24 z-50 flex w-[420px] flex-col rounded-xl border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-900"
+          onMouseEnter={cancelHidePreview}
+          onMouseLeave={hidePreview}
+        >
+          <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+            <span className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">
+              {previewSalary.employee_name ?? "Payslip"} — {fmtCurrency(previewSalary.net_pay)}
+            </span>
+            <div className="flex gap-1">
+              <a
+                href={`/api/salaries/download?path=${encodeURIComponent(previewSalary.payslip_storage_path)}&view=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50"
+              >
+                Open
+              </a>
+              <button
+                onClick={() => setPreviewSalary(null)}
+                className="rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          <div className="h-[500px] overflow-hidden">
+            <iframe
+              src={`/api/salaries/download?path=${encodeURIComponent(previewSalary.payslip_storage_path)}&view=1`}
+              className="h-full w-full border-0"
+              title="Payslip preview"
+            />
+          </div>
+        </div>
       )}
 
       {showUploadModal && (

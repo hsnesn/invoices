@@ -19,13 +19,14 @@ export function SalariesSetupSection() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ full_name: string; bank_account_number: string; sort_code: string; email_address: string }>({
+  const [editForm, setEditForm] = useState<{ full_name: string; bank_account_number: string; sort_code: string; email_address: string; badge_color: string }>({
     full_name: "",
     bank_account_number: "",
     sort_code: "",
     email_address: "",
+    badge_color: "#64748b",
   });
-  const [newEmployee, setNewEmployee] = useState({ full_name: "", bank_account_number: "", sort_code: "", email_address: "" });
+  const [newEmployee, setNewEmployee] = useState({ full_name: "", bank_account_number: "", sort_code: "", email_address: "", badge_color: "#64748b" });
 
   const refresh = useCallback(() => {
     fetch("/api/employees")
@@ -45,6 +46,7 @@ export function SalariesSetupSection() {
       bank_account_number: emp.bank_account_number ?? "",
       sort_code: emp.sort_code ?? "",
       email_address: emp.email_address ?? "",
+      badge_color: emp.badge_color ?? "#64748b",
     });
   };
 
@@ -62,6 +64,7 @@ export function SalariesSetupSection() {
           bank_account_number: editForm.bank_account_number.trim() || null,
           sort_code: editForm.sort_code.trim() || null,
           email_address: editForm.email_address.trim() || null,
+          badge_color: editForm.badge_color.trim() || null,
         }),
       });
       const data = await res.json();
@@ -118,12 +121,13 @@ export function SalariesSetupSection() {
           bank_account_number: newEmployee.bank_account_number.trim() || null,
           sort_code: newEmployee.sort_code.trim() || null,
           email_address: newEmployee.email_address.trim() || null,
+          badge_color: newEmployee.badge_color.trim() || null,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setEmployees((prev) => [...prev, data]);
-        setNewEmployee({ full_name: "", bank_account_number: "", sort_code: "", email_address: "" });
+        setNewEmployee({ full_name: "", bank_account_number: "", sort_code: "", email_address: "", badge_color: "#64748b" });
         setMessage({ type: "success", text: "Employee added." });
       } else {
         setMessage({ type: "error", text: data.error ?? "Add failed." });
@@ -191,6 +195,23 @@ export function SalariesSetupSection() {
             placeholder="Email"
             className={`min-w-[200px] flex-1 ${inputCls}`}
           />
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Badge color</label>
+            <input
+              type="color"
+              value={newEmployee.badge_color || "#64748b"}
+              onChange={(e) => setNewEmployee((p) => ({ ...p, badge_color: e.target.value }))}
+              className="h-9 w-14 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
+              title="Badge color"
+            />
+            <input
+              type="text"
+              value={newEmployee.badge_color}
+              onChange={(e) => setNewEmployee((p) => ({ ...p, badge_color: e.target.value }))}
+              placeholder="#64748b"
+              className={`w-24 font-mono text-sm ${inputCls}`}
+            />
+          </div>
           <button type="submit" disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
             Add
           </button>
@@ -200,6 +221,7 @@ export function SalariesSetupSection() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b-2 border-gray-300 bg-gray-100 dark:border-gray-600 dark:bg-gray-800">
+                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Color</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Official Name</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Email</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-gray-200">Sort Code</th>
@@ -211,8 +233,8 @@ export function SalariesSetupSection() {
               {employees.map((emp) => (
                 <tr key={emp.id} className="border-b-2 border-gray-200 dark:border-gray-600">
                   {editingId === emp.id ? (
-                    <td colSpan={5} className="px-4 py-3">
-                      <form onSubmit={saveEdit} className="flex flex-wrap gap-3">
+                    <td colSpan={6} className="px-4 py-3">
+                      <form onSubmit={saveEdit} className="flex flex-wrap items-center gap-3">
                         <input
                           type="text"
                           value={editForm.full_name}
@@ -242,6 +264,22 @@ export function SalariesSetupSection() {
                           placeholder="Account number"
                           className={`w-32 ${inputCls}`}
                         />
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400">Color</label>
+                          <input
+                            type="color"
+                            value={editForm.badge_color || "#64748b"}
+                            onChange={(e) => setEditForm((p) => ({ ...p, badge_color: e.target.value }))}
+                            className="h-8 w-12 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
+                            title="Badge color"
+                          />
+                          <input
+                            type="text"
+                            value={editForm.badge_color}
+                            onChange={(e) => setEditForm((p) => ({ ...p, badge_color: e.target.value }))}
+                            className={`w-24 font-mono text-sm ${inputCls}`}
+                          />
+                        </div>
                         <button type="submit" disabled={loading} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50">
                           Save
                         </button>
@@ -252,6 +290,13 @@ export function SalariesSetupSection() {
                     </td>
                   ) : (
                     <>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span
+                          className="inline-block h-6 w-6 rounded-full border-2 border-gray-300 shadow-sm"
+                          style={{ backgroundColor: emp.badge_color ?? "#64748b" }}
+                          title={emp.badge_color ?? "Default"}
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{emp.full_name ?? "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-gray-700 dark:text-gray-300">{emp.email_address ?? "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-700 dark:text-gray-300">{emp.sort_code ?? "—"}</td>
