@@ -7,7 +7,7 @@ async function canAccess(supabase: ReturnType<typeof createAdminClient>, invoice
   if (!inv) return false;
   const { data: profile } = await supabase.from("profiles").select("role, department_id, program_ids").eq("id", userId).eq("is_active", true).single();
   if (!profile) return false;
-  if (profile.role === "admin") return true;
+  if (profile.role === "admin" || profile.role === "operations") return true;
   if (inv.submitter_user_id === userId) return true;
   const { data: wf } = await supabase.from("invoice_workflows").select("manager_user_id, status").eq("invoice_id", invoiceId).single();
   if (profile.role === "manager" && (wf?.manager_user_id === userId || (profile.department_id && inv.department_id === profile.department_id))) return true;

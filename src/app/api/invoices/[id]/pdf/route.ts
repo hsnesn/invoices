@@ -21,7 +21,7 @@ async function canAccessInvoice(
   })();
 
   if (!profile) return false;
-  if (profile.role === "admin") return true;
+  if (profile.role === "admin" || profile.role === "operations") return true;
 
   const { data: invoice } = await supabaseAdmin
     .from("invoices")
@@ -51,6 +51,9 @@ async function canAccessInvoice(
       ? ["ready_for_payment", "paid", "archived"].includes(wf.status)
       : false;
   }
+
+  const { data: or } = await supabaseAdmin.from("operations_room_members").select("id").eq("user_id", userId).single();
+  if (or) return true;
 
   return false;
 }

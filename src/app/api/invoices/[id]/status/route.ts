@@ -84,6 +84,7 @@ export async function POST(
     const isOwner = inv.submitter_user_id === userId;
     const isAssigned = wf.manager_user_id === userId;
     const isAdmin = profile.role === "admin";
+    const isOperations = profile.role === "operations";
     const isFinance = profile.role === "finance" && ["ready_for_payment", "paid", "archived"].includes(wf.status);
     const inDept = profile.role === "manager" && profile.department_id != null && inv.department_id === profile.department_id;
     const inProg = profile.role === "manager" && (profile.program_ids ?? []).length > 0 && inv.program_id != null && (profile.program_ids ?? []).includes(inv.program_id);
@@ -95,7 +96,7 @@ export async function POST(
       .single();
     const isOperationsRoom = !!orMember;
 
-    if (!isOwner && !isAssigned && !isAdmin && !isFinance && !inDept && !inProg && !isOperationsRoom) {
+    if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !inDept && !inProg && !isOperationsRoom) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -249,8 +250,9 @@ export async function POST(
       } else {
         return NextResponse.json({ error: "Invalid manager action" }, { status: 400 });
       }
-    } else if (isOperationsRoom && (inv as { invoice_type?: string }).invoice_type === "freelancer") {
-      if (to_status === "ready_for_payment" && fromStatus === "pending_admin") {
+    } else if ((isOperationsRoom || isOperations) && (inv as { invoice_type?: string }).invoice_type === "freelancer") {
+      const opsValidFrom = ["pending_admin", "approved_by_manager"];
+      if (to_status === "ready_for_payment" && opsValidFrom.includes(fromStatus)) {
         await supabase
           .from("invoice_workflows")
           .update({
@@ -275,8 +277,37 @@ export async function POST(
             });
           }
         }
+      } else if (to_status === "rejected" && opsValidFrom.includes(fromStatus)) {
+        if (!rejection_reason?.trim()) {
+          return NextResponse.json(
+            { error: "rejection_reason is required" },
+            { status: 400 }
+          );
+        }
+        await supabase
+          .from("invoice_workflows")
+          .update({
+            status: "rejected",
+            rejection_reason,
+            admin_comment: admin_comment ?? wf.admin_comment,
+          })
+          .eq("invoice_id", invoiceId);
+
+        if (await isEmailStageEnabled("manager_rejected")) {
+          const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
+          const submitterEmail = submitterEmails[0];
+          if (submitterEmail) {
+            await sendManagerRejectedEmail({
+              submitterEmail,
+              invoiceId,
+              reason: rejection_reason,
+              invoiceNumber: extracted?.invoice_number ?? undefined,
+              freelancerDetails,
+            });
+          }
+        }
       } else {
-        return NextResponse.json({ error: "Operations Room can only approve invoices in The Operations Room stage" }, { status: 400 });
+        return NextResponse.json({ error: "Operations Room can only approve or reject invoices in The Operations Room stage" }, { status: 400 });
       }
     } else if (profile.role === "admin") {
       if (to_status === "approved_by_manager") {

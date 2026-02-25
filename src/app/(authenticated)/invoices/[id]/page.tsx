@@ -36,6 +36,7 @@ export default async function InvoicePage({
   const isOwner = invoice.submitter_user_id === userId;
   const isAssigned = wfCheck?.manager_user_id === userId;
   const isAdmin = profile.role === "admin";
+  const isOperations = profile.role === "operations";
   const isFinance =
     profile.role === "finance" &&
     ["ready_for_payment", "paid", "archived"].includes(wfCheck?.status ?? "");
@@ -49,7 +50,7 @@ export default async function InvoicePage({
     invoice.program_id != null &&
     (profile.program_ids ?? []).includes(invoice.program_id);
 
-  if (!isOwner && !isAssigned && !isAdmin && !isFinance && !inDeptScope && !inProgScope) {
+  if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !inDeptScope && !inProgScope) {
     notFound();
   }
 

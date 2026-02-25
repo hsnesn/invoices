@@ -20,7 +20,7 @@ function canUserSeeInvoice(
   userDepartmentId: string | null,
   userProgramIds: string[] | null
 ): boolean {
-  if (role === "admin" || role === "viewer") return true;
+  if (role === "admin" || role === "viewer" || role === "operations") return true;
   if (inv.submitter_user_id === userId) return true;
 
   const wfRaw = inv.invoice_workflows;

@@ -21,7 +21,7 @@ function canUserSeeInvoice(
   userProgramIds: string[] | null,
   isOperationsRoomMember: boolean
 ): boolean {
-  if (role === "admin" || role === "viewer") return true;
+  if (role === "admin" || role === "viewer" || role === "operations") return true;
   if (isOperationsRoomMember) return true;
   if (inv.submitter_user_id === userId) return true;
 
@@ -75,7 +75,7 @@ export default async function FreelancerInvoicesPage() {
     supabase.from("operations_room_members").select("user_id").eq("user_id", session.user.id).maybeSingle(),
   ]);
 
-  const isOperationsRoomMember = !!orMembers;
+  const isOperationsRoomMember = !!orMembers || profile.role === "operations";
 
   const visibleInvoicesFiltered = (invoicesRaw ?? []).filter((inv) =>
     canUserSeeInvoice(

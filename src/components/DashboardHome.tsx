@@ -132,13 +132,14 @@ function getInitials(name: string | null): string {
 export function DashboardHome({ profile }: { profile: Profile }) {
   const isAdmin = profile.role === "admin";
   const isViewer = profile.role === "viewer";
+  const isOperations = profile.role === "operations";
   const userPages = profile.allowed_pages;
   const { data: stats } = useSWR<Stats>("/api/dashboard/stats", fetcher);
 
   const visiblePages = PAGES.filter((p) => {
-    if (p.viewerHidden && isViewer) return false;
+    if (p.viewerHidden && (isViewer || isOperations)) return false;
     if (p.adminOnly && !isAdmin) return false;
-    if (isViewer) return ["guest_invoices", "freelancer_invoices", "reports"].includes(p.pageKey);
+    if (isViewer || isOperations) return ["guest_invoices", "freelancer_invoices", "reports"].includes(p.pageKey);
     if (userPages && userPages.length > 0) return userPages.includes(p.pageKey);
     return true;
   });

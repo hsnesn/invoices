@@ -4,7 +4,7 @@ import { ReportsClient } from "./ReportsClient";
 
 export default async function ReportsPage() {
   const { profile } = await requireAuth();
-  const allowed = profile.role === "admin" || profile.role === "viewer" || profile.allowed_pages?.includes("reports");
+  const allowed = profile.role === "admin" || profile.role === "viewer" || profile.role === "operations" || profile.allowed_pages?.includes("reports");
   if (!allowed) redirect("/dashboard");
   return <ReportsClient />;
 }

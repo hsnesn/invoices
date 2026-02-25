@@ -14,6 +14,7 @@ const ROLE_COLORS: Record<string, string> = {
   admin: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border border-red-200 dark:border-red-800",
   manager: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
   finance: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+  operations: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 border border-orange-200 dark:border-orange-800",
   submitter: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600",
   viewer: "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600",
 };
@@ -27,7 +28,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
   const { data: programs = [] } = useSWR<{ id: string; name: string }[]>("/api/programs", fetcher);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
-  const [inviteRole, setInviteRole] = useState<"submitter" | "manager" | "admin" | "finance" | "viewer">("submitter");
+  const [inviteRole, setInviteRole] = useState<"submitter" | "manager" | "admin" | "finance" | "viewer" | "operations">("submitter");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [search, setSearch] = useState("");
@@ -260,6 +261,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
               <option value="manager">Manager</option>
               <option value="admin">Admin</option>
               <option value="finance">Finance</option>
+              <option value="operations">Operations</option>
               <option value="viewer">Viewer</option>
             </select>
           </div>
@@ -407,6 +409,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
               <option value="admin">Admin</option>
               <option value="manager">Manager</option>
               <option value="finance">Finance</option>
+              <option value="operations">Operations</option>
               <option value="submitter">Submitter</option>
               <option value="viewer">Viewer</option>
             </select>
@@ -454,6 +457,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
                         <option value="submitter">Submitter</option>
                         <option value="manager">Manager</option>
                         <option value="finance">Finance</option>
+                        <option value="operations">Operations</option>
                         <option value="admin">Admin</option>
                         <option value="viewer">Viewer</option>
                       </select>
