@@ -42,6 +42,7 @@ type SalaryRow = {
   paid_date: string | null;
   email_sent_status: string | null;
   created_at: string;
+  updated_at?: string;
   employees?: { full_name: string | null; email_address: string | null; badge_color: string | null; bank_account_number?: string | null; sort_code?: string | null } | null;
 };
 
@@ -280,7 +281,7 @@ export function SalariesBoard({
   const canMarkPaid = profile.role === "admin" || profile.role === "finance";
 
   const { data: salariesRaw, error: salariesError, mutate } = useSWR<SalaryRow[] | { error?: string }>("/api/salaries", fetcher);
-  const { data: stats, error: statsError } = useSWR<{ pending: { count: number; netTotal: number; costTotal: number }; paid: { count: number; netTotal: number; costTotal: number }; monthlyTrend: { month: string; count: number; netTotal: number; costTotal: number }[] }>("/api/salaries/stats", fetcher);
+  const { data: stats, error: statsError, mutate: mutateStats } = useSWR<{ pending: { count: number; netTotal: number; costTotal: number }; paid: { count: number; netTotal: number; costTotal: number }; monthlyTrend: { month: string; count: number; netTotal: number; costTotal: number }[] }>("/api/salaries/stats", fetcher);
 
   const salaries = Array.isArray(salariesRaw) ? salariesRaw : [];
   const searchParams = useSearchParams();
@@ -410,10 +411,29 @@ export function SalariesBoard({
   const recentActivity = React.useMemo(() => {
     const withDate = salaries.map((s) => ({
       ...s,
-      sortDate: s.paid_date || s.created_at || "",
+      sortDate: s.paid_date || s.updated_at || s.created_at || "",
     }));
     return [...withDate].sort((a, b) => b.sortDate.localeCompare(a.sortDate)).slice(0, 5);
   }, [salaries]);
+
+  useEffect(() => {
+    let disposed = false;
+    let sub: { unsubscribe: () => void } | null = null;
+    (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        if (disposed) return;
+        const supabase = createClient();
+        sub = supabase.channel("salaries-rt").on("postgres_changes", { event: "*", schema: "public", table: "salaries" }, () => {
+          if (!disposed) {
+            void mutate();
+            void mutateStats();
+          }
+        }).subscribe();
+      } catch { /* realtime not critical */ }
+    })();
+    return () => { disposed = true; sub?.unsubscribe(); };
+  }, [mutate, mutateStats]);
 
   const toggleColumn = useCallback((key: string) => {
     setVisibleColumns((prev) => {
@@ -1000,22 +1020,8 @@ export function SalariesBoard({
         </div>
       )}
 
-      {recentActivity.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
-          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Recent activity</p>
-          <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-400">
-            {recentActivity.map((s) => (
-              <li key={s.id} className="flex items-center gap-2">
-                <span className="font-medium">{s.employee_name ?? "—"}</span>
-                <span>{s.payment_month} {s.payment_year}</span>
-                <span>{s.status === "paid" ? "Paid" : s.status === "needs_review" ? "Needs Review" : "Pending"}</span>
-                <span>{s.paid_date ? `Paid ${s.paid_date}` : `Added ${s.created_at?.slice(0, 10)}`}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
+      <div className="flex gap-6">
+        <div className="min-w-0 flex-1 space-y-6">
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Presets:</span>
@@ -1359,6 +1365,26 @@ export function SalariesBoard({
           })}
         </div>
       )}
+
+        </div>
+        {recentActivity.length > 0 && (
+          <aside className="w-64 shrink-0">
+            <div className="sticky top-24 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Recent activity</p>
+              <ul className="mt-2 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                {recentActivity.map((s) => (
+                  <li key={s.id} className="flex flex-col gap-0.5 rounded-lg border border-slate-100 px-2 py-1.5 dark:border-slate-600">
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{s.employee_name ?? "—"}</span>
+                    <span>{s.payment_month} {s.payment_year}</span>
+                    <span>{s.status === "paid" ? "Paid" : s.status === "needs_review" ? "Needs Review" : "Pending"}</span>
+                    <span className="text-slate-500">{s.paid_date ? `Paid ${s.paid_date}` : `Added ${s.created_at?.slice(0, 10)}`}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </aside>
+        )}
+      </div>
 
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

@@ -11,7 +11,7 @@ function getResend() {
   return new Resend(key);
 }
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Invoice Approval Workflow";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "TRT World UK Payment System";
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? `${APP_NAME} <noreply@example.com>`;
 
 function invitationEmailHtml(inviterName: string, recipientName: string, role: string, magicLink: string) {

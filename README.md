@@ -37,7 +37,7 @@ Copy `.env.example` to `.env.local` and fill in:
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-only, never expose to client) |
 | `OPENAI_API_KEY` | OpenAI API key for extraction |
 | `RESEND_API_KEY` | Resend API key |
-| `RESEND_FROM_EMAIL` | Sender email (e.g. `Invoice System <noreply@yourdomain.com>`) |
+| `RESEND_FROM_EMAIL` | Sender email (e.g. `TRT World UK Payment System <noreply@yourdomain.com>`) |
 | `NEXT_PUBLIC_APP_URL` | Full app URL (e.g. `https://your-app.vercel.app`) |
 
 ### 3. Supabase setup
