@@ -82,7 +82,7 @@ export default async function InvoicesPage() {
   const allProfiles = (profiles ?? []) as { id: string; full_name: string | null; role?: string }[];
   const profilePairs = allProfiles.map((p) => [p.id, p.full_name || p.id] as [string, string]);
   const managerProfilePairs = allProfiles
-    .filter((p) => p.role === "manager" || p.role === "admin")
+    .filter((p) => p.role === "manager")
     .map((p) => [p.id, p.full_name || p.id] as [string, string]);
 
   const producerColorsMap: Record<string, string> = {};

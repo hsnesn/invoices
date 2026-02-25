@@ -106,6 +106,8 @@ const ALL_COLUMNS = [
 
 const DEFAULT_VISIBLE = ALL_COLUMNS.map(c => c.key);
 const COL_STORAGE_KEY = "fl_visible_columns";
+const PAGE_SIZE = 50;
+const GROUP_VIEW_STORAGE_KEY = "fl_group_view";
 
 function loadStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -215,6 +217,7 @@ export function FreelancerBoard({
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
+  const [contractorFilter, setContractorFilter] = useState("");
   const [missingInfoFilter, setMissingInfoFilter] = useState(false);
   const refreshAndKeepVisible = useCallback(() => {
     setGroupFilter("");
@@ -224,15 +227,22 @@ export function FreelancerBoard({
   const [bookedByFilter, setBookedByFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [groupByContractor, setGroupByContractor] = useState(false);
+  const [visibleCountByGroup, setVisibleCountByGroup] = useState<Record<string, number>>({});
 
-  const hasFilter = !!(search || departmentFilter || monthFilter || groupFilter || missingInfoFilter || managerFilter || bookedByFilter || dateFrom || dateTo);
-  const clearFilters = () => { setSearch(""); setDepartmentFilter(""); setMonthFilter(""); setGroupFilter(""); setMissingInfoFilter(false); setManagerFilter(""); setBookedByFilter(""); setDateFrom(""); setDateTo(""); };
+  const hasFilter = !!(search || departmentFilter || monthFilter || groupFilter || contractorFilter || missingInfoFilter || managerFilter || bookedByFilter || dateFrom || dateTo);
+  const clearFilters = () => { setSearch(""); setDepartmentFilter(""); setMonthFilter(""); setGroupFilter(""); setContractorFilter(""); setMissingInfoFilter(false); setManagerFilter(""); setBookedByFilter(""); setDateFrom(""); setDateTo(""); };
+
+  const filterByContractor = useCallback((name: string) => {
+    setContractorFilter(name === contractorFilter ? "" : name);
+  }, [contractorFilter]);
 
   const uniqueMonths = useMemo(() => Array.from(new Set(rows.map(r => r.month).filter(m => m !== "—"))).sort(), [rows]);
   const uniqueBookedBy = useMemo(() => Array.from(new Set(rows.map(r => r.bookedBy).filter(b => b !== "—"))).sort(), [rows]);
 
   const filteredRows = useMemo(() => rows.filter(r => {
     if (missingInfoFilter && !r.hasMissingInfo) return false;
+    if (contractorFilter && r.contractor !== contractorFilter) return false;
     if (search) { const q = search.toLowerCase(); if (![r.contractor, r.companyName, r.submittedBy, r.beneficiary, r.invNumber, r.serviceDescription, r.bookedBy, r.department, r.department2].some(v => v.toLowerCase().includes(q))) return false; }
     if (departmentFilter && r.departmentId !== departmentFilter) return false;
     if (monthFilter && r.month !== monthFilter) return false;
@@ -242,7 +252,7 @@ export function FreelancerBoard({
     if (dateFrom && r.createdAt < dateFrom) return false;
     if (dateTo && r.createdAt > dateTo + "T23:59:59") return false;
     return true;
-  }), [rows, search, departmentFilter, monthFilter, groupFilter, missingInfoFilter, managerFilter, bookedByFilter, dateFrom, dateTo]);
+  }), [rows, search, departmentFilter, monthFilter, groupFilter, contractorFilter, missingInfoFilter, managerFilter, bookedByFilter, dateFrom, dateTo]);
 
   /* ---------- Column visibility ---------- */
   const [visibleColumns, setVisibleColumns] = useState<string[]>([...DEFAULT_VISIBLE]);
@@ -256,6 +266,7 @@ export function FreelancerBoard({
     const stored = loadStorage<string[]>(COL_STORAGE_KEY, [...DEFAULT_VISIBLE]);
     const normalized = DEFAULT_VISIBLE.filter((k) => stored.includes(k));
     setVisibleColumns(normalized.length > 0 ? normalized : [...DEFAULT_VISIBLE]);
+    setGroupByContractor(loadStorage(GROUP_VIEW_STORAGE_KEY, false));
   }, []);
 
   useEffect(() => {
@@ -754,6 +765,55 @@ export function FreelancerBoard({
     return map;
   }, [filteredRows]);
 
+  const contractorGroups = useMemo(() => {
+    const m = new Map<string, DisplayRow[]>();
+    for (const r of filteredRows) {
+      const key = r.contractor || "—";
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(r);
+    }
+    return Array.from(m.entries())
+      .map(([key, rows]) => ({
+        key,
+        rows,
+        amount: rows.reduce((s, r) => s + r.amountNum, 0),
+        additional: rows.reduce((s, r) => s + r.additionalCostNum, 0),
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [filteredRows]);
+
+  const displayGroups = useMemo(() => {
+    if (groupByContractor) {
+      return contractorGroups.map(g => ({
+        key: g.key,
+        label: g.key,
+        rows: g.rows,
+        amount: g.amount,
+        additional: g.additional,
+        color: "border-slate-400",
+        headerBg: "bg-slate-50 dark:bg-slate-800/50",
+        textColor: "text-slate-700 dark:text-slate-300",
+      }));
+    }
+    return GROUPS.map(g => ({
+      key: g.key,
+      label: g.label,
+      rows: groupedRows[g.key] ?? [],
+      amount: (groupSums[g.key] ?? {}).amount ?? 0,
+      additional: (groupSums[g.key] ?? {}).additional ?? 0,
+      color: g.color,
+      headerBg: g.headerBg,
+      textColor: g.textColor,
+    }));
+  }, [groupByContractor, contractorGroups, groupedRows, groupSums]);
+
+  const showMoreInGroup = useCallback((groupKey: string) => {
+    setVisibleCountByGroup(prev => ({ ...prev, [groupKey]: (prev[groupKey] ?? PAGE_SIZE) + PAGE_SIZE }));
+  }, []);
+  const showAllInGroup = useCallback((groupKey: string, total: number) => {
+    setVisibleCountByGroup(prev => ({ ...prev, [groupKey]: total }));
+  }, []);
+
   /* ---------- Permissions ---------- */
   const canEditRow = (r: DisplayRow) => {
     if (currentRole === "admin") return true;
@@ -790,11 +850,9 @@ export function FreelancerBoard({
       );
       case "contractor": return (
         <span
-          className="font-medium cursor-pointer"
-          onMouseEnter={() => showPreviewOnHover(r.id)}
-          onMouseLeave={hidePreviewOnHover}
-          onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
-          title="Hover to preview, double-click to open in new tab"
+          className={`font-medium ${r.contractor !== "—" ? "cursor-pointer hover:text-blue-600 hover:underline dark:hover:text-blue-400" : ""}`}
+          onClick={e => { if (r.contractor !== "—") { e.stopPropagation(); filterByContractor(r.contractor); } }}
+          title={r.contractor !== "—" ? "Click to filter by this contractor" : undefined}
         >
           {r.contractor}{r.status === "rejected" && r.rejectionReason && <div className="mt-1 rounded bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300"><span className="font-semibold">Rejection:</span> {r.rejectionReason}</div>}
         </span>
@@ -818,7 +876,17 @@ export function FreelancerBoard({
       case "amount": return <span className="font-semibold text-gray-900 dark:text-white group/amt relative cursor-default">{r.amount}<span className="pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-normal text-white opacity-0 shadow-lg transition-opacity group-hover/amt:opacity-100 z-50">{r.serviceDaysCount} days × {r.serviceRate} + {r.additionalCost} add.</span></span>;
       case "currency": return <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{r.currency === "USD" ? "USD ($)" : r.currency === "EUR" ? "EUR (€)" : "GBP (£)"}</span>;
       case "invNumber": return <span className="max-w-[120px] truncate block" title={r.invNumber}>{r.invNumber}</span>;
-      case "beneficiary": return <span className="max-w-[120px] truncate block" title={r.beneficiary}>{r.beneficiary}</span>;
+      case "beneficiary": return (
+        <span
+          className="max-w-[120px] truncate block cursor-pointer"
+          onMouseEnter={() => showPreviewOnHover(r.id)}
+          onMouseLeave={hidePreviewOnHover}
+          onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
+          title="Hover to preview, double-click to open in new tab"
+        >
+          {r.beneficiary}
+        </span>
+      );
       case "accountNumber": return <span className="max-w-[120px] truncate block" title={r.accountNumber}>{r.accountNumber}</span>;
       case "sortCode": return r.sortCode;
       case "department": return <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>;
@@ -927,10 +995,21 @@ export function FreelancerBoard({
             Missing info
           </label>
           <select value={groupFilter} onChange={e => setGroupFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Status</option>{GROUPS.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}</select>
-          <select value={managerFilter} onChange={e => setManagerFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Managers</option>{profilePairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
+          <select value={managerFilter} onChange={e => setManagerFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Managers</option>{(managerProfilePairs ?? []).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
           <select value={bookedByFilter} onChange={e => setBookedByFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Booked By</option>{uniqueBookedBy.map(b => <option key={b} value={b}>{b}</option>)}</select>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" title="From" />
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" title="To" />
+          <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-600 pl-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400">Group by:</span>
+            <button onClick={() => { setGroupByContractor(false); localStorage.setItem(GROUP_VIEW_STORAGE_KEY, "false"); }} className={`rounded-lg px-2 py-1 text-xs font-medium ${!groupByContractor ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"}`}>Status</button>
+            <button onClick={() => { setGroupByContractor(true); localStorage.setItem(GROUP_VIEW_STORAGE_KEY, "true"); }} className={`rounded-lg px-2 py-1 text-xs font-medium ${groupByContractor ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"}`}>Contractor</button>
+          </div>
+          {contractorFilter && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">
+              Contractor: {contractorFilter}
+              <button onClick={() => setContractorFilter("")} className="hover:text-blue-600 dark:hover:text-blue-300">✕</button>
+            </span>
+          )}
           {hasFilter && <button onClick={clearFilters} className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">Clear Filters</button>}
           <span className="ml-auto text-xs text-gray-400">{filteredRows.length} of {rows.length}</span>
         </div>
@@ -988,11 +1067,13 @@ export function FreelancerBoard({
           title="No freelancer invoices"
           description="There are no invoices matching your filters. Submit a new invoice or adjust your search."
         />
-      ) : GROUPS.map(g => {
-        const gRows = groupedRows[g.key] ?? [];
-        if (gRows.length === 0 && g.key === "rejected" && !groupFilter) return null;
+      ) : displayGroups.map(g => {
+        const gRows = g.rows;
+        const visibleCount = Math.min(gRows.length, visibleCountByGroup[g.key] ?? PAGE_SIZE);
+        const visibleRows = gRows.slice(0, visibleCount);
+        const hasMore = gRows.length > visibleCount;
+        if (gRows.length === 0 && !groupByContractor && g.key === "rejected" && !groupFilter) return null;
         const collapsed = collapsedGroups.has(g.key);
-        const sums = groupSums[g.key];
         return (
           <div key={g.key} className={`rounded-xl border-l-4 ${g.color} bg-white shadow-md dark:bg-slate-800 overflow-hidden`}>
             <button onClick={() => toggleGroup(g.key)} className={`w-full flex items-center justify-between px-4 py-3 ${g.headerBg} transition-colors hover:opacity-90`}>
@@ -1002,14 +1083,14 @@ export function FreelancerBoard({
                 <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:text-slate-300">{gRows.length}</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                {sums.amount > 0 && <span>Amount: <strong>{fmtCurrency(sums.amount)}</strong></span>}
+                {g.amount > 0 && <span>Amount: <strong>{fmtCurrency(g.amount)}</strong></span>}
               </div>
             </button>
             {!collapsed && (
               <>
                 <div className="md:hidden px-4 pb-4">
                   <FreelancerMobileCards
-                    rows={gRows}
+                    rows={visibleRows}
                     currentRole={currentRole}
                     currentUserId={currentUserId}
                     isOperationsRoomMember={isOperationsRoomMember}
@@ -1028,12 +1109,12 @@ export function FreelancerBoard({
                 <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-[2600px] w-full divide-y divide-slate-200 dark:divide-slate-600">
                   <thead className="bg-slate-50 dark:bg-slate-700/50"><tr>
-                    {currentRole === "admin" && <th className="px-2 py-2 w-8"><input type="checkbox" checked={gRows.length > 0 && gRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(gRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" /></th>}
+                    {currentRole === "admin" && <th className="px-2 py-2 w-8"><input type="checkbox" checked={visibleRows.length > 0 && visibleRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(visibleRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" /></th>}
                     {COLUMNS.map(c => <th key={c.key} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.label}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {gRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
-                    {gRows.map(r => {
+                    {visibleRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
+                    {visibleRows.map(r => {
                       const editable = canEditRow(r);
                       const editTdCls = editable ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
                       const isDuplicate = duplicates.has(r.id);
@@ -1128,8 +1209,18 @@ export function FreelancerBoard({
                       );
                     })}
                   </tbody>
-                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{currentRole === "admin" && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(sums.additional) : c.key === "amount" ? fmtCurrency(sums.amount) : ""}</td>)}</tr></tfoot>
+                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{currentRole === "admin" && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(g.additional) : c.key === "amount" ? fmtCurrency(g.amount) : ""}</td>)}</tr></tfoot>
                 </table>
+                {hasMore && (
+                  <div className="flex items-center justify-center gap-2 border-t border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+                    <button onClick={() => showMoreInGroup(g.key)} className="rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+                      Show {Math.min(PAGE_SIZE, gRows.length - visibleCount)} more
+                    </button>
+                    <button onClick={() => showAllInGroup(g.key, gRows.length)} className="rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+                      Show all ({gRows.length})
+                    </button>
+                  </div>
+                )}
                 </div>
               </>
             )}
