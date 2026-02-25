@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createAuditEvent } from "@/lib/audit";
 import { sendManagerAssignedEmail } from "@/lib/email";
 import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
+import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { isEmailStageEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
@@ -119,7 +120,7 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("invoices")
-      .select("id, submitter_user_id, department_id, program_id, service_description, invoice_workflows(status, manager_user_id)")
+      .select("id, submitter_user_id, department_id, program_id, service_description, invoice_type, invoice_workflows(status, manager_user_id)")
       .eq("id", invoiceId)
       .single();
     if (!existing) {
@@ -250,17 +251,33 @@ export async function PATCH(
         const { data: mUser } = await supabase.auth.admin.getUserById(newManagerId);
         const { data: extracted } = await supabase
           .from("invoice_extracted_fields")
-          .select("invoice_number")
+          .select("invoice_number, gross_amount")
           .eq("invoice_id", invoiceId)
           .single();
         if (mUser?.user?.email) {
           const guestName = (guest_name?.trim() || parseGuestNameFromServiceDesc(existing.service_description)) ?? undefined;
+          let guestDetails: import("@/lib/email").GuestEmailDetails | undefined;
+          if ((existing as { invoice_type?: string }).invoice_type !== "freelancer") {
+            const deptName = existing.department_id
+              ? ((await supabase.from("departments").select("name").eq("id", existing.department_id).single()).data?.name ?? "—")
+              : "—";
+            const progName = existing.program_id
+              ? ((await supabase.from("programs").select("name").eq("id", existing.program_id).single()).data?.name ?? "—")
+              : "—";
+            guestDetails = buildGuestEmailDetails(
+              existing.service_description,
+              deptName,
+              progName,
+              extracted
+            );
+          }
           await sendManagerAssignedEmail({
             managerEmail: mUser.user.email,
             invoiceId,
             invoiceNumber: extracted?.invoice_number ?? undefined,
             assignedByName: profile.full_name ?? undefined,
             guestName: guestName ?? undefined,
+            guestDetails,
           });
         }
       }

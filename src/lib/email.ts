@@ -63,6 +63,19 @@ function subjectWithGuest(guestName: string | undefined, baseSubject: string): s
   return baseSubject;
 }
 
+/** Guest invoice details for email body and subject. */
+export type GuestEmailDetails = {
+  producer: string;
+  guest: string;
+  title: string;
+  department: string;
+  programme: string;
+  topic: string;
+  txDate: string;
+  invoiceNumber: string;
+  amount: string;
+};
+
 /** Freelancer invoice details for email body and subject. */
 export type FreelancerEmailDetails = {
   companyOrPerson: string; // Company name if valid, else contractor name
@@ -101,6 +114,25 @@ function fmtNum(v: unknown): string {
   if (v == null) return "—";
   const n = Number(v);
   return Number.isFinite(n) ? String(n) : "—";
+}
+
+/** Build HTML table of guest invoice details (all in English). */
+function buildGuestDetailsHtml(d: GuestEmailDetails): string {
+  const rows = [
+    ["Producer", d.producer],
+    ["Guest", d.guest],
+    ["Title", d.title],
+    ["Department", d.department],
+    ["Programme", d.programme],
+    ["Topic", d.topic],
+    ["TX Date", d.txDate],
+    ["INV Number", d.invoiceNumber],
+    ["Amount", d.amount],
+  ];
+  const trs = rows.map(([label, val]) => `<tr><td style="padding:6px 12px;font-weight:600;color:#475569;width:40%">${label}</td><td style="padding:6px 12px;color:#1e293b">${fmt(val)}</td></tr>`).join("");
+  return `<div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table style="width:100%;border-collapse:collapse;font-size:13px">${trs}</table>
+</div>`;
 }
 
 /** Build HTML table of freelancer invoice details (all in English). */
@@ -183,7 +215,7 @@ export async function sendEmailWithAttachment(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendSubmissionEmail(params: {
-  submitterEmail: string; managerEmails: string[]; invoiceId: string; invoiceNumber?: string; guestName?: string; freelancerDetails?: FreelancerEmailDetails;
+  submitterEmail: string; managerEmails: string[]; invoiceId: string; invoiceNumber?: string; guestName?: string; guestDetails?: GuestEmailDetails; freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "New invoice";
@@ -191,7 +223,11 @@ export async function sendSubmissionEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, "Submitted for review")
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   const to = [params.submitterEmail, ...params.managerEmails].filter((e): e is string => !!e && e.trim().length > 0);
   if (to.length === 0) return { success: false, error: "No recipients" };
   return sendEmail({
@@ -199,7 +235,7 @@ export async function sendSubmissionEmail(params: {
     subject,
     html: wrap("Invoice Submitted", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A new invoice has been submitted and is awaiting manager review.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
       ${btn(link, "View Invoice")}
@@ -213,7 +249,7 @@ export async function sendSubmissionEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendManagerApprovedEmail(params: {
-  submitterEmail: string; adminEmails: string[]; operationsRoomEmails?: string[]; invoiceId: string; invoiceNumber?: string; managerName?: string; guestName?: string; freelancerDetails?: FreelancerEmailDetails;
+  submitterEmail: string; adminEmails: string[]; operationsRoomEmails?: string[]; invoiceId: string; invoiceNumber?: string; managerName?: string; guestName?: string; guestDetails?: GuestEmailDetails; freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Your invoice";
@@ -222,7 +258,11 @@ export async function sendManagerApprovedEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, statusSuffix)
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   const to = [
     params.submitterEmail,
     ...params.adminEmails,
@@ -233,7 +273,7 @@ export async function sendManagerApprovedEmail(params: {
     subject,
     html: wrap("Invoice Approved", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Great news! The invoice has been approved${params.managerName ? ` by <strong>${params.managerName}</strong>` : ""} and is now pending admin review.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge(statusSuffix, "#d1fae5", "#065f46")}</p>
       ${btn(link, "View Invoice", "#059669")}
@@ -246,7 +286,7 @@ export async function sendManagerApprovedEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendManagerRejectedEmail(params: {
-  submitterEmail: string; invoiceId: string; reason: string; invoiceNumber?: string; managerName?: string; guestName?: string; freelancerDetails?: FreelancerEmailDetails;
+  submitterEmail: string; invoiceId: string; reason: string; invoiceNumber?: string; managerName?: string; guestName?: string; guestDetails?: GuestEmailDetails; freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Your invoice";
@@ -254,13 +294,17 @@ export async function sendManagerRejectedEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, "Rejected")
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   return sendEmail({
     to: params.submitterEmail,
     subject,
     html: wrap("Invoice Rejected", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your invoice has been rejected${params.managerName ? ` by <strong>${params.managerName}</strong>` : ""}.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <div style="margin:16px 0;padding:12px 16px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0">
         <p style="margin:0;font-size:13px;color:#7f1d1d"><strong>Rejection Reason:</strong> ${params.reason}</p>
@@ -277,7 +321,7 @@ export async function sendManagerRejectedEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendReadyForPaymentEmail(params: {
-  submitterEmail: string; financeEmails: string[]; invoiceId: string; invoiceNumber?: string; guestName?: string; freelancerDetails?: FreelancerEmailDetails;
+  submitterEmail: string; financeEmails: string[]; invoiceId: string; invoiceNumber?: string; guestName?: string; guestDetails?: GuestEmailDetails; freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Invoice";
@@ -285,13 +329,17 @@ export async function sendReadyForPaymentEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, "Ready for payment")
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   return sendEmail({
     to: [params.submitterEmail, ...params.financeEmails],
     subject,
     html: wrap("Ready for Payment", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The invoice has been fully approved and is now ready for payment processing.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Ready for Payment", "#dbeafe", "#1e40af")}</p>
       ${btn(link, "Process Payment", "#2563eb")}
@@ -304,7 +352,7 @@ export async function sendReadyForPaymentEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendPaidEmail(params: {
-  submitterEmail: string; adminEmails: string[]; invoiceId: string; paymentReference?: string; invoiceNumber?: string; guestName?: string; freelancerDetails?: FreelancerEmailDetails;
+  submitterEmail: string; adminEmails: string[]; invoiceId: string; paymentReference?: string; invoiceNumber?: string; guestName?: string; guestDetails?: GuestEmailDetails; freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Invoice";
@@ -312,13 +360,17 @@ export async function sendPaidEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, "Payment completed")
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   return sendEmail({
     to: [params.submitterEmail, ...params.adminEmails],
     subject,
     html: wrap("Payment Completed", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The invoice has been paid successfully.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       ${params.paymentReference ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Payment Reference:</strong> ${params.paymentReference}</p>` : ""}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Paid", "#d1fae5", "#065f46")}</p>
@@ -337,6 +389,7 @@ export async function sendManagerAssignedEmail(params: {
   invoiceNumber?: string;
   assignedByName?: string;
   guestName?: string;
+  guestDetails?: GuestEmailDetails;
   freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
@@ -345,13 +398,17 @@ export async function sendManagerAssignedEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, "Assigned to you for review")
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   return sendEmail({
     to: params.managerEmail,
     subject,
     html: wrap("Invoice Assigned to You", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">You have been assigned${params.assignedByName ? ` by <strong>${params.assignedByName}</strong>` : ""} to review this invoice.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
       ${btn(link, "Review Invoice", "#f59e0b")}
@@ -364,7 +421,7 @@ export async function sendManagerAssignedEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendResubmittedEmail(params: {
-  managerEmails: string[]; invoiceId: string; invoiceNumber?: string; submitterName?: string; guestName?: string; freelancerDetails?: FreelancerEmailDetails;
+  managerEmails: string[]; invoiceId: string; invoiceNumber?: string; submitterName?: string; guestName?: string; guestDetails?: GuestEmailDetails; freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Invoice";
@@ -372,13 +429,17 @@ export async function sendResubmittedEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, "Resubmitted after correction")
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   return sendEmail({
     to: params.managerEmails,
     subject,
     html: wrap("Invoice Resubmitted", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A previously rejected invoice has been corrected and resubmitted${params.submitterName ? ` by <strong>${params.submitterName}</strong>` : ""} for your review.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
       ${btn(link, "Review Invoice", "#f59e0b")}
@@ -391,7 +452,7 @@ export async function sendResubmittedEmail(params: {
 /* ------------------------------------------------------------------ */
 
 export async function sendAdminApprovedEmail(params: {
-  submitterEmail: string; financeEmails: string[]; invoiceId: string; invoiceNumber?: string; adminName?: string; guestName?: string; freelancerDetails?: FreelancerEmailDetails;
+  submitterEmail: string; financeEmails: string[]; invoiceId: string; invoiceNumber?: string; adminName?: string; guestName?: string; guestDetails?: GuestEmailDetails; freelancerDetails?: FreelancerEmailDetails;
 }) {
   const link = `${APP_URL}/invoices/${params.invoiceId}`;
   const invLabel = params.invoiceNumber ? `#${params.invoiceNumber}` : "Invoice";
@@ -400,13 +461,17 @@ export async function sendAdminApprovedEmail(params: {
   const subject = params.freelancerDetails
     ? subjectForFreelancer(params.freelancerDetails, statusSuffix)
     : subjectWithGuest(params.guestName, baseSubject);
-  const detailsBlock = params.freelancerDetails ? buildFreelancerDetailsHtml(params.freelancerDetails) : "";
+  const detailsBlock = params.freelancerDetails
+    ? buildFreelancerDetailsHtml(params.freelancerDetails)
+    : params.guestDetails
+    ? buildGuestDetailsHtml(params.guestDetails)
+    : "";
   return sendEmail({
     to: [params.submitterEmail, ...params.financeEmails],
     subject,
     html: wrap("Admin Approved", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The invoice has been approved by admin${params.adminName ? ` (<strong>${params.adminName}</strong>)` : ""} and is now ready for payment.</p>
-      ${params.invoiceNumber && !params.freelancerDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
+      ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Ready for Payment", "#dbeafe", "#1e40af")}</p>
       ${btn(link, "Process Payment", "#2563eb")}

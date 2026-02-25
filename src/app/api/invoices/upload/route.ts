@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendSubmissionEmail } from "@/lib/email";
 import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
+import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { isEmailStageEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
@@ -225,12 +226,25 @@ export async function POST(request: NextRequest) {
       if (submitterEmail || managerEmails.length > 0) {
         const guestName = parseGuestNameFromServiceDesc(service_description);
         const invoiceNumber = file.name.replace(/\.[^.]+$/, "");
+        const deptName = safeDepartmentId
+          ? ((await supabaseAdmin.from("departments").select("name").eq("id", safeDepartmentId).single()).data?.name ?? "—")
+          : "—";
+        const progName = safeProgramId
+          ? ((await supabaseAdmin.from("programs").select("name").eq("id", safeProgramId).single()).data?.name ?? "—")
+          : "—";
+        const guestDetails = buildGuestEmailDetails(
+          service_description,
+          deptName,
+          progName,
+          { invoice_number: invoiceNumber || null, gross_amount: null }
+        );
         await sendSubmissionEmail({
           submitterEmail: submitterEmail ?? "",
           managerEmails,
           invoiceId,
           invoiceNumber: invoiceNumber || undefined,
           guestName,
+          guestDetails,
         });
       }
     }

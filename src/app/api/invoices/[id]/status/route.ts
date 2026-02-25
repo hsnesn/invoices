@@ -12,6 +12,7 @@ import {
   sendAdminApprovedEmail,
 } from "@/lib/email";
 import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
+import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { triggerBookingFormWorkflow } from "@/lib/booking-form/approval-trigger";
 import { isEmailStageEnabled, getFilteredEmailsForUserIds, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
 import type { InvoiceStatus } from "@/lib/types";
@@ -107,6 +108,7 @@ export async function POST(
 
     const isFreelancer = (inv as { invoice_type?: string }).invoice_type === "freelancer";
     let freelancerDetails: import("@/lib/email").FreelancerEmailDetails | undefined;
+    let guestDetails: import("@/lib/email").GuestEmailDetails | undefined;
     if (isFreelancer) {
       const { data: fl } = await supabase
         .from("freelancer_invoice_fields")
@@ -117,6 +119,19 @@ export async function POST(
         ? ((await supabase.from("departments").select("name").eq("id", inv.department_id).single()).data?.name ?? "—")
         : "—";
       freelancerDetails = (await import("@/lib/freelancer-email-details")).buildFreelancerEmailDetails(fl, extracted, deptName);
+    } else {
+      const deptName = inv.department_id
+        ? ((await supabase.from("departments").select("name").eq("id", inv.department_id).single()).data?.name ?? "—")
+        : "—";
+      const progName = inv.program_id
+        ? ((await supabase.from("programs").select("name").eq("id", inv.program_id).single()).data?.name ?? "—")
+        : "—";
+      guestDetails = buildGuestEmailDetails(
+        (inv as { service_description?: string | null }).service_description,
+        deptName,
+        progName,
+        extracted
+      );
     }
 
     // Submitters cannot approve/reject their own invoices (admins exempt)
@@ -166,6 +181,7 @@ export async function POST(
                 invoiceId,
                 invoiceNumber: extracted?.invoice_number ?? undefined,
                 guestName,
+                guestDetails,
               });
             }
           }
@@ -241,6 +257,7 @@ export async function POST(
               reason: rejection_reason,
               invoiceNumber: extracted?.invoice_number ?? undefined,
               guestName,
+              guestDetails,
               freelancerDetails,
             });
           }
@@ -300,6 +317,7 @@ export async function POST(
               invoiceId,
               reason: rejection_reason,
               invoiceNumber: extracted?.invoice_number ?? undefined,
+              guestDetails,
               freelancerDetails,
             });
           }
@@ -394,6 +412,7 @@ export async function POST(
               invoiceId,
               invoiceNumber: extracted?.invoice_number ?? undefined,
               guestName,
+              guestDetails,
               freelancerDetails,
             });
           }
@@ -440,6 +459,7 @@ export async function POST(
               invoiceNumber: extracted?.invoice_number ?? undefined,
               managerName: profile.full_name ?? undefined,
               guestName,
+              guestDetails,
               freelancerDetails,
             });
           }
@@ -469,7 +489,7 @@ export async function POST(
           for (const id of filteredAdminIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) paidAdminEmails.push(u.email); }
           const submitterWants = paidSubUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
           if (submitterWants || paidAdminEmails.length > 0) {
-            await sendPaidEmail({ submitterEmail: submitterWants ? paidSubUser!.email! : "", adminEmails: paidAdminEmails, invoiceId, paymentReference: payment_reference, invoiceNumber: extracted?.invoice_number ?? undefined, guestName, freelancerDetails });
+            await sendPaidEmail({ submitterEmail: submitterWants ? paidSubUser!.email! : "", adminEmails: paidAdminEmails, invoiceId, paymentReference: payment_reference, invoiceNumber: extracted?.invoice_number ?? undefined, guestName, guestDetails, freelancerDetails });
           }
         }
       } else if (to_status === "archived") {
@@ -523,7 +543,7 @@ export async function POST(
             const managerEmails: string[] = [];
             for (const id of filteredIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) managerEmails.push(u.email); }
             if (managerEmails.length > 0) {
-              await sendResubmittedEmail({ managerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, freelancerDetails });
+              await sendResubmittedEmail({ managerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, guestDetails, freelancerDetails });
             }
           }
         }
@@ -566,6 +586,7 @@ export async function POST(
               paymentReference: payment_reference,
               invoiceNumber: extracted?.invoice_number ?? undefined,
               guestName,
+              guestDetails,
               freelancerDetails,
             });
           }
@@ -601,7 +622,7 @@ export async function POST(
           const resubManagerEmails: string[] = [];
           for (const id of filteredIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) resubManagerEmails.push(u.email); }
           if (resubManagerEmails.length > 0) {
-            await sendResubmittedEmail({ managerEmails: resubManagerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, freelancerDetails });
+            await sendResubmittedEmail({ managerEmails: resubManagerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, guestDetails, freelancerDetails });
           }
         }
       } else {
