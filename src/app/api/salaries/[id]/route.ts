@@ -235,8 +235,23 @@ export async function PATCH(
         }
       }
 
-      const emp = existing as { employees?: { email_address?: string } | null };
-      const emailTo = emp?.employees?.email_address ?? "hasanesen@gmail.com";
+      const emp = existing as { employees?: { email_address?: string } | null; employee_name?: string | null };
+      let emailTo = emp?.employees?.email_address;
+      if (!emailTo && emp?.employee_name) {
+        const empName = (emp.employee_name ?? "").trim().toLowerCase().replace(/\b(Mr|Mrs|Ms|Dr)\.?\s*/gi, "").trim();
+        const empWords = empName.split(/\s+/).filter(Boolean);
+        const { data: allEmps } = await supabase.from("employees").select("full_name, email_address");
+        for (const e of allEmps ?? []) {
+          if (!e?.email_address) continue;
+          const dbNorm = (e.full_name ?? "").trim().toLowerCase();
+          const matches = empWords.length > 0 && empWords.every((w) => dbNorm.includes(w));
+          if (matches || dbNorm.includes(empName) || empName.includes(dbNorm)) {
+            emailTo = e.email_address;
+            break;
+          }
+        }
+      }
+      emailTo = emailTo ?? "london.finance@trtworld.com";
       const salaryForEmail: SalaryForEmail = {
         ...existing,
         paid_date: paidDate,
