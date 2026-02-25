@@ -138,9 +138,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
   const visiblePages = PAGES.filter((p) => {
     if (p.viewerHidden && isViewer) return false;
+    if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
     if (isViewer) return ["guest_invoices", "freelancer_invoices", "reports"].includes(p.pageKey);
-    if (isOperations) return ["guest_invoices", "freelancer_invoices", "reports", "salaries"].includes(p.pageKey);
+    if (isOperations) return ["guest_invoices", "freelancer_invoices", "reports", "salaries", "setup"].includes(p.pageKey);
     if (profile.role === "finance") return ["guest_invoices", "freelancer_invoices", "reports", "salaries"].includes(p.pageKey);
     if (userPages && userPages.length > 0) return userPages.includes(p.pageKey);
     return true;

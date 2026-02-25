@@ -832,7 +832,10 @@ export function InvoicesBoard({
   const [rejectReason, setRejectReason] = useState("");
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("");
+  const [previewDownloadUrl, setPreviewDownloadUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const previewShowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1140,21 +1143,59 @@ export function InvoicesBoard({
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
       return null;
     });
+    setPreviewHtml(null);
+    setPreviewDownloadUrl(null);
+    setPreviewLoading(false);
   }, []);
 
   const openPdf = useCallback(async (invoiceId: string) => {
+    setPreviewLoading(true);
+    setPreviewUrl(null);
+    setPreviewHtml(null);
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/pdf`);
       const data = await res.json();
       if (!data.url) return;
       const row = rows.find((r) => r.id === invoiceId);
       setPreviewName(row?.invNumber ?? "File");
+      setPreviewDownloadUrl(data.url);
+
       const fileRes = await fetch(data.url);
       const blob = await fileRes.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      setPreviewUrl(blobUrl);
+      const mime = blob.type.toLowerCase();
+      const fileUrl = data.url.toLowerCase();
+
+      if (mime.includes("pdf") || fileUrl.includes(".pdf")) {
+        const blobUrl = URL.createObjectURL(blob);
+        setPreviewHtml(null);
+        setPreviewUrl(blobUrl);
+      } else if (mime.includes("word") || mime.includes("docx") || fileUrl.includes(".docx") || fileUrl.includes(".doc")) {
+        const mammoth = await import("mammoth");
+        const arrayBuf = await blob.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuf });
+        setPreviewUrl(null);
+        setPreviewHtml(result.value);
+      } else if (mime.includes("sheet") || mime.includes("excel") || fileUrl.includes(".xlsx") || fileUrl.includes(".xls")) {
+        const XLSX = await import("xlsx");
+        const arrayBuf = await blob.arrayBuffer();
+        const wb = XLSX.read(arrayBuf, { type: "array" });
+        let html = "";
+        for (const name of wb.SheetNames) {
+          const ws = wb.Sheets[name];
+          html += `<h3 style="margin:16px 0 8px;font-weight:bold;font-size:14px;">${name}</h3>`;
+          html += XLSX.utils.sheet_to_html(ws, { editable: false });
+        }
+        setPreviewUrl(null);
+        setPreviewHtml(html);
+      } else {
+        const blobUrl = URL.createObjectURL(blob);
+        setPreviewHtml(null);
+        setPreviewUrl(blobUrl);
+      }
     } catch {
       // silently fail
+    } finally {
+      setPreviewLoading(false);
     }
   }, [rows]);
 
@@ -2238,7 +2279,7 @@ export function InvoicesBoard({
         </div>
       )}
 
-      {previewUrl && (
+      {(previewUrl || previewHtml || previewLoading) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closePreview}>
           <div
             className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
@@ -2247,15 +2288,17 @@ export function InvoicesBoard({
             onMouseLeave={hidePreviewOnHover}
           >
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-800 truncate dark:text-white">{previewName}</h3>
+              <h3 className="text-sm font-semibold text-gray-800 truncate dark:text-white">{previewName || (previewLoading ? "Loading..." : "")}</h3>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => void downloadFile(previewUrl, previewName || "invoice")}
-                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 transition-colors shadow-sm"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
-                  Download
-                </button>
+                {previewDownloadUrl && (
+                  <button
+                    onClick={() => void downloadFile(previewDownloadUrl, previewName || "invoice")}
+                    className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 transition-colors shadow-sm"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                    Download
+                  </button>
+                )}
                 <button
                   onClick={closePreview}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors"
@@ -2264,8 +2307,15 @@ export function InvoicesBoard({
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <iframe src={previewUrl} className="h-full w-full border-0" title="File preview" />
+            <div className="flex-1 overflow-hidden flex items-center justify-center">
+              {previewLoading && !previewUrl && !previewHtml && (
+                <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
+                  <svg className="h-12 w-12 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>
+                  <span className="text-sm">Loading file...</span>
+                </div>
+              )}
+              {previewUrl && !previewLoading && <iframe src={previewUrl} className="h-full w-full border-0" title="File preview" />}
+              {previewHtml && !previewLoading && <div className="h-full w-full overflow-auto p-6 prose prose-sm max-w-none dark:prose-invert [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-1.5 [&_td]:text-sm [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-3 [&_th]:py-2 [&_th]:text-sm [&_th]:font-semibold dark:[&_td]:border-gray-600 dark:[&_th]:border-gray-600 dark:[&_th]:bg-gray-800" dangerouslySetInnerHTML={{ __html: previewHtml }} />}
             </div>
           </div>
         </div>

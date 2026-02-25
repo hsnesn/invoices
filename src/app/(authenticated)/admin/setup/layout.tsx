@@ -8,6 +8,6 @@ export default async function SetupLayout({
 }) {
   const { profile } = await requireAuth();
   if (profile.role === "viewer") redirect("/dashboard");
-  if (profile.role !== "admin") redirect("/dashboard");
+  if (profile.role !== "admin" && profile.role !== "operations") redirect("/dashboard");
   return <>{children}</>;
 }
