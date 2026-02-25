@@ -11,6 +11,7 @@ import { FreelancerMobileCards } from "./FreelancerMobileCards";
 
 const FreelancerDashboard = lazy(() => import("./FreelancerDashboard").then(m => ({ default: m.FreelancerDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
+import { STATUS_GROUP_COLORS, departmentBadgeStyle, statusBadgeStyle } from "@/lib/colors";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -56,20 +57,20 @@ type NoteItem = { id: number; content: string; author_name: string; created_at: 
 /* CONSTANTS                                                           */
 /* ------------------------------------------------------------------ */
 
-const GROUPS: { key: GroupKey; label: string; color: string; headerBg: string; textColor: string }[] = [
-  { key: "submitted", label: "Submitted Invoices", color: "border-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", textColor: "text-amber-700 dark:text-amber-400" },
-  { key: "rejected", label: "Rejected Invoices", color: "border-rose-500", headerBg: "bg-rose-50 dark:bg-rose-950/30", textColor: "text-rose-700 dark:text-rose-400" },
-  { key: "admin_approvals", label: "The Operations Room Approvals", color: "border-orange-500", headerBg: "bg-orange-50 dark:bg-orange-950/30", textColor: "text-orange-700 dark:text-orange-400" },
-  { key: "ready_for_payment", label: "Ready for Payment", color: "border-sky-500", headerBg: "bg-sky-50 dark:bg-sky-950/30", textColor: "text-sky-700 dark:text-sky-400" },
-  { key: "paid", label: "Paid Invoices", color: "border-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", textColor: "text-emerald-700 dark:text-emerald-400" },
+const GROUPS: { key: GroupKey; label: string; borderColor: string; headerBg: string }[] = [
+  { key: "submitted", label: "Submitted Invoices", borderColor: "border-l-[#18C868]", headerBg: STATUS_GROUP_COLORS.submitted },
+  { key: "rejected", label: "Rejected Invoices", borderColor: "border-l-[#E53A4C]", headerBg: STATUS_GROUP_COLORS.rejected },
+  { key: "admin_approvals", label: "The Operations Room Approvals", borderColor: "border-l-[#F9509E]", headerBg: STATUS_GROUP_COLORS.admin_approvals },
+  { key: "ready_for_payment", label: "Ready for Payment", borderColor: "border-l-[#0C86BB]", headerBg: STATUS_GROUP_COLORS.ready_for_payment },
+  { key: "paid", label: "Paid Invoices", borderColor: "border-l-[#28C16E]", headerBg: STATUS_GROUP_COLORS.paid },
 ];
 
 const FL_MOVE_GROUPS: MoveGroup[] = [
-  { key: "submitted", label: "Submitted Invoices", color: "bg-amber-500" },
-  { key: "rejected", label: "Rejected Invoices", color: "bg-rose-500" },
-  { key: "admin_approvals", label: "The Operations Room Approvals", color: "bg-orange-500" },
-  { key: "ready_for_payment", label: "Ready for Payment", color: "bg-sky-500" },
-  { key: "paid", label: "Paid Invoices", color: "bg-emerald-500" },
+  { key: "submitted", label: "Submitted Invoices", bgHex: STATUS_GROUP_COLORS.submitted },
+  { key: "rejected", label: "Rejected Invoices", bgHex: STATUS_GROUP_COLORS.rejected },
+  { key: "admin_approvals", label: "The Operations Room Approvals", bgHex: STATUS_GROUP_COLORS.admin_approvals },
+  { key: "ready_for_payment", label: "Ready for Payment", bgHex: STATUS_GROUP_COLORS.ready_for_payment },
+  { key: "paid", label: "Paid Invoices", bgHex: STATUS_GROUP_COLORS.paid },
 ];
 
 const ALL_COLUMNS = [
@@ -726,7 +727,7 @@ export function FreelancerBoard({
       case "beneficiary": return isEditing ? inp("beneficiary") : r.beneficiary;
       case "accountNumber": return isEditing ? inp("accountNumber") : r.accountNumber;
       case "sortCode": return isEditing ? inp("sortCode") : r.sortCode;
-      case "department": return isEditing ? <select value={editDraft?.departmentId ?? ""} onChange={e => onChangeDraft("departmentId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">{r.department}</span>;
+      case "department": return isEditing ? <select value={editDraft?.departmentId ?? ""} onChange={e => onChangeDraft("departmentId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>;
       case "department2": return isEditing ? inp("department2") : r.department2;
       case "serviceDaysCount": return isEditing ? inp("serviceDaysCount", "number") : r.serviceDaysCount;
       case "days": return isEditing ? inp("days") : <span className="max-w-[120px] truncate block" title={r.days}>{r.days}</span>;
@@ -895,12 +896,12 @@ export function FreelancerBoard({
         const collapsed = collapsedGroups.has(g.key);
         const sums = groupSums[g.key];
         return (
-          <div key={g.key} className={`rounded-xl border-l-4 ${g.color} bg-white shadow-md dark:bg-slate-800 overflow-hidden`}>
-            <button onClick={() => toggleGroup(g.key)} className={`w-full flex items-center justify-between px-4 py-3 ${g.headerBg} transition-colors hover:opacity-90`}>
+          <div key={g.key} className={`rounded-xl border-l-4 ${g.borderColor} bg-white shadow-md dark:bg-slate-800 overflow-hidden`}>
+            <button onClick={() => toggleGroup(g.key)} className="w-full flex items-center justify-between px-4 py-3 transition-colors hover:opacity-90" style={{ backgroundColor: g.headerBg, color: "#ffffff" }}>
               <div className="flex items-center gap-2">
-                <svg className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                <h2 className={`text-sm font-bold ${g.textColor}`}>{g.label}</h2>
-                <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-slate-700 dark:text-slate-300">{gRows.length}</span>
+                <svg className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} fill="currentColor" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                <h2 className="text-sm font-bold">{g.label}</h2>
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:text-slate-200">{gRows.length}</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                 {sums.amount > 0 && <span>Amount: <strong>{fmtCurrency(sums.amount)}</strong></span>}
@@ -1183,19 +1184,20 @@ function StatusCell({ r, canApprove, isSubmitter, currentRole, isOperationsRoomM
   onManagerApprove: (id: string) => void; onAdminApprove: (id: string) => void; onResubmit: (id: string) => void; onMarkPaid: (id: string) => void; openRejectModal: (id: string) => void;
 }) {
   const loading = actionLoadingId === r.id;
-  const btn = (fn: () => void, title: string, label: string, cls: string) => <button onClick={fn} disabled={loading} title={title} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-white disabled:opacity-50 transition-colors shadow-sm ${cls}`}>{loading ? "…" : label}</button>;
+  const btn = (fn: () => void, title: string, label: string, cls: string, style?: React.CSSProperties) => <button onClick={fn} disabled={loading} title={title} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-white disabled:opacity-50 transition-colors shadow-sm hover:opacity-90 ${cls}`} style={style}>{loading ? "…" : label}</button>;
   const canOpsRoomApprove = isOperationsRoomMember && (r.status === "approved_by_manager" || r.status === "pending_admin");
   const canAdminApprove = currentRole === "admin" && (r.status === "approved_by_manager" || r.status === "pending_admin");
 
-  if (r.status === "pending_manager" && canApprove) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onManagerApprove(r.id), "Approve", "✓", "bg-amber-400 hover:bg-emerald-500")}{btn(() => openRejectModal(r.id), "Reject", "✗", "bg-amber-400 hover:bg-red-500")}</div>;
-  if ((canAdminApprove || canOpsRoomApprove) && canApprove) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onAdminApprove(r.id), canOpsRoomApprove ? "Approve" : "Admin Approve", "✓", "bg-orange-400 hover:bg-emerald-500")}{(currentRole === "admin" || canOpsRoomApprove) && btn(() => openRejectModal(r.id), "Reject", "✗", "bg-orange-400 hover:bg-red-500")}</div>;
-  if ((r.status === "approved_by_manager" || r.status === "pending_admin")) return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-orange-600 shadow-sm" title="The Operations Room">○</span>;
-  if (r.status === "rejected") return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}><span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title={r.rejectionReason || "Rejected"}>✗</span>{(isSubmitter || currentRole === "admin") && btn(() => onResubmit(r.id), "Resubmit", "↻", "bg-emerald-500 hover:bg-emerald-600 text-sm")}</div>;
-  if (r.status === "ready_for_payment" && (currentRole === "admin" || currentRole === "finance")) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onMarkPaid(r.id), "Mark Paid", "£", "bg-emerald-100 text-emerald-600 hover:bg-emerald-500 hover:text-white")}{currentRole === "admin" && btn(() => openRejectModal(r.id), "Reject", "✗", "bg-red-500 hover:bg-red-600 text-white")}</div>;
-  if (r.status === "paid" || r.status === "archived") return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm" title="Paid">✓</span>;
-  if (r.status === "ready_for_payment") return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-sky-600 shadow-sm" title="Ready">✓</span>;
+  const statusStyle = statusBadgeStyle(r.status);
+  if (r.status === "pending_manager" && canApprove) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onManagerApprove(r.id), "Approve", "✓", "", statusStyle)}{btn(() => openRejectModal(r.id), "Reject", "✗", "!bg-red-500")}</div>;
+  if ((canAdminApprove || canOpsRoomApprove) && canApprove) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onAdminApprove(r.id), canOpsRoomApprove ? "Approve" : "Admin Approve", "✓", "", statusStyle)}{(currentRole === "admin" || canOpsRoomApprove) && btn(() => openRejectModal(r.id), "Reject", "✗", "!bg-red-500")}</div>;
+  if ((r.status === "approved_by_manager" || r.status === "pending_admin")) return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm" style={statusStyle} title="The Operations Room">○</span>;
+  if (r.status === "rejected") return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}><span className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm" style={statusStyle} title={r.rejectionReason || "Rejected"}>✗</span>{(isSubmitter || currentRole === "admin") && btn(() => onResubmit(r.id), "Resubmit", "↻", "bg-emerald-500 hover:bg-emerald-600 text-sm")}</div>;
+  if (r.status === "ready_for_payment" && (currentRole === "admin" || currentRole === "finance")) return <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>{btn(() => onMarkPaid(r.id), "Mark Paid", "£", "", statusStyle)}{currentRole === "admin" && btn(() => openRejectModal(r.id), "Reject", "✗", "!bg-red-500")}</div>;
+  if (r.status === "paid" || r.status === "archived") return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm" style={statusStyle} title="Paid">✓</span>;
+  if (r.status === "ready_for_payment") return <span className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm" style={statusStyle} title="Ready">✓</span>;
   const pd = daysSince(r.createdAt);
-  return <div className="flex items-center justify-center gap-1"><span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-600 shadow-sm" title="Pending">○</span>{pd >= 3 && <span className={`text-[9px] font-bold ${pd >= 7 ? "text-red-600" : "text-orange-500"}`}>{pd}d</span>}</div>;
+  return <div className="flex items-center justify-center gap-1"><span className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm" style={statusStyle} title="Pending">○</span>{pd >= 3 && <span className={`text-[9px] font-bold ${pd >= 7 ? "text-red-600" : "text-orange-500"}`}>{pd}d</span>}</div>;
 }
 
 function SubmitterBadge({ name }: { name: string }) {

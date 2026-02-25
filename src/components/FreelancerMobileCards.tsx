@@ -42,13 +42,7 @@ function statusLabel(s: string): string {
   return s;
 }
 
-function statusColor(s: string): string {
-  if (s === "rejected") return "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300";
-  if (s === "paid" || s === "archived") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300";
-  if (s === "ready_for_payment") return "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300";
-  if (s === "approved_by_manager" || s === "pending_admin") return "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300";
-  return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
-}
+import { statusBadgeStyle } from "@/lib/colors";
 
 export function FreelancerMobileCards({
   rows,
@@ -139,7 +133,7 @@ export function FreelancerMobileCards({
                   <p className="font-semibold text-gray-900 dark:text-white truncate">{r.contractor}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{r.invNumber}</p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor(r.status)}`}>
+                <span className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={statusBadgeStyle(r.status)}>
                   {statusLabel(r.status)}
                 </span>
               </div>

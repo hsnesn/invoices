@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 
-export type MoveGroup = { key: string; label: string; color?: string };
+export type MoveGroup = { key: string; label: string; color?: string; bgHex?: string };
 
 export function BulkMoveModal({
   groups,
@@ -61,9 +61,8 @@ export function BulkMoveModal({
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 dark:text-gray-200 dark:hover:bg-slate-700"
                 >
                   <span
-                    className={`h-3 w-3 shrink-0 rounded-full ${
-                      g.color ?? "bg-gray-400"
-                    }`}
+                    className={`h-3 w-3 shrink-0 rounded-full ${!g.bgHex ? (g.color ?? "bg-gray-400") : ""}`}
+                    style={g.bgHex ? { backgroundColor: g.bgHex } : undefined}
                   />
                   {g.label}
                 </button>

@@ -9,6 +9,7 @@ import { InvoiceMobileCards } from "./InvoiceMobileCards";
 
 const DashboardSection = lazy(() => import("./InvoiceDashboard").then((m) => ({ default: m.InvoiceDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
+import { departmentBadgeStyle, programmeBadgeStyle, sectionHeaderStyle, GUEST_SECTION_COLORS } from "@/lib/colors";
 
 type InvoiceRow = {
   id: string;
@@ -175,15 +176,6 @@ type EditDraft = {
   lineManagerId: string;
 };
 
-function programmeBadgeClass(value: string): string {
-  const v = value.toLowerCase();
-  if (v.includes("newsmaker")) return "bg-teal-200 text-teal-900 border border-teal-400 dark:bg-teal-800 dark:text-teal-100 dark:border-teal-600";
-  if (v.includes("roundtable")) return "bg-amber-200 text-amber-900 border border-amber-400 dark:bg-amber-800 dark:text-amber-100 dark:border-amber-600";
-  if (v.includes("bigger")) return "bg-sky-200 text-sky-900 border border-sky-400 dark:bg-sky-800 dark:text-sky-100 dark:border-sky-600";
-  if (v.includes("haber") || v.includes("news")) return "bg-rose-200 text-rose-900 border border-rose-400 dark:bg-rose-800 dark:text-rose-100 dark:border-rose-600";
-  if (v.includes("strait")) return "bg-violet-200 text-violet-900 border border-violet-400 dark:bg-violet-800 dark:text-violet-100 dark:border-violet-600";
-  return "bg-emerald-200 text-emerald-900 border border-emerald-400 dark:bg-emerald-800 dark:text-emerald-100 dark:border-emerald-600";
-}
 
 function paymentTypeBadge(value: string): string {
   const v = value.toLowerCase();
@@ -202,13 +194,6 @@ function producerColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function sectionColor(group: DisplayRow["group"]): string {
-  if (group === "pending_line_manager") return "text-amber-700 dark:text-amber-300";
-  if (group === "ready_for_payment") return "text-sky-700 dark:text-sky-300";
-  if (group === "paid_invoices") return "text-emerald-700 dark:text-emerald-300";
-  if (group === "rejected") return "text-rose-700 dark:text-rose-300";
-  return "text-slate-600 dark:text-slate-400";
-}
 
 function parseServiceDescription(value: string | null): Record<string, string> {
   if (!value) return {};
@@ -267,11 +252,11 @@ function sectionTitle(group: DisplayRow["group"]): string {
 }
 
 const GUEST_MOVE_GROUPS: MoveGroup[] = [
-  { key: "pending_line_manager", label: "Pending Line Manager Approval", color: "bg-amber-500" },
-  { key: "rejected", label: "Rejected Invoices", color: "bg-rose-500" },
-  { key: "ready_for_payment", label: "Ready For Payment", color: "bg-sky-500" },
-  { key: "paid_invoices", label: "Paid Invoices", color: "bg-emerald-500" },
-  { key: "no_payment_needed", label: "No Payment Needed", color: "bg-slate-500" },
+  { key: "pending_line_manager", label: "Pending Line Manager Approval", bgHex: GUEST_SECTION_COLORS.pending_line_manager },
+  { key: "rejected", label: "Rejected Invoices", bgHex: GUEST_SECTION_COLORS.rejected },
+  { key: "ready_for_payment", label: "Ready For Payment", bgHex: GUEST_SECTION_COLORS.ready_for_payment },
+  { key: "paid_invoices", label: "Paid Invoices", bgHex: GUEST_SECTION_COLORS.paid_invoices },
+  { key: "no_payment_needed", label: "No Payment Needed", bgHex: GUEST_SECTION_COLORS.no_payment_needed },
 ];
 
 function InvoiceTable({
@@ -527,8 +512,8 @@ function InvoiceTable({
               {isCol("title") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.title ?? ""} onChange={(e) => onChangeDraft("title", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.title}</td>}
               {isCol("producer") && <td className={`px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.producer ?? ""} onChange={(e) => onChangeDraft("producer", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : <div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColor(r.producer)}`}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div>}</td>}
               {isCol("paymentType") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.paymentType ?? "paid guest"} onChange={(e) => onChangeDraft("paymentType", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"><option value="paid guest">Paid Guest</option><option value="unpaid guest">Unpaid Guest</option></select> : <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span>}</td>}
-              {isCol("department") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.departmentId ?? ""} onChange={(e) => { onChangeDraft("departmentId", e.target.value); onChangeDraft("programmeId", ""); }} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className="inline-flex rounded-full bg-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-900 border-2 border-emerald-400 dark:bg-emerald-800 dark:text-emerald-100 dark:border-emerald-600">{r.department}</span>}</td>}
-              {isCol("programme") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.programmeId ?? ""} onChange={(e) => onChangeDraft("programmeId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{programPairs.filter(([, ]) => true).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${programmeBadgeClass(r.programme)}`}>{r.programme}</span>}</td>}
+              {isCol("department") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.departmentId ?? ""} onChange={(e) => { onChangeDraft("departmentId", e.target.value); onChangeDraft("programmeId", ""); }} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>}</td>}
+              {isCol("programme") && <td className={`px-4 py-3${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <select value={editDraft?.programmeId ?? ""} onChange={(e) => onChangeDraft("programmeId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{programPairs.filter(([, ]) => true).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={programmeBadgeStyle(r.programme)}>{r.programme}</span>}</td>}
               {isCol("topic") && <td className={`max-w-[220px] truncate px-4 py-3 text-sm text-gray-700${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input value={editDraft?.topic ?? ""} onChange={(e) => onChangeDraft("topic", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.topic}</td>}
               {isCol("tx1") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx1 ?? ""} onChange={(e) => onChangeDraft("tx1", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx1}</td>}
               {isCol("tx2") && <td className={`px-4 py-3 text-sm text-gray-600${editableTdClass}`} onDoubleClick={editingId !== r.id ? startEditOnDblClick : undefined}>{editingId === r.id ? <input type="date" value={editDraft?.tx2 ?? ""} onChange={(e) => onChangeDraft("tx2", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900" /> : r.tx2}</td>}
@@ -2046,9 +2031,9 @@ export function InvoicesBoard({
         const data = filtered.filter((r) => r.group === g);
         return (
           <section key={g} className="space-y-2">
-            <h2 className={`text-base font-bold ${sectionColor(g)} flex items-center gap-2`}>
+            <h2 className="text-base font-bold flex items-center gap-2 text-white rounded-lg px-3 py-2" style={sectionHeaderStyle(g)}>
               <span className="inline-flex h-2.5 w-2.5 rounded-full bg-current" />
-              {sectionTitle(g)} <span className="font-medium text-slate-600 dark:text-slate-400">({data.length})</span>
+              {sectionTitle(g)} <span className="font-medium opacity-90">({data.length})</span>
             </h2>
             <div className="md:hidden">
               <InvoiceMobileCards
