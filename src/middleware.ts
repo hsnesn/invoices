@@ -6,7 +6,7 @@ export async function middleware(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
-    console.warn("Supabase URL veya ANON_KEY eksik. .env.local dosyasını kontrol et.");
+    console.warn("Supabase URL or ANON_KEY missing. Check .env.local file.");
     return NextResponse.next({ request: { headers: request.headers } });
   }
 

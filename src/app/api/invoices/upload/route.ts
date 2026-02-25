@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     if (uploadError) {
       const msg = uploadError.message;
       const hint = msg.includes("fetch") || msg.includes("network")
-        ? " Supabase Storage'a bağlanılamıyor. Supabase URL ve bucket (invoices) ayarlarını kontrol edin."
+        ? "Cannot connect to Supabase Storage. Check Supabase URL and bucket (invoices) settings."
         : "";
       return NextResponse.json(
         { error: "Upload failed: " + msg + hint },

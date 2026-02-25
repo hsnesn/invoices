@@ -1214,7 +1214,7 @@ export function InvoicesBoard({
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
-      toast.error(msg.includes("fetch") ? "Bağlantı hatası. Sunucunun çalıştığından emin olun." : msg);
+      toast.error(msg.includes("fetch") ? "Connection error. Ensure the server is running." : msg);
     } finally {
       setActionLoadingId(null);
     }
@@ -1317,10 +1317,10 @@ export function InvoicesBoard({
         setNewNote("");
       } else {
         const d = await res.json().catch(() => ({}));
-        toast.error(d?.error ?? "Not eklenemedi.");
+        toast.error(d?.error ?? "Failed to add note.");
       }
     } catch {
-      toast.error("Not eklenemedi. Bağlantınızı kontrol edin.");
+      toast.error("Failed to add note. Check your connection.");
     }
   }, [expandedRowId, newNote]);
 

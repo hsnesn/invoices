@@ -1,0 +1,11 @@
+---
+description: Use English only in the codebase - no Turkish strings
+alwaysApply: true
+---
+
+# Language: English Only
+
+- **All user-facing strings** (labels, buttons, messages, errors, toasts) must be in English.
+- **Comments and documentation** in source code must be in English.
+- **Script output** (echo, console.log) must be in English.
+- Do not add new Turkish text. If you find Turkish, translate it to English.

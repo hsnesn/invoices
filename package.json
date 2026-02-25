@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "setup": "npm install && echo 'Kurulum tamam. .env.local dosyasını düzenle ve Supabase adımlarını uygula.'",
+    "setup": "npm install && echo 'Setup complete. Edit .env.local and apply Supabase steps.'",
     "dev": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config node_modules/.bin/next dev",
     "build": "next build",
     "start": "next start",

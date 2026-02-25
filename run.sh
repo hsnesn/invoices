@@ -1,23 +1,23 @@
 #!/bin/bash
-# Fatura sistemi - çalıştır
+# Invoice system - run
 cd "$(dirname "$0")"
 
 # Node kontrol
 if ! command -v node &> /dev/null; then
-  echo "❌ Node.js bulunamadı."
+  echo "❌ Node.js not found."
   echo ""
-  echo "Node.js kurmak için:"
-  echo "  1. https://nodejs.org adresinden indir"
-  echo "  2. veya Terminal'de: brew install node"
+  echo "To install Node.js:"
+  echo "  1. Download from https://nodejs.org"
+  echo "  2. Or in Terminal: brew install node"
   echo ""
   exit 1
 fi
 
-echo "📦 Bağımlılıklar yükleniyor..."
+echo "📦 Installing dependencies..."
 npm install
 
 echo ""
-echo "🚀 Uygulama başlatılıyor..."
-echo "   Tarayıcıda http://localhost:3000 adresine git"
+echo "🚀 Starting application..."
+echo "   Open http://localhost:3000 in your browser"
 echo ""
 npm run dev

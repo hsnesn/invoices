@@ -368,10 +368,10 @@ export function FreelancerBoard({
         if (listRes.ok) setNotesData(await listRes.json());
       } else {
         const d = await res.json().catch(() => ({}));
-        toast.error(d?.error ?? "Not eklenemedi.");
+        toast.error(d?.error ?? "Failed to add note.");
       }
     } catch {
-      toast.error("Not eklenemedi. Bağlantınızı kontrol edin.");
+      toast.error("Failed to add note. Check your connection.");
     }
   }, [expandedRowId, newNote]);
 

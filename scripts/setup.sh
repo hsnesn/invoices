@@ -1,17 +1,17 @@
 #!/bin/bash
-# Kurulum scripti - Node.js kurulu olmalı
+# Setup script - Node.js must be installed
 
 set -e
 cd "$(dirname "$0")/.."
 
-echo "📦 Bağımlılıklar yükleniyor..."
+echo "📦 Installing dependencies..."
 npm install
 
 echo ""
-echo "✅ Kurulum tamamlandı."
+echo "✅ Setup complete."
 echo ""
-echo "Sonraki adımlar:"
-echo "1. .env.local dosyasını düzenleyip Supabase, OpenAI, Resend anahtarlarını ekle"
-echo "2. scripts/setup-supabase.md dosyasındaki Supabase adımlarını uygula"
-echo "3. npm run dev ile uygulamayı başlat"
+echo "Next steps:"
+echo "1. Edit .env.local and add Supabase, OpenAI, Resend keys"
+echo "2. Apply Supabase steps from scripts/setup-supabase.md"
+echo "3. Start the app with npm run dev"
 echo ""
