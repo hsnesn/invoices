@@ -10,7 +10,6 @@ type DisplayRow = {
   submissionDate: string;
   additionalCost: string;
   amount: string;
-  invoiceAmount: string;
   invNumber: string;
   beneficiary: string;
   accountNumber: string;
@@ -153,8 +152,7 @@ export function FreelancerMobileCards({
                   { label: "Additional Cost", value: r.additionalCost },
                   { label: "Add. Cost Reason", value: r.additionalCostReason },
                   { label: "Amount", value: r.amount },
-                  { label: "Invoice Amount", value: r.invoiceAmount },
-                  { label: "Dept Manager", value: r.deptManager },
+                  { label: "Approver", value: r.deptManager },
                   { label: "Service Desc.", value: r.serviceDescription },
                   { label: "Paid Date", value: r.paidDate },
                   { label: "Created", value: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "—" },

@@ -35,7 +35,7 @@ type GroupKey = "submitted" | "rejected" | "admin_approvals" | "ready_for_paymen
 
 type DisplayRow = {
   id: string; submitterId: string; contractor: string; submittedBy: string; companyName: string; submissionDate: string;
-  additionalCost: string; additionalCostNum: number; amount: string; amountNum: number; invoiceAmount: string; invoiceAmountNum: number;
+  additionalCost: string; additionalCostNum: number; amount: string; amountNum: number;
   invNumber: string; beneficiary: string; accountNumber: string; sortCode: string;
   deptManager: string; deptManagerId: string; department: string; departmentId: string;
   department2: string; serviceDaysCount: string; days: string; serviceRate: string;
@@ -93,12 +93,11 @@ const ALL_COLUMNS = [
   { key: "additionalCost", label: "Additional Cost" },
   { key: "additionalCostReason", label: "Add. Cost Reason" },
   { key: "amount", label: "Amount" },
-  { key: "invoiceAmount", label: "Invoice Amount" },
   { key: "invNumber", label: "INV Number" },
   { key: "beneficiary", label: "Beneficiary" },
   { key: "accountNumber", label: "Account Nu." },
   { key: "sortCode", label: "Sort Code" },
-  { key: "deptManager", label: "Department Manager" },
+  { key: "deptManager", label: "Approver" },
   { key: "bookingForm", label: "Booking Form" },
   { key: "actions", label: "" },
 ];
@@ -163,7 +162,6 @@ export function FreelancerBoard({
     const rate = fl?.service_rate_per_day ?? 0;
     const addCost = fl?.additional_cost ?? 0;
     const computedAmount = daysCount * rate + addCost;
-    const invoiceAmtNum = ext?.gross_amount ?? 0;
     return {
       id: inv.id, submitterId: inv.submitter_user_id,
       contractor: fl?.contractor_name ?? "—", submittedBy: profMap[inv.submitter_user_id] ?? "—",
@@ -171,7 +169,6 @@ export function FreelancerBoard({
       submissionDate: inv.created_at ? new Date(inv.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—",
       additionalCost: addCost > 0 ? fmtCurrency(addCost) : "—", additionalCostNum: addCost,
       amount: computedAmount > 0 ? fmtCurrency(computedAmount) : "—", amountNum: computedAmount,
-      invoiceAmount: invoiceAmtNum > 0 ? fmtCurrency(invoiceAmtNum) : "—", invoiceAmountNum: invoiceAmtNum,
       invNumber: ext?.invoice_number ?? "—", beneficiary: ext?.beneficiary_name ?? "—",
       accountNumber: ext?.account_number ?? "—", sortCode: ext?.sort_code ?? "—",
       deptManager: wf?.manager_user_id ? profMap[wf.manager_user_id] ?? "—" : "—",
@@ -189,7 +186,6 @@ export function FreelancerBoard({
         if (!ext?.beneficiary_name) m.push("Alacaklı");
         if (!ext?.account_number) m.push("Hesap No");
         if (!ext?.sort_code) m.push("Sort Code");
-        if (!ext?.gross_amount) m.push("Tutar");
         if (!ext?.invoice_number) m.push("Fatura No");
         return { hasMissingInfo: m.length > 0 || ext?.needs_review === true, missingFields: m };
       })(),
@@ -403,7 +399,7 @@ export function FreelancerBoard({
     setPreviewUrl(null); setPreviewHtml(null); setPreviewDownloadUrl(null); setPreviewName(""); setPreviewLoading(false);
   }, [previewUrl]);
 
-  const openFile = useCallback(async (id: string, path?: string) => {
+  const openFile = useCallback(async (id: string, path?: string, fileName?: string) => {
     setPreviewLoading(true);
     setPreviewUrl(null); setPreviewHtml(null);
     try {
@@ -412,7 +408,8 @@ export function FreelancerBoard({
       const data = await res.json();
       if (!data.url) return;
       const row = rows.find(r => r.id === id);
-      setPreviewName(row?.contractor ?? "File");
+      const displayName = (fileName || (path ? (path.split("/").pop() ?? "") : "") || row?.contractor) ?? "File";
+      setPreviewName(displayName);
       setPreviewDownloadUrl(data.url);
 
       const fileRes = await fetch(data.url);
@@ -717,9 +714,9 @@ export function FreelancerBoard({
       Department: r.department, "Department 2": r.department2, "Booked by": r.bookedBy,
       "Service Days": r.serviceDaysCount, Month: r.month, Days: r.days, "Rate/Day": r.serviceRate,
       "Additional Cost": r.additionalCost, "Add. Cost Reason": r.additionalCostReason,
-      Amount: r.amount, "Invoice Amount": r.invoiceAmount, "INV Number": r.invNumber,
+      Amount: r.amount, "INV Number": r.invNumber,
       Beneficiary: r.beneficiary, "Account Nu.": r.accountNumber, "Sort Code": r.sortCode,
-      "Department Manager": r.deptManager, Status: r.status,
+      Approver: r.deptManager, Status: r.status,
       "Rejection Reason": r.rejectionReason, "Paid Date": r.paidDate,
     }));
     const ws = XLSX.utils.json_to_sheet(xlsRows);
@@ -752,8 +749,8 @@ export function FreelancerBoard({
 
   /* ---------- Group sums ---------- */
   const groupSums = useMemo(() => {
-    const result: Record<string, { additional: number; amount: number; invoiceAmount: number }> = {};
-    for (const g of GROUPS) { const gr = groupedRows[g.key] ?? []; result[g.key] = { additional: gr.reduce((s, r) => s + r.additionalCostNum, 0), amount: gr.reduce((s, r) => s + r.amountNum, 0), invoiceAmount: gr.reduce((s, r) => s + r.invoiceAmountNum, 0) }; }
+    const result: Record<string, { additional: number; amount: number }> = {};
+    for (const g of GROUPS) { const gr = groupedRows[g.key] ?? []; result[g.key] = { additional: gr.reduce((s, r) => s + r.additionalCostNum, 0), amount: gr.reduce((s, r) => s + r.amountNum, 0) }; }
     return result;
   }, [groupedRows]);
 
@@ -800,7 +797,6 @@ export function FreelancerBoard({
         if (isEditing) { const d = parseFloat(editDraft?.serviceDaysCount ?? "0") || 0; const rt = parseFloat(editDraft?.serviceRate ?? "0") || 0; const ac = parseFloat(editDraft?.additionalCost ?? "0") || 0; const t = d * rt + ac; return <span className="font-semibold text-blue-700 dark:text-blue-300">{t > 0 ? fmtCurrency(t) : "—"}</span>; }
         return <span className="font-semibold text-gray-900 dark:text-white group/amt relative cursor-default">{r.amount}<span className="pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-normal text-white opacity-0 shadow-lg transition-opacity group-hover/amt:opacity-100 z-50">{r.serviceDaysCount} days × {r.serviceRate} + {r.additionalCost} add.</span></span>;
       }
-      case "invoiceAmount": return <span className="font-semibold text-gray-900 dark:text-white">{r.invoiceAmount}</span>;
       case "invNumber": return isEditing ? inp("invNumber") : <span className="max-w-[120px] truncate block" title={r.invNumber}>{r.invNumber}</span>;
       case "beneficiary": return isEditing ? inp("beneficiary") : <span className="max-w-[120px] truncate block" title={r.beneficiary}>{r.beneficiary}</span>;
       case "accountNumber": return isEditing ? inp("accountNumber") : <span className="max-w-[120px] truncate block" title={r.accountNumber}>{r.accountNumber}</span>;
@@ -987,7 +983,6 @@ export function FreelancerBoard({
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                 {sums.amount > 0 && <span>Amount: <strong>{fmtCurrency(sums.amount)}</strong></span>}
-                {sums.invoiceAmount > 0 && <span>Invoice: <strong>{fmtCurrency(sums.invoiceAmount)}</strong></span>}
               </div>
             </button>
             {!collapsed && (
@@ -1033,7 +1028,7 @@ export function FreelancerBoard({
                               </div>
                             </td>}
                             {COLUMNS.map(c => {
-                              const noEdit = ["status", "files", "submissionDate", "invoiceAmount", "amount", "actions", "bookingForm"].includes(c.key) || (c.key === "submittedBy" && currentRole !== "admin");
+                              const noEdit = ["status", "files", "submissionDate", "amount", "actions", "bookingForm"].includes(c.key) || (c.key === "submittedBy" && currentRole !== "admin");
                               return (
                                 <td key={c.key} className={`px-3 py-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap${!noEdit ? editTdCls : ""}`} onDoubleClick={!noEdit && editable && !isEditing ? e => { e.stopPropagation(); e.preventDefault(); handleRowDblClick(); onStartEdit(r); } : undefined}>
                                   {renderCell(r, c.key, isEditing)}
@@ -1114,7 +1109,7 @@ export function FreelancerBoard({
                       );
                     })}
                   </tbody>
-                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{currentRole === "admin" && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(sums.additional) : c.key === "amount" ? fmtCurrency(sums.amount) : c.key === "invoiceAmount" ? fmtCurrency(sums.invoiceAmount) : ""}</td>)}</tr></tfoot>
+                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{currentRole === "admin" && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(sums.additional) : c.key === "amount" ? fmtCurrency(sums.amount) : ""}</td>)}</tr></tfoot>
                 </table>
                 </div>
               </>
@@ -1216,7 +1211,7 @@ function FreelancerFilesCell({
 }: {
   invoiceId: string;
   canEdit: boolean;
-  openFile: (id: string, path?: string) => void;
+  openFile: (id: string, path?: string, fileName?: string) => void;
   onReplaceFile: (id: string, file: File, onSuccess?: () => void) => void;
   onAddFile: (id: string, file: File, onSuccess?: () => void) => void;
   actionLoadingId: string | null;
@@ -1230,6 +1225,15 @@ function FreelancerFilesCell({
   const loading = actionLoadingId === invoiceId;
   const list = files ?? [];
 
+  const handleAddFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    for (const f of selected) {
+      await onAddFile(invoiceId, f, () => void mutate());
+    }
+    void mutate();
+  };
+
   return (
     <div className="flex flex-col gap-1 max-w-[180px]" onClick={e => e.stopPropagation()}>
       {isLoading && list.length === 0 ? (
@@ -1237,18 +1241,16 @@ function FreelancerFilesCell({
       ) : list.length === 0 ? (
         <span className="text-xs text-gray-400">—</span>
       ) : (
-        <div className="space-y-1">
+        <div className="flex flex-wrap gap-0.5">
           {list.map((f, i) => (
-            <div key={i} className="flex items-center gap-1 flex-wrap">
-              <button
-                onClick={() => void openFile(invoiceId, f.storage_path)}
-                className="inline-flex items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 truncate max-w-[100px]"
-                title={f.file_name}
-              >
-                <svg className="h-3 w-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
-                <span className="truncate">{f.file_name}</span>
-              </button>
-            </div>
+            <button
+              key={i}
+              onClick={() => void openFile(invoiceId, f.storage_path, f.file_name)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-400 dark:hover:bg-sky-800/60 transition-colors"
+              title={f.file_name}
+            >
+              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+            </button>
           ))}
         </div>
       )}
@@ -1257,7 +1259,7 @@ function FreelancerFilesCell({
           <label className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 cursor-pointer dark:bg-amber-900/30 dark:text-amber-300 disabled:opacity-50">
             <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             Add
-            <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" onChange={e => { const f = e.target.files?.[0]; if (f) void onAddFile(invoiceId, f, () => void mutate()); e.target.value = ""; }} disabled={loading} />
+            <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" multiple onChange={handleAddFiles} disabled={loading} />
           </label>
           <label className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 cursor-pointer dark:bg-amber-900/30 dark:text-amber-300 disabled:opacity-50">
             <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
@@ -1311,10 +1313,10 @@ function CompareTable({ rows, ids }: { rows: DisplayRow[]; ids: string[] }) {
     { label: "Service Days", key: "serviceDaysCount" }, { label: "Month", key: "month" },
     { label: "Days", key: "days" }, { label: "Rate/Day", key: "serviceRate" },
     { label: "Additional Cost", key: "additionalCost" }, { label: "Add. Cost Reason", key: "additionalCostReason" },
-    { label: "Amount", key: "amount" }, { label: "Invoice Amount", key: "invoiceAmount" },
-    { label: "INV Number", key: "invNumber" }, { label: "Beneficiary", key: "beneficiary" },
+    { label: "Amount", key: "amount" }, { label: "INV Number", key: "invNumber" },
+    { label: "Beneficiary", key: "beneficiary" },
     { label: "Account Number", key: "accountNumber" }, { label: "Sort Code", key: "sortCode" },
-    { label: "Department Manager", key: "deptManager" },
+    { label: "Approver", key: "deptManager" },
     { label: "Status", key: "status" }, { label: "Rejection Reason", key: "rejectionReason" },
   ];
 

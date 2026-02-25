@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
     const booked_by = formData.get("booked_by") as string | null;
     const department_2 = formData.get("department_2") as string | null;
     const istanbul_team = formData.get("istanbul_team") as string | null;
+    const inv_number = (formData.get("inv_number") as string | null)?.trim() || null;
 
     const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
     const fileExtFromName = file?.name?.split(".").pop()?.toLowerCase() ?? "";
@@ -136,8 +137,9 @@ export async function POST(request: NextRequest) {
 
     await supabase.from("invoice_files").insert({ invoice_id: invoiceId, storage_path: storagePath, file_name: file.name, sort_order: 0 });
 
+    const seedInvNumber = inv_number || file.name.replace(/\.[^.]+$/, "");
     await supabase.from("invoice_extracted_fields").upsert(
-      { invoice_id: invoiceId, invoice_number: file.name.replace(/\.[^.]+$/, ""), extracted_currency: currency, needs_review: true, manager_confirmed: false, raw_json: { source_file_name: file.name }, updated_at: new Date().toISOString() },
+      { invoice_id: invoiceId, invoice_number: seedInvNumber, extracted_currency: currency, needs_review: true, manager_confirmed: false, raw_json: { source_file_name: file.name, inv_number: inv_number ?? undefined }, updated_at: new Date().toISOString() },
       { onConflict: "invoice_id" }
     );
 
@@ -220,7 +222,7 @@ export async function POST(request: NextRequest) {
           submitterEmail: submitterWants ? submitterUser!.email! : "",
           managerEmails,
           invoiceId,
-          invoiceNumber: ext?.invoice_number ?? file.name.replace(/\.[^.]+$/, ""),
+          invoiceNumber: ext?.invoice_number ?? seedInvNumber,
           freelancerDetails,
         });
       }

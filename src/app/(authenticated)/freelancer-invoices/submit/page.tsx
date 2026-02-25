@@ -36,6 +36,7 @@ export default function FreelancerSubmitPage() {
   const [additionalCostReasonCustom, setAdditionalCostReasonCustom] = useState("");
   const [submissionDate] = useState(today);
   const [currency, setCurrency] = useState("GBP");
+  const [invNumber, setInvNumber] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -90,6 +91,7 @@ export default function FreelancerSubmitPage() {
     fd.append("additional_cost_reason", additionalCostReasonCustom.trim() || additionalCostReason);
     fd.append("booked_by", bookedBy);
     fd.append("currency", currency);
+    fd.append("inv_number", invNumber.trim());
 
     try {
       const res = await fetch("/api/freelancer-invoices/upload", { method: "POST", body: fd });
@@ -219,9 +221,17 @@ export default function FreelancerSubmitPage() {
           </div>
         </div>
 
-        {/* 11. Additional Cost Reason */}
+        {/* 11. INV Number */}
         <div>
-          <label className={labelCls}>11. Additional Cost Reason</label>
+          <label className={labelCls}>11. INV Number</label>
+          <p className={hintCls}>Short number or code (e.g. INV-001, 123)</p>
+          <input value={invNumber} onChange={(e) => setInvNumber(e.target.value.slice(0, 50))} placeholder="e.g. INV-001" maxLength={50} className={inputCls} />
+          <p className="text-right text-[11px] text-gray-400">{invNumber.length}/50</p>
+        </div>
+
+        {/* 12. Additional Cost Reason */}
+        <div>
+          <label className={labelCls}>12. Additional Cost Reason</label>
           <select value={additionalCostReason} onChange={(e) => setAdditionalCostReason(e.target.value)} className={inputCls}>
             <option value="">None</option>
             {costReasons.map((r) => <option key={r.id} value={r.value}>{r.value}</option>)}
@@ -240,15 +250,15 @@ export default function FreelancerSubmitPage() {
           <p className="text-xs text-teal-600 dark:text-teal-500 mt-1">({serviceDaysCountAuto} days × £{serviceRatePerDay || 0}/day) + £{additionalCost || 0} additional</p>
         </div>
 
-        {/* 12. Submission Date */}
+        {/* 13. Submission Date */}
         <div>
-          <label className={labelCls}>12. Submission Date <span className="text-red-500">*</span></label>
+          <label className={labelCls}>13. Submission Date <span className="text-red-500">*</span></label>
           <input value={submissionDate} readOnly className={inputCls + " bg-gray-50 dark:bg-gray-700"} />
         </div>
 
-        {/* 13. Files */}
+        {/* 14. Files */}
         <div>
-          <label className={labelCls}>13. Files</label>
+          <label className={labelCls}>14. Files</label>
           <p className={hintCls}>You can add multiple documents (invoice, timesheet, etc.)</p>
           <div className="relative mt-2 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-10 text-center dark:border-gray-600 dark:bg-gray-700/30 hover:border-teal-400 transition-colors">
             <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls" multiple onChange={(e) => { const newFiles = Array.from(e.target.files ?? []); setFiles((prev) => [...prev, ...newFiles]); e.target.value = ""; }} className="absolute inset-0 cursor-pointer opacity-0" />
