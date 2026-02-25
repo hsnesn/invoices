@@ -346,7 +346,7 @@ function EditGuestInvoiceModal({
               <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-800/40">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
                 Replace
-                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" onChange={(e) => { const f = e.target.files?.[0]; if (f) setReplaceFile(f); e.target.value = ""; }} />
+                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) setReplaceFile(f); e.target.value = ""; }} />
               </label>
               {replaceFile && <span className="text-sm text-gray-600 dark:text-gray-400">{replaceFile.name}</span>}
             </div>
@@ -512,6 +512,7 @@ function InvoiceTable({
   programPairs,
   profilePairs,
   managerProfilePairs,
+  producerColorsMap = {},
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -551,12 +552,16 @@ function InvoiceTable({
   programPairs: [string, string][];
   profilePairs: [string, string][];
   managerProfilePairs?: [string, string][];
+  producerColorsMap?: Record<string, string>;
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const colCount = visibleColumns.filter((k) => k !== "checkbox" || currentRole === "admin").length;
 
   const isCol = (key: string) => visibleColumns.includes(key);
+
+  const [fileDropTargetId, setFileDropTargetId] = useState<string | null>(null);
+  const FILE_EXTS = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
 
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRowClick = useCallback((id: string) => {
@@ -728,7 +733,7 @@ function InvoiceTable({
               </td>
               )}
               {isCol("title") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.title}>{r.title}</td>}
-              {isCol("producer") && <td className="px-4 py-3 text-sm text-gray-700"><div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColor(r.producer)}`}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div></td>}
+              {isCol("producer") && <td className="px-4 py-3 text-sm text-gray-700"><div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColorsMap[r.producer] ? "" : producerColor(r.producer)}`} style={producerColorsMap[r.producer] ? { backgroundColor: producerColorsMap[r.producer] } : undefined}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div></td>}
               {isCol("paymentType") && <td className="px-4 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span></td>}
               {isCol("department") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span></td>}
               {isCol("programme") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={programmeBadgeStyle(r.programme)}>{r.programme}</span></td>}
@@ -737,14 +742,40 @@ function InvoiceTable({
               {isCol("tx2") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx2}</td>}
               {isCol("tx3") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx3}</td>}
               {isCol("invoiceDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.invoiceDate}</td>}
-              {isCol("file") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+              {isCol("file") && <td
+                className={`px-4 py-3 min-w-[140px] transition-colors ${fileDropTargetId === r.id ? "bg-amber-100 dark:bg-amber-900/30" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (r.submitterId === currentUserId || currentRole === "admin" || currentRole === "manager") setFileDropTargetId(r.id);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) setFileDropTargetId(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFileDropTargetId(null);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f && (r.submitterId === currentUserId || currentRole === "admin" || currentRole === "manager")) {
+                    const ext = f.name.split(".").pop()?.toLowerCase();
+                    if (ext && FILE_EXTS.includes(ext)) void onReplaceFile(r.id, f);
+                    else if (f) toast.error("Unsupported file type. Use PDF, DOCX, DOC, XLSX, XLS, or JPEG.");
+                  }
+                  e.dataTransfer.clearData();
+                }}
+              >
                 <div className="flex items-center gap-1">
                 <button onClick={() => void openPdf(r.id)} className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"><svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4zM6 10h8v2H6v-2zm0 4h5v2H6v-2z"/></svg>Open</button>
                 {(r.submitterId === currentUserId || currentRole === "admin" || currentRole === "manager") && (
                   <label className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-800/40">
                     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>Replace
-                    <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onReplaceFile(r.id, f); e.target.value = ""; }} />
+                    <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onReplaceFile(r.id, f); e.target.value = ""; }} />
                   </label>
+                )}
+                {(r.submitterId === currentUserId || currentRole === "admin" || currentRole === "manager") && (
+                  <span className="text-[10px] text-gray-400">or drop</span>
                 )}
                 </div>
               </td>}
@@ -978,6 +1009,7 @@ export function InvoicesBoard({
   programPairs,
   profilePairs,
   managerProfilePairs,
+  producerColorsMap = {},
   currentRole,
   currentUserId,
 }: {
@@ -986,6 +1018,7 @@ export function InvoicesBoard({
   programPairs: [string, string][];
   profilePairs: [string, string][];
   managerProfilePairs?: [string, string][];
+  producerColorsMap?: Record<string, string>;
   currentRole: string;
   currentUserId: string;
 }) {
@@ -2472,6 +2505,7 @@ export function InvoicesBoard({
               programPairs={programPairs}
               profilePairs={profilePairs}
               managerProfilePairs={managerProfilePairs}
+              producerColorsMap={producerColorsMap}
             />
             </div>
           </section>

@@ -6,7 +6,7 @@ import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 
 const BUCKET = "invoices";
 
-const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
+const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
 
 function safeFileStem(name: string): string {
   return name
@@ -51,7 +51,7 @@ export async function POST(
     const fileExt = file.name.split(".").pop()?.toLowerCase() ?? "";
     if (!ALLOWED_EXT.includes(fileExt)) {
       return NextResponse.json(
-        { error: "Unsupported file type. Allowed: PDF, DOCX, DOC, XLSX, XLS" },
+        { error: "Unsupported file type. Allowed: PDF, DOCX, DOC, XLSX, XLS, JPEG" },
         { status: 400 }
       );
     }

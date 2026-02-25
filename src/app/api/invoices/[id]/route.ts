@@ -120,7 +120,7 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("invoices")
-      .select("id, submitter_user_id, department_id, program_id, service_description, invoice_type, invoice_workflows(status, manager_user_id)")
+      .select("id, submitter_user_id, department_id, program_id, service_description, service_date_from, service_date_to, invoice_type, invoice_workflows(status, manager_user_id)")
       .eq("id", invoiceId)
       .single();
     if (!existing) {
@@ -157,78 +157,112 @@ export async function PATCH(
 
     const oldDesc = parseOldDescription(existing.service_description ?? "");
 
-    const guest_name = asString(body.guest_name);
-    const title = asString(body.title);
-    const producer = asString(body.producer);
-    const topic = asString(body.topic);
-    const invoice_date = asString(body.invoice_date);
-    const tx_date_1 = asString(body.tx_date_1);
-    const tx_date_2 = asString(body.tx_date_2);
-    const tx_date_3 = asString(body.tx_date_3);
-    const payment_type = asString(body.payment_type) ?? "paid_guest";
+    const hasInvoiceFields =
+      body.guest_name !== undefined ||
+      body.title !== undefined ||
+      body.producer !== undefined ||
+      body.topic !== undefined ||
+      body.invoice_date !== undefined ||
+      body.tx_date_1 !== undefined ||
+      body.tx_date_2 !== undefined ||
+      body.tx_date_3 !== undefined ||
+      body.payment_type !== undefined ||
+      body.department_id !== undefined ||
+      body.program_id !== undefined;
+    const hasExtractedFields =
+      body.beneficiary_name !== undefined ||
+      body.account_number !== undefined ||
+      body.sort_code !== undefined ||
+      body.invoice_number !== undefined ||
+      body.gross_amount !== undefined ||
+      body.extracted_currency !== undefined;
 
-    const service_description = buildServiceDescription({
-      guest_name,
-      title,
-      producer,
-      topic,
-      invoice_date,
-      tx_date_1,
-      tx_date_2,
-      tx_date_3,
-      payment_type,
-    });
+    if (hasInvoiceFields) {
+      const guest_name = asString(body.guest_name);
+      const title = asString(body.title);
+      const producer = asString(body.producer);
+      const topic = asString(body.topic);
+      const invoice_date = asString(body.invoice_date);
+      const tx_date_1 = asString(body.tx_date_1);
+      const tx_date_2 = asString(body.tx_date_2);
+      const tx_date_3 = asString(body.tx_date_3);
+      const payment_type = asString(body.payment_type) ?? "paid_guest";
 
-    const invoiceUpdate: Record<string, unknown> = {
-      service_description,
-      service_date_from: tx_date_1,
-      service_date_to: tx_date_3 ?? tx_date_2 ?? tx_date_1,
-    };
-    if (body.department_id !== undefined) invoiceUpdate.department_id = body.department_id || null;
-    if (body.program_id !== undefined) invoiceUpdate.program_id = body.program_id || null;
+      const service_description = buildServiceDescription({
+        guest_name: guest_name ?? oldDesc["guest name"] ?? oldDesc["guest_name"] ?? "",
+        title: title ?? oldDesc["title"] ?? "",
+        producer: producer ?? oldDesc["producer"] ?? "",
+        topic: topic ?? oldDesc["topic"] ?? "",
+        invoice_date: invoice_date ?? oldDesc["invoice date"] ?? "",
+        tx_date_1: tx_date_1 ?? oldDesc["tx date"] ?? oldDesc["tx date 1"] ?? "",
+        tx_date_2: tx_date_2 ?? oldDesc["2. tx date"] ?? oldDesc["tx date 2"] ?? "",
+        tx_date_3: tx_date_3 ?? oldDesc["3. tx date"] ?? oldDesc["tx date 3"] ?? "",
+        payment_type: payment_type ?? oldDesc["payment type"] ?? "paid_guest",
+      });
 
-    const { error: invUpdateError } = await supabase
-      .from("invoices")
-      .update(invoiceUpdate)
-      .eq("id", invoiceId);
+      const invoiceUpdate: Record<string, unknown> = {
+        service_description,
+        service_date_from: tx_date_1 ?? oldDesc["tx date"] ?? oldDesc["tx date 1"] ?? (existing as { service_date_from?: string | null }).service_date_from ?? null,
+        service_date_to: tx_date_3 ?? tx_date_2 ?? tx_date_1 ?? oldDesc["3. tx date"] ?? oldDesc["2. tx date"] ?? oldDesc["tx date"] ?? (existing as { service_date_to?: string | null }).service_date_to ?? null,
+      };
+      if (body.department_id !== undefined) invoiceUpdate.department_id = body.department_id || null;
+      if (body.program_id !== undefined) invoiceUpdate.program_id = body.program_id || null;
 
-    if (invUpdateError) {
-      return NextResponse.json(
-        { error: "Invoice update failed: " + invUpdateError.message },
-        { status: 500 }
-      );
+      const { error: invUpdateError } = await supabase
+        .from("invoices")
+        .update(invoiceUpdate)
+        .eq("id", invoiceId);
+
+      if (invUpdateError) {
+        return NextResponse.json(
+          { error: "Invoice update failed: " + invUpdateError.message },
+          { status: 500 }
+        );
+      }
     }
 
-    const beneficiaryRaw = asString(body.beneficiary_name);
-    const guestName = asString(body.guest_name);
-    const beneficiarySanitized = beneficiaryRaw && !/trt/i.test(beneficiaryRaw) ? beneficiaryRaw : guestName;
+    if (hasExtractedFields) {
+      const beneficiaryRaw = asString(body.beneficiary_name);
+      const guestName = asString(body.guest_name);
+      const beneficiarySanitized = beneficiaryRaw && !/trt/i.test(beneficiaryRaw) ? beneficiaryRaw : guestName;
 
-    const { error: extractedUpdateError } = await supabase
-      .from("invoice_extracted_fields")
-      .upsert(
-        {
-          invoice_id: invoiceId,
-          beneficiary_name: beneficiarySanitized,
-          account_number: asString(body.account_number),
-          sort_code: asString(body.sort_code),
-          invoice_number: asString(body.invoice_number),
-          gross_amount:
-            typeof body.gross_amount === "number"
-              ? body.gross_amount
-              : typeof body.gross_amount === "string" && body.gross_amount.trim()
-              ? Number(body.gross_amount)
-              : null,
-          extracted_currency: asString(body.extracted_currency) ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "invoice_id" }
-      );
+      const { data: currentExtracted } = await supabase
+        .from("invoice_extracted_fields")
+        .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, extracted_currency")
+        .eq("invoice_id", invoiceId)
+        .single();
 
-    if (extractedUpdateError) {
-      return NextResponse.json(
-        { error: "Extracted field update failed: " + extractedUpdateError.message },
-        { status: 500 }
-      );
+      const cur = (currentExtracted ?? {}) as Record<string, unknown>;
+
+      const { error: extractedUpdateError } = await supabase
+        .from("invoice_extracted_fields")
+        .upsert(
+          {
+            invoice_id: invoiceId,
+            beneficiary_name: beneficiarySanitized ?? cur.beneficiary_name,
+            account_number: asString(body.account_number) ?? cur.account_number,
+            sort_code: asString(body.sort_code) ?? cur.sort_code,
+            invoice_number: asString(body.invoice_number) ?? cur.invoice_number,
+            gross_amount:
+              body.gross_amount !== undefined
+                ? (typeof body.gross_amount === "number"
+                    ? body.gross_amount
+                    : typeof body.gross_amount === "string" && body.gross_amount.trim()
+                    ? Number(body.gross_amount)
+                    : null)
+                : cur.gross_amount,
+            extracted_currency: asString(body.extracted_currency) ?? cur.extracted_currency ?? null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "invoice_id" }
+        );
+
+      if (extractedUpdateError) {
+        return NextResponse.json(
+          { error: "Extracted field update failed: " + extractedUpdateError.message },
+          { status: 500 }
+        );
+      }
     }
 
     if (body.manager_user_id !== undefined && profile.role === "admin") {
@@ -255,7 +289,7 @@ export async function PATCH(
           .eq("invoice_id", invoiceId)
           .single();
         if (mUser?.user?.email) {
-          const guestName = (guest_name?.trim() || parseGuestNameFromServiceDesc(existing.service_description)) ?? undefined;
+          const guestName = parseGuestNameFromServiceDesc(existing.service_description) ?? undefined;
           let guestDetails: import("@/lib/email").GuestEmailDetails | undefined;
           if ((existing as { invoice_type?: string }).invoice_type !== "freelancer") {
             const deptName = existing.department_id
@@ -290,7 +324,7 @@ export async function PATCH(
       existing.department_id,
       existing.program_id,
       oldManagerId,
-      { ...body, payment_type }
+      { ...body, payment_type: (body.payment_type as string) ?? oldDesc["payment type"] ?? "paid_guest" }
     );
 
     await createAuditEvent({

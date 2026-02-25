@@ -86,13 +86,15 @@ export async function POST(request: NextRequest) {
       "application/msword": "doc",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
       "application/vnd.ms-excel": "xls",
+      "image/jpeg": "jpg",
+      "image/jpg": "jpg",
     };
-    const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
+    const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
     const fileExtFromName = file?.name?.split(".").pop()?.toLowerCase() ?? "";
 
     if (!file || (!ALLOWED_MIME[file.type] && !ALLOWED_EXT.includes(fileExtFromName))) {
       return NextResponse.json(
-        { error: "Invalid or missing file. Supported: PDF, DOCX, DOC, XLSX, XLS" },
+        { error: "Invalid or missing file. Supported: PDF, DOCX, DOC, XLSX, XLS, JPEG" },
         { status: 400 }
       );
     }

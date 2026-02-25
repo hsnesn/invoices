@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { DepartmentManagersSection } from "@/components/DepartmentManagersSection";
+import { ProducerColorsSection } from "@/components/ProducerColorsSection";
 import { EmailSetupSection } from "@/components/EmailSetupSection";
 import { ContractorTemplatesSection } from "@/components/ContractorTemplatesSection";
 import { SalariesSetupSection } from "@/components/SalariesSetupSection";
@@ -390,6 +391,8 @@ function GuestInvoiceSetup() {
       </div>
 
       <DepartmentManagersSection />
+
+      <ProducerColorsSection />
 
       {/* Admin & Finance Assignment */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">

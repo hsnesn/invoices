@@ -86,13 +86,13 @@ function SubmitPageContent() {
       return;
     }
     if (!file) {
-      setError("Please select a file (PDF, DOCX, DOC, XLSX, XLS)");
+      setError("Please select a file (PDF, DOCX, DOC, XLSX, XLS, JPEG)");
       return;
     }
-    const allowedExts = [".pdf", ".docx", ".doc", ".xlsx", ".xls"];
+    const allowedExts = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".jpg", ".jpeg"];
     const fileExt = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
     if (!allowedExts.includes(fileExt)) {
-      setError("Unsupported file type. Allowed: PDF, DOCX, DOC, XLSX, XLS");
+      setError("Unsupported file type. Allowed: PDF, DOCX, DOC, XLSX, XLS, JPEG");
       return;
     }
     setLoading(true);
@@ -328,11 +328,11 @@ function SubmitPageContent() {
           </label>
           <input
             type="file"
-            accept=".pdf,.docx,.doc,.xlsx,.xls"
+            accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 file:mr-4 file:rounded file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-white"
           />
-          <p className="mt-1 text-xs text-slate-500">PDF, DOCX, DOC, XLSX, XLS</p>
+          <p className="mt-1 text-xs text-slate-500">PDF, DOCX, DOC, XLSX, XLS, JPEG</p>
         </div>
 
         <button

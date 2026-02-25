@@ -72,10 +72,11 @@ export default async function InvoicesPage() {
     )
   );
 
-  const [{ data: departments }, { data: programs }, { data: profiles }] = await Promise.all([
+  const [{ data: departments }, { data: programs }, { data: profiles }, { data: producerColors }] = await Promise.all([
     supabase.from("departments").select("id,name"),
     supabase.from("programs").select("id,name"),
     supabase.from("profiles").select("id,full_name,role"),
+    supabase.from("producer_colors").select("producer_name,color_hex"),
   ]);
 
   const allProfiles = (profiles ?? []) as { id: string; full_name: string | null; role?: string }[];
@@ -84,6 +85,11 @@ export default async function InvoicesPage() {
     .filter((p) => p.role === "manager" || p.role === "admin")
     .map((p) => [p.id, p.full_name || p.id] as [string, string]);
 
+  const producerColorsMap: Record<string, string> = {};
+  (producerColors ?? []).forEach((r: { producer_name: string; color_hex: string }) => {
+    producerColorsMap[r.producer_name] = r.color_hex;
+  });
+
   return (
     <InvoicesBoard
       invoices={visibleInvoices as never[]}
@@ -91,6 +97,7 @@ export default async function InvoicesPage() {
       programPairs={(programs ?? []).map((p: { id: string; name: string }) => [p.id, p.name])}
       profilePairs={profilePairs}
       managerProfilePairs={managerProfilePairs}
+      producerColorsMap={producerColorsMap}
       currentRole={profile.role}
       currentUserId={session.user.id}
     />
