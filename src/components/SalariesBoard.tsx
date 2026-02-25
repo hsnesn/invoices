@@ -144,6 +144,60 @@ function EditSalaryModal({
   );
 }
 
+type AuditEvent = {
+  id: string;
+  event_type: string;
+  from_status: string | null;
+  to_status: string | null;
+  payload: Record<string, unknown>;
+  actor_name: string;
+  created_at: string;
+};
+
+function AuditLogModal({ salaryId, employeeName, onClose }: { salaryId: string; employeeName: string | null; onClose: () => void }) {
+  const { data: events = [] } = useSWR<AuditEvent[]>(salaryId ? `/api/salaries/${salaryId}/audit` : null, fetcher);
+
+  const formatEvent = (e: AuditEvent) => {
+    if (e.event_type === "salary_edited") {
+      const changes = (e.payload?.changes as Record<string, unknown>) ?? {};
+      const parts = Object.entries(changes).map(([k, v]) => `${k}: ${String(v)}`);
+      return parts.join(", ");
+    }
+    if (e.event_type === "salary_marked_paid") return `Marked as paid`;
+    if (e.event_type === "salary_extracted") return `Extracted from payslip`;
+    if (e.event_type === "salary_added") return `Salary record added`;
+    return e.event_type;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold">Change History</h2>
+        <p className="mt-1 text-sm text-gray-500">{employeeName ?? "Salary"}</p>
+        <ul className="mt-4 space-y-2">
+          {events.length === 0 ? (
+            <li className="text-sm text-gray-500">No changes recorded</li>
+          ) : (
+            events.map((e) => (
+              <li key={e.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-600">
+                <p className="text-sm font-medium">{formatEvent(e)}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {e.actor_name} · {new Date(e.created_at).toLocaleString()}
+                </p>
+              </li>
+            ))
+          )}
+        </ul>
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getEmployeeBadgeColor(
   salary: SalaryRow,
   nameToColor: Map<string, string>
@@ -194,6 +248,7 @@ export function SalariesBoard({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [auditSalaryId, setAuditSalaryId] = useState<string | null>(null);
 
   const grouped = React.useMemo(() => {
     const byGroup: Record<string, SalaryRow[]> = { pending: [], needs_review: [], paid: [] };
@@ -266,7 +321,7 @@ export function SalariesBoard({
       const res = await fetch("/api/salaries/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      toast.success("Payslip uploaded and extracted");
+      toast.success(data.bulk ? `${data.count ?? 0} salaries imported` : "Payslip uploaded and extracted");
       setShowUploadModal(false);
       setUploadFile(null);
       setUploadEmployeeId("");
@@ -377,6 +432,29 @@ export function SalariesBoard({
       setMarkingPaidId(null);
     }
   }, [mutate]);
+
+  const clickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleRowClick = useCallback((s: SalaryRow, e: React.MouseEvent) => {
+    if (e.detail === 2) {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = null;
+      }
+      if (canEdit) setShowEditModal(s);
+    } else {
+      clickTimeoutRef.current = setTimeout(() => {
+        clickTimeoutRef.current = null;
+        setAuditSalaryId(s.id);
+      }, 200);
+    }
+  }, [canEdit]);
+  const handleRowDoubleClick = useCallback((s: SalaryRow) => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    if (canEdit) setShowEditModal(s);
+  }, [canEdit]);
 
   const downloadPayslip = useCallback(async (path: string, name: string) => {
     try {
@@ -514,7 +592,6 @@ export function SalariesBoard({
                         <th className="px-3 py-2 text-left font-medium">Sort Code</th>
                         <th className="px-3 py-2 text-left font-medium">Account</th>
                         <th className="px-3 py-2 text-left font-medium">Reference</th>
-                        <th className="px-3 py-2 text-left font-medium">Status</th>
                         <th className="px-3 py-2 text-left font-medium">Month</th>
                         <th className="px-3 py-2 text-left font-medium">Date</th>
                         <th className="px-3 py-2 text-left font-medium">Total Cost</th>
@@ -524,7 +601,12 @@ export function SalariesBoard({
                     </thead>
                     <tbody>
                       {rows.map((s) => (
-                        <tr key={s.id} className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                        <tr
+                          key={s.id}
+                          className="cursor-pointer border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/30"
+                          onClick={(e) => handleRowClick(s, e)}
+                          onDoubleClick={() => handleRowDoubleClick(s)}
+                        >
                           <td className="px-3 py-2">{s.display_id ?? "—"}</td>
                           <td className="px-3 py-2">
                             <span
@@ -539,19 +621,10 @@ export function SalariesBoard({
                           <td className="px-3 py-2">{s.sort_code ?? "—"}</td>
                           <td className="px-3 py-2">{s.bank_account_number ?? "—"}</td>
                           <td className="px-3 py-2">{s.reference ?? "—"}</td>
-                          <td className="px-3 py-2">
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                              s.status === "paid" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" :
-                              s.status === "needs_review" ? "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300" :
-                              "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                            }`}>
-                              {s.status}
-                            </span>
-                          </td>
                           <td className="px-3 py-2">{s.payment_month ?? "—"}</td>
                           <td className="px-3 py-2">{s.process_date ?? "—"}</td>
                           <td className="px-3 py-2">{fmtCurrency(s.employer_total_cost)}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                             {s.payslip_storage_path ? (
                               <div className="flex gap-2">
                                 <a
@@ -573,16 +646,8 @@ export function SalariesBoard({
                               "—"
                             )}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                             <div className="flex flex-wrap gap-1">
-                              {canEdit && (
-                                <button
-                                  onClick={() => setShowEditModal(s)}
-                                  className="rounded bg-slate-600 px-2 py-1 text-xs font-medium text-white hover:bg-slate-500"
-                                >
-                                  Edit
-                                </button>
-                              )}
                               {canEdit && s.payslip_storage_path && (
                                 <button
                                   onClick={() => handleReExtract(s.id)}
@@ -653,6 +718,14 @@ export function SalariesBoard({
           onSave={(updates) => handleSaveEdit(showEditModal, updates)}
           onClose={() => setShowEditModal(null)}
           saving={savingEdit}
+        />
+      )}
+
+      {auditSalaryId && (
+        <AuditLogModal
+          salaryId={auditSalaryId}
+          employeeName={salaries.find((s) => s.id === auditSalaryId)?.employee_name ?? null}
+          onClose={() => setAuditSalaryId(null)}
         />
       )}
 

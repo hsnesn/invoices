@@ -53,19 +53,30 @@ async function extractTextFromBuffer(buffer: Buffer, ext: SupportedExt): Promise
 }
 
 const EXCEL_HEADER_ALIASES: Record<string, string[]> = {
-  employee_name: ["employee name", "name", "employee", "full name", "person", "calisan", "isim", "ad soyad"],
-  net_pay: ["net pay", "net", "final net pay", "take home", "netpay", "net maas", "net odeme"],
-  total_gross_pay: ["total gross pay", "gross pay", "gross", "total gross", "gross salary", "grosspay", "brut", "brut maas"],
+  employee_name: ["employee name", "name", "employee", "full name", "person", "staff name", "calisan", "isim", "ad soyad", "emp name"],
+  net_pay: ["net pay", "net", "final net pay", "take home", "netpay", "net maas", "net odeme", "net amount"],
+  total_gross_pay: ["total gross pay", "gross pay", "gross", "total gross", "gross salary", "grosspay", "brut", "brut maas", "gross amount"],
   paye_tax: ["paye tax", "paye", "tax", "income tax", "vergi"],
-  employee_ni: ["employee ni", "ni", "national insurance", "employee national insurance", "sigorta"],
-  employee_pension: ["employee pension", "ee pension", "pension", "employee's pension", "emekli"],
-  employer_pension: ["employer pension", "er pension", "employer's pension"],
-  employer_ni: ["employer ni", "employer national insurance"],
-  process_date: ["process date", "date", "payment date", "tarih", "islem tarihi"],
-  bank_account_number: ["account number", "account no", "account", "bank account", "hesap", "iban", "hesap no"],
-  sort_code: ["sort code", "sort/branch code", "sortcode", "sube kodu"],
+  employee_ni: ["employee ni", "ni", "national insurance", "employee national insurance", "sigorta", "ee ni"],
+  employee_pension: ["employee pension", "ee pension", "pension", "employee's pension", "emekli", "ee pension"],
+  employer_pension: ["employer pension", "er pension", "employer's pension", "employer pension"],
+  employer_ni: ["employer ni", "employer national insurance", "er ni"],
+  process_date: ["process date", "date", "payment date", "tarih", "islem tarihi", "pay date", "paid date"],
+  payment_month: ["payment month", "month", "pay month", "period"],
+  bank_account_number: ["account number", "account no", "account", "bank account", "hesap", "iban", "hesap no", "acc no", "acc number", "bank acc"],
+  sort_code: ["sort code", "sort/branch code", "sortcode", "sube kodu", "sort"],
   ni_number: ["ni number", "ni no", "national insurance number"],
+  employer_total_cost: ["total cost", "employer total cost", "cost", "total"],
 };
+
+/** Convert Excel serial date (e.g. 46053) to YYYY-MM-DD */
+function excelSerialToDateString(serial: number): string | null {
+  if (!Number.isFinite(serial) || serial < 1) return null;
+  const epoch = new Date(1899, 11, 30);
+  const d = new Date(epoch.getTime() + serial * 86400 * 1000);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
 
 function findColumnIndex(headers: string[], aliases: string[]): number {
   for (let i = 0; i < headers.length; i++) {
@@ -77,79 +88,169 @@ function findColumnIndex(headers: string[], aliases: string[]): number {
   return -1;
 }
 
-function parseExcelStructured(buffer: Buffer): ExtractedSalaryFields | null {
-  try {
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    if (!sheet) return null;
-    const data = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
-    if (!data.length) return null;
+function tryParseSheetWithHeader(data: string[][], headerRowIndex: number): ExtractedSalaryFields | null {
+  const headerRow = data[headerRowIndex] ?? [];
+  const headers = headerRow.map((h) => String(h ?? "").trim());
 
-    const headerRow = data[0] ?? [];
-    const headers = headerRow.map((h) => String(h ?? "").trim());
+  const colMap: Record<string, number> = {};
+  for (const [key, aliases] of Object.entries(EXCEL_HEADER_ALIASES)) {
+    const idx = findColumnIndex(headers, aliases);
+    if (idx >= 0) colMap[key] = idx;
+  }
 
-    const colMap: Record<string, number> = {};
-    for (const [key, aliases] of Object.entries(EXCEL_HEADER_ALIASES)) {
-      const idx = findColumnIndex(headers, aliases);
-      if (idx >= 0) colMap[key] = idx;
-    }
+  const hasName = colMap.employee_name >= 0;
+  const hasAnyData = Object.keys(colMap).length > 0;
+  if (!hasName || !hasAnyData) return null;
 
-    const result: ExtractedSalaryFields = {
-      employee_name: null,
-      ni_number: null,
-      net_pay: null,
-      total_gross_pay: null,
-      paye_tax: null,
-      employee_ni: null,
-      employee_pension: null,
-      employer_pension: null,
-      employer_ni: null,
-      process_date: null,
-      tax_period: null,
-      payment_month: null,
-      payment_year: null,
-      bank_account_number: null,
-      sort_code: null,
+  const result: ExtractedSalaryFields = {
+    employee_name: null,
+    ni_number: null,
+    net_pay: null,
+    total_gross_pay: null,
+    paye_tax: null,
+    employee_ni: null,
+    employee_pension: null,
+    employer_pension: null,
+    employer_ni: null,
+    employer_total_cost: null,
+    process_date: null,
+    tax_period: null,
+    payment_month: null,
+    payment_year: null,
+    bank_account_number: null,
+    sort_code: null,
+  };
+
+  for (let r = headerRowIndex + 1; r < data.length; r++) {
+    const row = data[r] ?? [];
+    const getVal = (key: string): string | null => {
+      const idx = colMap[key];
+      if (idx == null || idx < 0) return null;
+      const v = row[idx];
+      return v != null && String(v).trim() !== "" ? String(v).trim() : null;
+    };
+    const getRaw = (key: string): unknown => {
+      const idx = colMap[key];
+      if (idx == null || idx < 0) return null;
+      return row[idx];
     };
 
-    for (let r = 1; r < data.length; r++) {
-      const row = data[r] ?? [];
-      const getVal = (key: string): string | null => {
-        const idx = colMap[key];
-        if (idx == null || idx < 0) return null;
-        const v = row[idx];
-        return v != null && String(v).trim() !== "" ? String(v).trim() : null;
-      };
+    const empName = getVal("employee_name");
+    if (!empName) continue;
 
-      const empName = getVal("employee_name");
-      if (!empName) continue;
-
-      result.employee_name = empName;
-      result.ni_number = getVal("ni_number");
-      const netPay = parseNumberLike(getVal("net_pay"));
-      result.net_pay = netPay;
-      result.total_gross_pay = parseNumberLike(getVal("total_gross_pay"));
-      result.paye_tax = parseNumberLike(getVal("paye_tax"));
-      result.employee_ni = parseNumberLike(getVal("employee_ni"));
-      result.employee_pension = parseNumberLike(getVal("employee_pension"));
-      result.employer_pension = parseNumberLike(getVal("employer_pension"));
-      result.employer_ni = parseNumberLike(getVal("employer_ni"));
-      const dateVal = getVal("process_date");
-      result.process_date = dateVal;
-      if (dateVal) {
-        result.payment_month = monthNameFromDate(dateVal);
-        result.payment_year = yearFromDate(dateVal);
-      }
-      result.bank_account_number = getVal("bank_account_number");
-      const sc = getVal("sort_code");
-      result.sort_code = sc ? (normalizeSortCode(sc) ?? sc) : null;
-      break;
+    result.employee_name = empName;
+    result.ni_number = getVal("ni_number");
+    result.net_pay = parseNumberLike(getVal("net_pay"));
+    result.total_gross_pay = parseNumberLike(getVal("total_gross_pay"));
+    result.paye_tax = parseNumberLike(getVal("paye_tax"));
+    result.employee_ni = parseNumberLike(getVal("employee_ni"));
+    result.employee_pension = parseNumberLike(getVal("employee_pension"));
+    result.employer_pension = parseNumberLike(getVal("employer_pension"));
+    result.employer_ni = parseNumberLike(getVal("employer_ni"));
+    result.employer_total_cost = parseNumberLike(getVal("employer_total_cost"));
+    const dateRaw = getRaw("process_date");
+    const dateVal =
+      typeof dateRaw === "number"
+        ? excelSerialToDateString(dateRaw)
+        : getVal("process_date");
+    result.process_date = dateVal;
+    const monthVal = getVal("payment_month");
+    result.payment_month = monthVal || (dateVal ? monthNameFromDate(dateVal) : null);
+    result.payment_year = dateVal ? yearFromDate(dateVal) : null;
+    if (!result.payment_year && monthVal) {
+      const m = new Date(`${monthVal} 1`);
+      if (!Number.isNaN(m.getTime())) result.payment_year = m.getFullYear();
     }
-
-    return result.employee_name ? result : null;
-  } catch {
-    return null;
+    result.bank_account_number = getVal("bank_account_number");
+    const sc = getVal("sort_code");
+    result.sort_code = sc ? (normalizeSortCode(sc) ?? sc) : null;
+    return result;
   }
+
+  return result.employee_name ? result : null;
+}
+
+function parseExcelStructured(buffer: Buffer): ExtractedSalaryFields | null {
+  const all = parseExcelBulk(buffer);
+  return all.length > 0 ? all[0]! : null;
+}
+
+/** Parse all rows from Excel (Salaries_Paid format). Returns one ExtractedSalaryFields per data row. */
+export function parseExcelBulk(buffer: Buffer): ExtractedSalaryFields[] {
+  const results: ExtractedSalaryFields[] = [];
+  try {
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) continue;
+      const data = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
+      if (!data.length) continue;
+
+      for (let headerRowIdx = 0; headerRowIdx <= Math.min(3, data.length - 1); headerRowIdx++) {
+        const headerRow = data[headerRowIdx] ?? [];
+        const headers = headerRow.map((h) => String(h ?? "").trim());
+        const colMap: Record<string, number> = {};
+        for (const [key, aliases] of Object.entries(EXCEL_HEADER_ALIASES)) {
+          const idx = findColumnIndex(headers, aliases);
+          if (idx >= 0) colMap[key] = idx;
+        }
+        if (colMap.employee_name == null || colMap.employee_name < 0) continue;
+
+        for (let r = headerRowIdx + 1; r < data.length; r++) {
+          const row = data[r] ?? [];
+          const getVal = (key: string): string | null => {
+            const idx = colMap[key];
+            if (idx == null || idx < 0) return null;
+            const v = row[idx];
+            return v != null && String(v).trim() !== "" ? String(v).trim() : null;
+          };
+          const getRaw = (key: string): unknown => {
+            const idx = colMap[key];
+            if (idx == null || idx < 0) return null;
+            return row[idx];
+          };
+
+          const empName = getVal("employee_name");
+          if (!empName) continue;
+
+          const dateRaw = getRaw("process_date");
+          const dateVal =
+            typeof dateRaw === "number" ? excelSerialToDateString(dateRaw) : getVal("process_date");
+          const monthVal = getVal("payment_month");
+
+          results.push({
+            employee_name: empName,
+            ni_number: getVal("ni_number"),
+            net_pay: parseNumberLike(getVal("net_pay")),
+            total_gross_pay: parseNumberLike(getVal("total_gross_pay")),
+            paye_tax: parseNumberLike(getVal("paye_tax")),
+            employee_ni: parseNumberLike(getVal("employee_ni")),
+            employee_pension: parseNumberLike(getVal("employee_pension")),
+            employer_pension: parseNumberLike(getVal("employer_pension")),
+            employer_ni: parseNumberLike(getVal("employer_ni")),
+            employer_total_cost: parseNumberLike(getVal("employer_total_cost")),
+            process_date: dateVal,
+            tax_period: null,
+            payment_month: monthVal || (dateVal ? monthNameFromDate(dateVal) : null),
+            payment_year: dateVal ? yearFromDate(dateVal) : null,
+            bank_account_number: getVal("bank_account_number"),
+            sort_code: (() => {
+              const sc = getVal("sort_code");
+              return sc ? (normalizeSortCode(sc) ?? sc) : null;
+            })(),
+          });
+          if (!results[results.length - 1]!.payment_year && monthVal) {
+            const m = new Date(`${monthVal} 1`);
+            if (!Number.isNaN(m.getTime())) (results[results.length - 1] as ExtractedSalaryFields).payment_year = m.getFullYear();
+          }
+        }
+        if (results.length > 0) return results;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return results;
 }
 
 function getOpenAIClient() {
@@ -175,6 +276,7 @@ export type ExtractedSalaryFields = {
   employee_pension: number | null;
   employer_pension: number | null;
   employer_ni: number | null;
+  employer_total_cost: number | null;
   process_date: string | null;
   tax_period: string | null;
   payment_month: string | null;
@@ -228,6 +330,7 @@ const PAYSLIP_FIELD_PROMPTS: Record<string, string> = {
   employee_pension: `Extract ONLY the Employee Pension from the Deductions section. Look for "Ee Pension", "Employee Pension", "Employee's Pension". NOT employer pension. Numeric only. IGNORE YTD.`,
   employer_pension: `Extract ONLY the Employer Pension from the Employer Costs section. Look for "Er Pension", "Employer Pension", "Employer's Pension". Numeric only. IGNORE YTD.`,
   employer_ni: `Extract the Employer NI (Employer National Insurance) from the Employer Costs section if it exists. If not present, return null. Numeric only. IGNORE YTD.`,
+  employer_total_cost: `Extract the Employer Total Cost / Total Cost from this payslip. This is Total Gross Pay + Employer Pension + Employer NI. Look for "Employer Total Cost", "Total Cost", "Cost to Company" or similar. Numeric only. IGNORE YTD.`,
   process_date: `Extract ONLY the Process Date from this payslip. Format as YYYY-MM-DD. Look for "Process Date" or similar.`,
   tax_period: `Extract the Tax Period if shown (e.g. "01", "02", or "Month 1"). Return as string or null if not found.`,
   bank_account_number: `Extract ONLY the bank account number (Account Number) from this payslip if shown. Typically 8 digits for UK.`,
@@ -271,6 +374,39 @@ async function fetchFileBuffer(storagePath: string): Promise<Buffer> {
   return Buffer.from(await data.arrayBuffer());
 }
 
+function simpleSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const sa = a.toLowerCase();
+  const sb = b.toLowerCase();
+  if (sa === sb) return 1;
+  const wordsA = sa.split(/\s+/).filter((w) => w.length > 1);
+  const wordsB = new Set(sb.split(/\s+/));
+  let matches = 0;
+  for (let i = 0; i < wordsA.length; i++) {
+    if (wordsB.has(wordsA[i])) matches++;
+  }
+  return wordsA.length + wordsB.size > 0 ? (2 * matches) / (wordsA.length + wordsB.size) : 0;
+}
+
+function matchEmployeeByName(
+  extractedName: string,
+  employees: { id: string; full_name: string | null; bank_account_number?: string | null; sort_code?: string | null; ni_number?: string | null }[]
+): (typeof employees)[number] | null {
+  const extractedNorm = extractedName.replace(/\b(Mr|Mrs|Ms|Dr)\.?\s*/gi, "").trim().toLowerCase();
+  let matched: (typeof employees)[number] | null = null;
+  for (const emp of employees) {
+    const dbNorm = (emp.full_name ?? "").trim().toLowerCase();
+    if (dbNorm === extractedNorm || extractedNorm.includes(dbNorm) || dbNorm.includes(extractedNorm)) {
+      return emp;
+    }
+    const sim = simpleSimilarity(extractedNorm, dbNorm);
+    if (sim >= 0.5 && (!matched || sim > simpleSimilarity(extractedNorm, (matched.full_name ?? "").toLowerCase()))) {
+      matched = emp;
+    }
+  }
+  return matched;
+}
+
 export async function runSalaryExtraction(
   salaryId: string,
   storagePath: string,
@@ -293,6 +429,7 @@ export async function runSalaryExtraction(
     employee_pension: null,
     employer_pension: null,
     employer_ni: null,
+    employer_total_cost: null,
     process_date: null,
     tax_period: null,
     payment_month: null,
@@ -310,8 +447,27 @@ export async function runSalaryExtraction(
 
   let extractionError: string | null = null;
   const hasText = text.trim().length > 30;
+  const isPdfOrDoc = ext === "pdf" || ext === "docx" || ext === "doc";
 
   if (openai && hasText) {
+    if (isPdfOrDoc) {
+      const nameResult = await extractSingleField("employee_name", text, openai);
+      const extractedName = nameResult.value != null && nameResult.value !== "" ? String(nameResult.value).trim() : null;
+      if (extractedName) {
+        parsed.employee_name = extractedName;
+        const supabase = createAdminClient();
+        const { data: employees } = await supabase
+          .from("employees")
+          .select("id, full_name, bank_account_number, sort_code, ni_number");
+        const matched = matchEmployeeByName(extractedName, employees ?? []);
+        if (matched) {
+          parsed.bank_account_number = matched.bank_account_number ?? null;
+          parsed.sort_code = matched.sort_code ? (normalizeSortCode(matched.sort_code) ?? matched.sort_code) : null;
+          parsed.ni_number = matched.ni_number ?? null;
+        }
+      }
+    }
+
     const fields = Object.keys(PAYSLIP_FIELD_PROMPTS);
     const results = await Promise.all(
       fields.map(async (key) => ({ key, result: await extractSingleField(key, text, openai) }))
@@ -339,11 +495,9 @@ export async function runSalaryExtraction(
     extractionError = hasText ? "OpenAI extraction unavailable" : "Document has no extractable text";
   }
 
-  const employerTotalCost = computeEmployerTotalCost(
-    parsed.total_gross_pay,
-    parsed.employer_pension,
-    parsed.employer_ni
-  );
+  const employerTotalCost =
+    parsed.employer_total_cost ??
+    computeEmployerTotalCost(parsed.total_gross_pay, parsed.employer_pension, parsed.employer_ni);
 
   const reference = generateSalaryReference(parsed.process_date);
   const sortCode = parsed.sort_code ? (normalizeSortCode(parsed.sort_code) ?? parsed.sort_code) : null;

@@ -254,6 +254,12 @@ export async function PATCH(
       if (updateError) {
         return NextResponse.json({ error: updateError.message }, { status: 500 });
       }
+      await createSalaryAuditEvent({
+        salary_id: id,
+        actor_user_id: session.user.id,
+        event_type: "salary_edited",
+        payload: { changes: updates },
+      });
       const { data: updated } = await supabase
         .from("salaries")
         .select("*, employees(full_name, email_address, bank_account_number, sort_code)")

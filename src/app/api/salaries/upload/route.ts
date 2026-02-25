@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { runSalaryExtraction } from "@/lib/salary-extraction";
+import {
+  runSalaryExtraction,
+  parseExcelBulk,
+  computeEmployerTotalCost,
+  generateSalaryReference,
+} from "@/lib/salary-extraction";
+import { normalizeSortCode } from "@/lib/validation";
 
 function simpleSimilarity(a: string, b: string): number {
   if (!a || !b) return 0;
@@ -18,6 +24,33 @@ function simpleSimilarity(a: string, b: string): number {
   return wordsA.length + wordsB.size > 0 ? (2 * matches) / (wordsA.length + wordsB.size) : 0;
 }
 
+type EmployeeForMatch = {
+  id: string;
+  full_name: string | null;
+  bank_account_number?: string | null;
+  sort_code?: string | null;
+  ni_number?: string | null;
+};
+
+function matchEmployee(
+  extractedName: string,
+  employees: EmployeeForMatch[]
+): EmployeeForMatch | null {
+  const extractedNorm = extractedName.replace(/\b(Mr|Mrs|Ms|Dr)\.?\s*/gi, "").trim().toLowerCase();
+  let matched: (typeof employees)[number] | null = null;
+  for (const emp of employees) {
+    const dbNorm = (emp.full_name ?? "").trim().toLowerCase();
+    if (dbNorm === extractedNorm || extractedNorm.includes(dbNorm) || dbNorm.includes(extractedNorm)) {
+      return emp;
+    }
+    const sim = simpleSimilarity(extractedNorm, dbNorm);
+    if (sim >= 0.5 && (!matched || sim > simpleSimilarity(extractedNorm, (matched.full_name ?? "").toLowerCase()))) {
+      matched = emp;
+    }
+  }
+  return matched;
+}
+
 const BUCKET = "invoices";
 const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
 
@@ -31,7 +64,7 @@ function safeFileStem(name: string): string {
     .slice(0, 60) || "payslip";
 }
 
-/** POST /api/salaries/upload - Upload payslip PDF, create salary record, run AI extraction */
+/** POST /api/salaries/upload - Upload payslip or Salaries_Paid Excel (bulk) */
 export async function POST(request: NextRequest) {
   try {
     const rl = checkRateLimit(request.headers);
@@ -59,12 +92,98 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const buffer = Buffer.from(await file.arrayBuffer());
     const supabase = createAdminClient();
+    const { data: allEmployees } = await supabase
+      .from("employees")
+      .select("id, full_name, bank_account_number, sort_code, email_address, ni_number");
+
+    const isExcel = fileExt === "xlsx" || fileExt === "xls";
+    const excelRows = isExcel ? parseExcelBulk(buffer) : [];
+
+    if (isExcel && excelRows.length > 1) {
+      const stem = safeFileStem(file.name);
+      const firstId = crypto.randomUUID();
+      const storagePath = `salaries/${session.user.id}/${firstId}-${stem}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(storagePath, buffer, {
+          contentType: file.type || "application/octet-stream",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        return NextResponse.json({ error: "Upload failed: " + uploadError.message }, { status: 500 });
+      }
+
+      const created: unknown[] = [];
+      for (const row of excelRows) {
+        const matched = matchEmployee(row.employee_name ?? "", allEmployees ?? []);
+        const empId = matched?.id ?? null;
+        const bankAccount = row.bank_account_number ?? matched?.bank_account_number ?? null;
+        const sortCode = row.sort_code
+          ? (normalizeSortCode(row.sort_code) ?? row.sort_code)
+          : matched?.sort_code ?? null;
+
+        const employerTotalCost =
+          row.employer_total_cost ??
+          computeEmployerTotalCost(row.total_gross_pay, row.employer_pension, row.employer_ni);
+        const reference = generateSalaryReference(row.process_date);
+        const needsReview =
+          !row.net_pay || row.net_pay <= 0 || !row.employee_name?.trim();
+
+        const salaryId = crypto.randomUUID();
+        const { data: inserted, error: insertErr } = await supabase
+          .from("salaries")
+          .insert({
+            id: salaryId,
+            employee_id: empId,
+            employee_name: row.employee_name ?? "Unknown",
+            ni_number: matched?.ni_number ?? null,
+            bank_account_number: bankAccount,
+            sort_code: sortCode,
+            net_pay: row.net_pay,
+            total_gross_pay: row.total_gross_pay,
+            employer_total_cost: employerTotalCost,
+            payment_month: row.payment_month,
+            payment_year: row.payment_year,
+            process_date: row.process_date,
+            reference: reference,
+            payslip_storage_path: storagePath,
+            status: needsReview ? "needs_review" : "pending",
+          })
+          .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
+          .single();
+
+        if (insertErr) {
+          console.error("Bulk insert error:", insertErr);
+          continue;
+        }
+        created.push(inserted);
+
+        if (matched && (bankAccount || sortCode)) {
+          const updates: Record<string, unknown> = {};
+          if (bankAccount && !matched.bank_account_number) updates.bank_account_number = bankAccount;
+          if (sortCode && !matched.sort_code) updates.sort_code = sortCode;
+          if (Object.keys(updates).length > 0) {
+            await supabase.from("employees").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", matched.id);
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        bulk: true,
+        count: created.length,
+        salaries: created,
+      });
+    }
+
     const salaryId = crypto.randomUUID();
     const stem = safeFileStem(file.name);
     const storagePath = `salaries/${session.user.id}/${salaryId}-${stem}.${fileExt}`;
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
       .upload(storagePath, buffer, {
@@ -73,29 +192,24 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      return NextResponse.json(
-        { error: "Upload failed: " + uploadError.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Upload failed: " + uploadError.message }, { status: 500 });
     }
 
     let employeeName = "Unknown";
     let bankAccount: string | null = null;
     let sortCode: string | null = null;
-    let emailAddress: string | null = null;
     let niNumber: string | null = null;
 
     if (employee_id) {
       const { data: emp } = await supabase
         .from("employees")
-        .select("full_name, bank_account_number, sort_code, email_address, ni_number")
+        .select("full_name, bank_account_number, sort_code, ni_number")
         .eq("id", employee_id)
         .single();
       if (emp) {
         employeeName = emp.full_name ?? "Unknown";
         bankAccount = emp.bank_account_number ?? null;
         sortCode = emp.sort_code ?? null;
-        emailAddress = emp.email_address ?? null;
         niNumber = emp.ni_number ?? null;
       }
     }
@@ -117,10 +231,7 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       await supabase.storage.from(BUCKET).remove([storagePath]);
-      return NextResponse.json(
-        { error: "Failed to create salary record: " + insertError.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Failed to create salary record: " + insertError.message }, { status: 500 });
     }
 
     try {
@@ -131,38 +242,40 @@ export async function POST(request: NextRequest) {
 
     const { data: afterExtract } = await supabase
       .from("salaries")
-      .select("employee_name")
+      .select("employee_name, bank_account_number, sort_code")
       .eq("id", salaryId)
       .single();
 
-    if (afterExtract?.employee_name && !employee_id) {
-      const { data: allEmployees } = await supabase
-        .from("employees")
-        .select("id, full_name, bank_account_number, sort_code, email_address");
-
-      const extractedNorm = afterExtract.employee_name.replace(/\b(Mr|Mrs|Ms|Dr)\.?\s*/gi, "").trim().toLowerCase();
-      const empList = allEmployees ?? [];
-      let matched: (typeof empList)[number] | null = null;
-
-      for (const emp of empList) {
-        const dbNorm = (emp.full_name ?? "").trim().toLowerCase();
-        if (dbNorm === extractedNorm || extractedNorm.includes(dbNorm) || dbNorm.includes(extractedNorm)) {
-          matched = emp;
-          break;
-        }
-        const sim = simpleSimilarity(extractedNorm, dbNorm);
-        if (sim >= 0.5 && (!matched || sim > simpleSimilarity(extractedNorm, (matched.full_name ?? "").toLowerCase()))) {
-          matched = emp;
-        }
-      }
+    if (afterExtract?.employee_name) {
+      const matched = matchEmployee(afterExtract.employee_name, allEmployees ?? []);
+      const extractedBank = afterExtract.bank_account_number ?? null;
+      const extractedSort = afterExtract.sort_code ?? null;
 
       if (matched) {
+        const salaryBank = extractedBank ?? matched.bank_account_number;
+        const salarySort = extractedSort ?? matched.sort_code;
         await supabase
           .from("salaries")
           .update({
             employee_id: matched.id,
-            bank_account_number: matched.bank_account_number ?? undefined,
-            sort_code: matched.sort_code ?? undefined,
+            bank_account_number: salaryBank ?? undefined,
+            sort_code: salarySort ?? undefined,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", salaryId);
+
+        const empUpdates: Record<string, unknown> = {};
+        if (extractedBank && !matched.bank_account_number) empUpdates.bank_account_number = extractedBank;
+        if (extractedSort && !matched.sort_code) empUpdates.sort_code = extractedSort;
+        if (Object.keys(empUpdates).length > 0) {
+          await supabase.from("employees").update({ ...empUpdates, updated_at: new Date().toISOString() }).eq("id", matched.id);
+        }
+      } else if (!employee_id) {
+        await supabase
+          .from("salaries")
+          .update({
+            bank_account_number: extractedBank ?? undefined,
+            sort_code: extractedSort ?? undefined,
             updated_at: new Date().toISOString(),
           })
           .eq("id", salaryId);
@@ -181,9 +294,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
-    return NextResponse.json(
-      { error: (e as Error).message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
