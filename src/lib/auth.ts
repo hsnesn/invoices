@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import type { Profile } from "@/lib/types";
+import type { Profile, PageKey } from "@/lib/types";
 
 export async function getSession() {
   const supabase = await createClient();
@@ -77,6 +77,16 @@ export async function requireAdmin() {
   const { profile } = await requireAuth();
   if (profile.role !== "admin") redirect("/invoices");
   return { profile };
+}
+
+/** Require page access per allowed_pages. Admin bypasses. Redirects to dashboard if not allowed. */
+export async function requirePageAccess(pageKey: PageKey) {
+  const { session, profile } = await requireAuth();
+  if (profile.role === "admin") return { session, profile };
+  const pages = profile.allowed_pages;
+  if (!pages || pages.length === 0) return { session, profile };
+  if (pages.includes(pageKey)) return { session, profile };
+  redirect("/dashboard");
 }
 
 /** Require Dev Admin (full_name "Dev Admin") - for Users page only. Redirects if not. */

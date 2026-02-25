@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { SalariesBoard } from "@/components/SalariesBoard";
-import { requireAuth } from "@/lib/auth";
+import { requirePageAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function SalariesPage() {
-  const { profile } = await requireAuth();
+  const { profile } = await requirePageAccess("salaries");
   if (profile.role === "viewer") redirect("/dashboard");
   if (profile.role !== "admin" && profile.role !== "operations" && profile.role !== "finance") {
     redirect("/dashboard");

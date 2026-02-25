@@ -1135,15 +1135,24 @@ export function InvoicesBoard({
     }
   };
 
+  const closePreview = useCallback(() => {
+    setPreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
   const openPdf = useCallback(async (invoiceId: string) => {
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/pdf`);
       const data = await res.json();
-      if (data.url) {
-        const row = rows.find((r) => r.id === invoiceId);
-        setPreviewName(row?.invNumber ?? "File");
-        setPreviewUrl(data.url);
-      }
+      if (!data.url) return;
+      const row = rows.find((r) => r.id === invoiceId);
+      setPreviewName(row?.invNumber ?? "File");
+      const fileRes = await fetch(data.url);
+      const blob = await fileRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewUrl(blobUrl);
     } catch {
       // silently fail
     }
@@ -1168,10 +1177,10 @@ export function InvoicesBoard({
     }
     if (previewHideRef.current) clearTimeout(previewHideRef.current);
     previewHideRef.current = setTimeout(() => {
-      setPreviewUrl(null);
+      closePreview();
       previewHideRef.current = null;
     }, 200);
-  }, []);
+  }, [closePreview]);
 
   const cancelHidePreview = useCallback(() => {
     if (previewHideRef.current) {
@@ -2230,7 +2239,7 @@ export function InvoicesBoard({
       )}
 
       {previewUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setPreviewUrl(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closePreview}>
           <div
             className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
             onClick={(e) => e.stopPropagation()}
@@ -2248,7 +2257,7 @@ export function InvoicesBoard({
                   Download
                 </button>
                 <button
-                  onClick={() => setPreviewUrl(null)}
+                  onClick={closePreview}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors"
                 >
                   ✕

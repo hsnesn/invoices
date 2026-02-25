@@ -1,5 +1,5 @@
 import { InvoicesBoard } from "@/components/InvoicesBoard";
-import { requireAuth } from "@/lib/auth";
+import { requirePageAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ function canUserSeeInvoice(
 }
 
 export default async function InvoicesPage() {
-  const { session, profile } = await requireAuth();
+  const { session, profile } = await requirePageAccess("guest_invoices");
   const supabase = createAdminClient();
 
   const { data: invoicesRaw } = await supabase

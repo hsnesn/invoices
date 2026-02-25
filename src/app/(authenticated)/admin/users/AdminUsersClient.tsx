@@ -172,6 +172,10 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
           u.id === editingPermissions ? { ...u, allowed_pages: permPages } : u
         )
       );
+      toast.success("Page permissions saved. Changes take effect when the user refreshes or navigates.");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data?.error ?? "Failed to save permissions");
     }
     setEditingPermissions(null);
   };
