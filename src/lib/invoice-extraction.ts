@@ -240,9 +240,10 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   } = {};
   let extractionError: string | null = null;
 
-  const extractionPrompt = `Extract invoice fields from this document with high accuracy.
-Return a JSON object with exactly these keys:
+  const extractionPrompt = `Extract invoice fields from this document. Return a JSON object with exactly these keys (use null for missing fields):
 beneficiary_name, company_name, account_number, sort_code, invoice_number, invoice_date, net_amount, vat_amount, gross_amount, currency.
+
+IMPORTANT: Extract ALL fields you can find. Do not return empty - use null only when a field is truly not present. Scan the entire document carefully.
 
 CRITICAL RULES - extract exactly as shown in the document:
 - invoice_number: Copy the exact invoice/reference number as printed (letters, numbers, slashes, hyphens). Do not invent or modify.
@@ -277,35 +278,12 @@ Other rules:
 - gross_amount is the most important amount - scan the entire document if needed to find the total payable
 - Be precise: double-check numbers match the document exactly`;
 
-  const isPdf = ext === "pdf";
+  const hasText = text.trim().length > 30;
 
   try {
     if (!openai) throw new Error("OPENAI_API_KEY missing");
 
-    if (isPdf) {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: extractionPrompt },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:application/pdf;base64,${fileBuffer.toString("base64")}`,
-                },
-              },
-            ],
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
-      const raw = completion.choices[0]?.message?.content;
-      if (!raw) throw new Error("No extraction result");
-      parsed = JSON.parse(raw) as typeof parsed;
-    } else {
-      if (!text.trim()) throw new Error("Document text extraction returned empty content");
+    if (hasText) {
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
@@ -319,11 +297,43 @@ Other rules:
       const raw = completion.choices[0]?.message?.content;
       if (!raw) throw new Error("No extraction result");
       parsed = JSON.parse(raw) as typeof parsed;
+    } else if (ext === "pdf" && openai) {
+      const apiKey = process.env.OPENAI_API_KEY!;
+      const base64Pdf = fileBuffer.toString("base64");
+      const res = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          input: [
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: extractionPrompt },
+                { type: "input_file", filename: "invoice.pdf", file_data: `data:application/pdf;base64,${base64Pdf}` },
+              ],
+            },
+          ],
+          text: { format: { type: "json_object" } },
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`OpenAI Responses API error: ${res.status} ${errBody}`);
+      }
+      const data = (await res.json()) as { output_text?: string };
+      const raw = data.output_text;
+      if (!raw) throw new Error("No extraction result");
+      parsed = JSON.parse(raw) as typeof parsed;
+    } else {
+      throw new Error("Document has no extractable text. Scanned/image-based PDFs require PDF format.");
     }
   } catch (err) {
     try {
-      if (!text.trim()) throw new Error("Document text extraction returned empty content");
-      if (openai) {
+      if (openai && text.trim().length > 20) {
         const completion = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
@@ -337,10 +347,10 @@ Other rules:
         const raw = completion.choices[0]?.message?.content;
         if (!raw) throw new Error("No extraction result from text fallback");
         parsed = JSON.parse(raw) as typeof parsed;
+        extractionError = null;
       } else {
         parsed = regexParsed;
       }
-      extractionError = null;
     } catch (fallbackErr) {
       extractionError =
         fallbackErr instanceof Error
