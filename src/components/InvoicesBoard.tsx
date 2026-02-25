@@ -127,7 +127,7 @@ const ALL_COLUMNS = [
   { key: "invNumber", label: "INV Number" },
   { key: "sortCode", label: "Sort Code" },
   { key: "accountNumber", label: "Account Number" },
-  { key: "lineManager", label: "Line Manager" },
+  { key: "lineManager", label: "Dept EP" },
   { key: "paymentDate", label: "Payment Date" },
   { key: "actions", label: "Actions" },
 ];
@@ -319,7 +319,7 @@ function EditGuestInvoiceModal({
               <input type="text" value={invNumber} onChange={(e) => setInvNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Line Manager</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Dept EP</label>
               <select value={lineManagerId} onChange={(e) => setLineManagerId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                 <option value="">Unassigned</option>
                 {(managerProfilePairs ?? profilePairs).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -458,7 +458,7 @@ function calcGroup(status: string, paymentType: string): DisplayRow["group"] {
 }
 
 function sectionTitle(group: DisplayRow["group"]): string {
-  if (group === "pending_line_manager") return "Pending Line Manager Approval";
+  if (group === "pending_line_manager") return "Pending Dept EP Approval";
   if (group === "ready_for_payment") return "Ready For Payment";
   if (group === "paid_invoices") return "Paid Invoices";
   if (group === "rejected") return "Rejected Invoices";
@@ -466,7 +466,7 @@ function sectionTitle(group: DisplayRow["group"]): string {
 }
 
 const GUEST_MOVE_GROUPS: MoveGroup[] = [
-  { key: "pending_line_manager", label: "Pending Line Manager Approval", bgHex: GUEST_SECTION_COLORS.pending_line_manager },
+  { key: "pending_line_manager", label: "Pending Dept EP Approval", bgHex: GUEST_SECTION_COLORS.pending_line_manager },
   { key: "rejected", label: "Rejected Invoices", bgHex: GUEST_SECTION_COLORS.rejected },
   { key: "ready_for_payment", label: "Ready For Payment", bgHex: GUEST_SECTION_COLORS.ready_for_payment },
   { key: "paid_invoices", label: "Paid Invoices", bgHex: GUEST_SECTION_COLORS.paid_invoices },
@@ -774,7 +774,7 @@ function InvoiceTable({
                         {currentRole === "admin" && inPaymentStage && (
                           <>
                             <button onClick={() => void onMoveToLineManager(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 shadow-sm">
-                              Move to Line Manager
+                              Move to Dept EP
                             </button>
                             <button onClick={() => void onMoveToArchived(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 shadow-sm dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
                               Move to Archived
@@ -1455,7 +1455,7 @@ export function InvoicesBoard({
   };
 
   const onMoveToLineManager = async (invoiceId: string) => {
-    const ok = window.confirm("Move this invoice back to Pending Line Manager for re-review?");
+    const ok = window.confirm("Move this invoice back to Pending Dept EP for re-review?");
     if (!ok) return;
     setActionLoadingId(invoiceId);
     try {
@@ -1782,7 +1782,7 @@ export function InvoicesBoard({
     const fields = Object.entries(customReportFields).filter(([, v]) => v).map(([k]) => k);
     if (fields.length === 0) return;
     const XLSX = await import("xlsx");
-    const fieldLabels: Record<string, string> = { guest: "Guest", producer: "Producer", department: "Department", programme: "Programme", amount: "Amount", invoiceDate: "Date", accountName: "Account", invNumber: "INV#", status: "Status", paymentType: "Payment", topic: "Topic", tx1: "TX1", lineManager: "Manager", title: "Title" };
+    const fieldLabels: Record<string, string> = { guest: "Guest", producer: "Producer", department: "Department", programme: "Programme", amount: "Amount", invoiceDate: "Date", accountName: "Account", invNumber: "INV#", status: "Status", paymentType: "Payment", topic: "Topic", tx1: "TX1", lineManager: "Dept EP", title: "Title" };
     const rows = data.map((r) => {
       const obj: Record<string, string> = {};
       fields.forEach((f) => {
@@ -1852,7 +1852,7 @@ export function InvoicesBoard({
       "INV Number": r.invNumber,
       "Sort Code": r.sortCode,
       "Account Number": r.accountNumber,
-      "Line Manager": r.lineManager,
+      "Dept EP": r.lineManager,
       "Payment Date": r.paymentDate,
       "Status": r.status,
       "Rejection Reason": r.rejectionReason || "",
@@ -2126,7 +2126,7 @@ export function InvoicesBoard({
             <option value="unpaid_guest">Unpaid</option>
           </select>
           <select value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-            <option value="">Manager</option>
+            <option value="">Dept EP</option>
             {Array.from(new Set(rows.map((r) => r.lineManager))).filter((v) => v !== "—").sort().map((v) => (<option key={v} value={v}>{v}</option>))}
           </select>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="From" />
@@ -2401,7 +2401,7 @@ export function InvoicesBoard({
               type="button"
               onClick={async () => {
                 const XLSX = await import("xlsx");
-                const headers = ["Guest Name", "Subitems", "Title", "Producer", "Department", "Programme Name", "Topic", "Invoice Date", "TX Date", "2. TX Date", "3. TX Date", "Invoice File", "Account Name", "Amount", "INV Number", "Sort Code", "Account Number", "Line Manager", "Payment Date"];
+                const headers = ["Guest Name", "Subitems", "Title", "Producer", "Department", "Programme Name", "Topic", "Invoice Date", "TX Date", "2. TX Date", "3. TX Date", "Invoice File", "Account Name", "Amount", "INV Number", "Sort Code", "Account Number", "Dept EP", "Payment Date"];
                 const data = [
                   ["Guest Invoice Submission", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                   ["Paid Invoices", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
@@ -2638,7 +2638,7 @@ export function InvoicesBoard({
                 { key: "topic", label: "Topic" },
                 { key: "title", label: "Title" },
                 { key: "tx1", label: "TX Date" },
-                { key: "lineManager", label: "Line Manager" },
+                { key: "lineManager", label: "Dept EP" },
               ].map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2 cursor-pointer">
                   <input

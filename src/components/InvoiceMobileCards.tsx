@@ -138,7 +138,7 @@ export function InvoiceMobileCards({
                   { label: "INV Number", value: r.invNumber },
                   { label: "Sort Code", value: r.sortCode },
                   { label: "Account Number", value: r.accountNumber },
-                  { label: "Line Manager", value: r.lineManager },
+                  { label: "Dept EP", value: r.lineManager },
                   { label: "Payment Date", value: r.paymentDate },
                   { label: "Created", value: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "—" },
                 ].map(({ label, value }) => (
