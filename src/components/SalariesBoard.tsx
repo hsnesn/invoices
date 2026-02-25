@@ -6,7 +6,12 @@ import { toast } from "sonner";
 import { EmptyState } from "./EmptyState";
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Request failed");
+  return data;
+};
 
 type SalaryRow = {
   id: string;
@@ -245,8 +250,10 @@ export function SalariesBoard({
   const canEdit = profile.role === "admin" || profile.role === "operations";
   const canMarkPaid = profile.role === "admin" || profile.role === "finance";
 
-  const { data: salaries = [], mutate } = useSWR<SalaryRow[]>("/api/salaries", fetcher);
-  const { data: stats } = useSWR<{ pending: { count: number; netTotal: number; costTotal: number }; paid: { count: number; netTotal: number; costTotal: number }; monthlyTrend: { month: string; count: number; netTotal: number; costTotal: number }[] }>("/api/salaries/stats", fetcher);
+  const { data: salariesRaw, error: salariesError, mutate } = useSWR<SalaryRow[] | { error?: string }>("/api/salaries", fetcher);
+  const { data: stats, error: statsError } = useSWR<{ pending: { count: number; netTotal: number; costTotal: number }; paid: { count: number; netTotal: number; costTotal: number }; monthlyTrend: { month: string; count: number; netTotal: number; costTotal: number }[] }>("/api/salaries/stats", fetcher);
+
+  const salaries = Array.isArray(salariesRaw) ? salariesRaw : [];
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -569,6 +576,22 @@ export function SalariesBoard({
       toast.error("Could not download payslip");
     }
   }, []);
+
+  if (salariesError || statsError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-red-200 bg-red-50 p-8 dark:border-red-800 dark:bg-red-950/30">
+        <p className="font-medium text-red-800 dark:text-red-200">
+          {(salariesError ?? statsError)?.message ?? "Failed to load data"}
+        </p>
+        <button
+          onClick={() => void mutate()}
+          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
