@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let query = supabase
       .from("salaries")
-      .select("*, employees(full_name, email_address)")
+      .select("*, employees(full_name, bank_account_number, sort_code)")
       .order("created_at", { ascending: false });
 
     if (status) query = query.eq("status", status);
@@ -35,28 +35,17 @@ export async function GET(request: NextRequest) {
     }
 
     const rows = (salaries ?? []).map((s) => {
-      const emp = s.employees as { full_name?: string; email_address?: string } | null;
+      const emp = s.employees as { full_name?: string; bank_account_number?: string; sort_code?: string } | null;
+      const sortCode = s.sort_code ?? emp?.sort_code ?? "";
+      const account = s.bank_account_number ?? emp?.bank_account_number ?? "";
       return {
-        ID: s.display_id ?? "",
-        "Employee Name": s.employee_name ?? "",
-        "NI Number": s.ni_number ?? "",
-        "Net Pay": s.net_pay ?? "",
-        "Gross Pay": s.total_gross_pay ?? "",
-        "PAYE Tax": s.paye_tax ?? "",
-        "Employee NI": s.employee_ni ?? "",
-        "Employee Pension": s.employee_pension ?? "",
-        "Employer Pension": s.employer_pension ?? "",
-        "Employer Total Cost": s.employer_total_cost ?? "",
-        "Sort Code": s.sort_code ?? "",
-        "Account Number": s.bank_account_number ?? "",
-        "Payment Month": s.payment_month ?? "",
-        "Payment Year": s.payment_year ?? "",
-        "Process Date": s.process_date ?? "",
-        "Tax Period": s.tax_period ?? "",
-        "Reference": s.reference ?? "",
-        "Status": s.status ?? "",
-        "Paid Date": s.paid_date ?? "",
-        "Email": emp?.email_address ?? "",
+        EMPLOYEE: s.employee_name ?? "",
+        "NET PAY": s.net_pay ?? "",
+        "SORT CODE": sortCode,
+        ACCOUNT: account,
+        REFERENCE: s.reference ?? "",
+        MONTH: s.payment_month ?? "",
+        DATE: s.process_date ?? "",
       };
     });
 

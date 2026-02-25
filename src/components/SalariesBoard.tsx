@@ -1049,7 +1049,7 @@ export function SalariesBoard({
 
       {previewSalary?.payslip_storage_path && (
         <div
-          className="fixed right-4 top-24 z-50 flex w-[420px] flex-col rounded-xl border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-900"
+          className="fixed left-4 top-24 z-50 flex w-[420px] flex-col rounded-xl border-2 border-gray-300 bg-white shadow-2xl sm:left-[420px] dark:border-gray-600 dark:bg-gray-900"
           onMouseEnter={cancelHidePreview}
           onMouseLeave={hidePreview}
         >
