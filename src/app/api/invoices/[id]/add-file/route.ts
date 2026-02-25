@@ -33,12 +33,9 @@ export async function POST(
       .single();
 
     if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
-    if ((invoice as { invoice_type?: string }).invoice_type !== "freelancer") {
-      return NextResponse.json({ error: "Add file is only for freelancer invoices" }, { status: 400 });
-    }
 
     const isOwner = invoice.submitter_user_id === session.user.id;
-    if (!isOwner && profile.role !== "admin" && profile.role !== "manager") {
+    if (!isOwner && profile.role !== "admin" && profile.role !== "manager" && profile.role !== "operations") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -51,15 +48,29 @@ export async function POST(
       return NextResponse.json({ error: "Unsupported file type. Allowed: PDF, DOCX, DOC, XLSX, XLS, JPEG" }, { status: 400 });
     }
 
-    const { data: maxOrder } = await supabase
+    const { data: existingFiles } = await supabase
       .from("invoice_files")
       .select("sort_order")
       .eq("invoice_id", invoiceId)
-      .order("sort_order", { ascending: false })
-      .limit(1)
-      .single();
+      .order("sort_order", { ascending: false });
 
-    const nextOrder = (maxOrder?.sort_order ?? -1) + 1;
+    // For guest invoices: if no invoice_files yet but invoices.storage_path exists, backfill it first
+    const invoiceType = (invoice as { invoice_type?: string }).invoice_type;
+    if (invoiceType === "guest" && (!existingFiles || existingFiles.length === 0)) {
+      const { data: inv } = await supabase.from("invoices").select("storage_path").eq("id", invoiceId).single();
+      if (inv?.storage_path) {
+        const existingName = inv.storage_path.split("/").pop() ?? inv.storage_path;
+        await supabase.from("invoice_files").insert({
+          invoice_id: invoiceId,
+          storage_path: inv.storage_path,
+          file_name: existingName,
+          sort_order: 0,
+        });
+      }
+    }
+
+    const maxOrder = existingFiles?.[0]?.sort_order ?? (invoiceType === "guest" ? 0 : -1);
+    const nextOrder = maxOrder + 1;
     const sourceStem = safeFileStem(file.name);
     const storagePath = `${session.user.id}/${invoiceId}-${sourceStem}-${Date.now()}.${fileExt}`;
     const buffer = Buffer.from(await file.arrayBuffer());

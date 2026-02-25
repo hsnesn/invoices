@@ -18,6 +18,9 @@ export function InvoiceDetail({
 }: InvoiceDetailProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [files, setFiles] = useState<{ storage_path: string; file_name: string }[]>([]);
+  const [addingFile, setAddingFile] = useState(false);
+  const [excelPreview, setExcelPreview] = useState<{ name: string; html: string } | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -82,6 +85,68 @@ export function InvoiceDetail({
         setPdfError("PDF could not be loaded.");
       });
   }, [invoice.id]);
+
+  useEffect(() => {
+    fetch(`/api/invoices/${invoice.id}/files`)
+      .then((r) => r.json())
+      .then((list) => (Array.isArray(list) ? setFiles(list) : setFiles([])))
+      .catch(() => setFiles([]));
+  }, [invoice.id]);
+
+  const openFile = async (path?: string, fileName?: string) => {
+    const url = path
+      ? `/api/invoices/${invoice.id}/pdf?path=${encodeURIComponent(path)}`
+      : `/api/invoices/${invoice.id}/pdf`;
+    const d = await fetch(url).then((r) => r.json()).catch(() => null);
+    if (!d?.url) return;
+    const fileRes = await fetch(d.url);
+    const blob = await fileRes.blob();
+    const mime = blob.type.toLowerCase();
+    const pathLower = (path ?? "").toLowerCase();
+    const nameLower = (fileName ?? "").toLowerCase();
+    const isExcel = mime.includes("sheet") || mime.includes("excel") || pathLower.endsWith(".xlsx") || pathLower.endsWith(".xls") || nameLower.endsWith(".xlsx") || nameLower.endsWith(".xls");
+    if (isExcel) {
+      try {
+        const XLSX = await import("xlsx");
+        const arrayBuf = await blob.arrayBuffer();
+        const wb = XLSX.read(arrayBuf, { type: "array" });
+        let html = "";
+        for (const name of wb.SheetNames) {
+          const ws = wb.Sheets[name];
+          html += `<h3 style="margin:16px 0 8px;font-weight:bold;font-size:14px;">${name}</h3>`;
+          html += XLSX.utils.sheet_to_html(ws, { editable: false });
+        }
+        setExcelPreview({ name: fileName ?? "Spreadsheet", html });
+      } catch {
+        window.open(d.url, "_blank", "noopener,noreferrer");
+      }
+    } else {
+      window.open(d.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleAddFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAddingFile(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/invoices/${invoice.id}/add-file`, { method: "POST", body: fd });
+      if (res.ok) {
+        const list = await fetch(`/api/invoices/${invoice.id}/files`).then((r) => r.json());
+        setFiles(Array.isArray(list) ? list : []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMessage({ type: "error", text: (data as { error?: string }).error ?? "Add file failed" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Add file failed" });
+    } finally {
+      setAddingFile(false);
+      e.target.value = "";
+    }
+  };
 
   const runExtract = async () => {
     setExtracting(true);
@@ -194,17 +259,39 @@ export function InvoiceDetail({
             </div>
           </dl>
 
-          {pdfUrl && (
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-block text-sky-400 hover:text-sky-300"
-            >
-              Open PDF
-            </a>
-          )}
-          {!pdfUrl && pdfError && (
+          <div className="mt-4 space-y-2">
+            {files.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {files.map((f, i) => (
+                  <button
+                    key={i}
+                    onClick={() => openFile(f.storage_path, f.file_name)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-1.5 text-sm text-sky-400 hover:bg-slate-700/50 hover:text-sky-300"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+                    {f.file_name}
+                  </button>
+                ))}
+              </div>
+            ) : pdfUrl && (
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-sky-400 hover:text-sky-300"
+              >
+                Open PDF
+              </a>
+            )}
+            {(profile.role === "admin" || profile.role === "manager" || profile.role === "operations" || invoice.submitter_user_id === profile.id) && (
+              <label className="ml-2 inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-600 bg-slate-700/50 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-600/50 disabled:opacity-50">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                {addingFile ? "Adding..." : "Add file"}
+                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={handleAddFile} disabled={addingFile} />
+              </label>
+            )}
+          </div>
+          {!pdfUrl && !files.length && pdfError && (
             <p className="mt-4 text-sm text-red-300">{pdfError}</p>
           )}
         </div>
@@ -458,6 +545,20 @@ export function InvoiceDetail({
         <div className="text-sm text-slate-400">
           Payment ref: {workflow?.payment_reference as string} | Paid:{" "}
           {workflow?.paid_date as string}
+        </div>
+      )}
+
+      {excelPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setExcelPreview(null)}>
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-4 py-3">
+              <h3 className="font-medium text-slate-200">{excelPreview.name}</h3>
+              <button onClick={() => setExcelPreview(null)} className="rounded-lg px-3 py-1 text-sm text-slate-400 hover:bg-slate-700 hover:text-slate-200">Close</button>
+            </div>
+            <div className="max-h-[calc(90vh-4rem)] overflow-auto p-4">
+              <div className="overflow-x-auto rounded-lg border border-slate-600 bg-white p-4 text-slate-900" dangerouslySetInnerHTML={{ __html: excelPreview.html }} />
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -43,7 +43,7 @@ function SubmitPageContent() {
   const [txDate3, setTxDate3] = useState("");
   const [paymentType, setPaymentType] = useState<"paid_guest" | "unpaid_guest" | "">("");
   const [currency, setCurrency] = useState("GBP");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -85,15 +85,17 @@ function SubmitPageContent() {
       setError("Invoice date, TX date and payment type are required.");
       return;
     }
-    if (!file) {
-      setError("Please select a file (PDF, DOCX, DOC, XLSX, XLS, JPEG)");
+    if (files.length === 0) {
+      setError("Please select at least one file (PDF, DOCX, DOC, XLSX, XLS, JPEG)");
       return;
     }
     const allowedExts = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".jpg", ".jpeg"];
-    const fileExt = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
-    if (!allowedExts.includes(fileExt)) {
-      setError("Unsupported file type. Allowed: PDF, DOCX, DOC, XLSX, XLS, JPEG");
-      return;
+    for (const f of files) {
+      const fileExt = f.name.toLowerCase().slice(f.name.lastIndexOf("."));
+      if (!allowedExts.includes(fileExt)) {
+        setError(`Unsupported file type: ${f.name}. Allowed: PDF, DOCX, DOC, XLSX, XLS, JPEG`);
+        return;
+      }
     }
     setLoading(true);
 
@@ -109,34 +111,50 @@ function SubmitPageContent() {
       txDate2 ? `2. TX Date: ${txDate2}` : "",
       txDate3 ? `3. TX Date: ${txDate3}` : "",
       `Payment Type: ${paymentType}`,
-      file ? `Source File Name: ${file.name}` : "",
+      files.length > 0 ? `Source File Name: ${files.map((f) => f.name).join(", ")}` : "",
     ]
       .filter(Boolean)
       .join("\n");
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("department_id", departmentId);
-    formData.append("program_id", programId);
-    formData.append("service_description", serviceDescription);
-    formData.append("service_date_from", txDate1);
-    formData.append("service_date_to", txDate3 || txDate2 || txDate1);
-    formData.append("currency", currency);
+    let successCount = 0;
+    const errors: string[] = [];
 
     try {
-      const res = await fetch("/api/invoices/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json().catch(() => ({}));
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("department_id", departmentId);
+        formData.append("program_id", programId);
+        formData.append("service_description", serviceDescription);
+        formData.append("service_date_from", txDate1);
+        formData.append("service_date_to", txDate3 || txDate2 || txDate1);
+        formData.append("currency", currency);
+
+        const res = await fetch("/api/invoices/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok) {
+          successCount++;
+        } else {
+          errors.push(`${file.name}: ${(data as { error?: string }).error || "Upload failed"}`);
+        }
+      }
       setLoading(false);
 
-      if (!res.ok) {
-        setError((data as { error?: string }).error || "Upload failed");
-        return;
+      if (successCount > 0) {
+        setSuccess(
+          successCount === files.length
+            ? `${successCount} invoice(s) submitted. Redirecting...`
+            : `${successCount} of ${files.length} invoice(s) submitted. ${errors.length > 0 ? errors.join("; ") : ""}`
+        );
+        router.push("/invoices");
+      } else {
+        setError(errors.join("; ") || "Upload failed");
       }
-      setSuccess("Invoice submitted. Redirecting...");
-      router.push("/invoices");
     } catch (err) {
       setLoading(false);
       const msg = err instanceof Error ? err.message : "Upload failed";
@@ -324,15 +342,17 @@ function SubmitPageContent() {
 
         <div>
           <label className="block text-sm font-semibold text-slate-800">
-            Invoice File <span className="text-red-500">*</span>
+            Invoice File(s) <span className="text-red-500">*</span>
           </label>
           <input
             type="file"
             accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            multiple
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 file:mr-4 file:rounded file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-white"
           />
-          <p className="mt-1 text-xs text-slate-500">PDF, DOCX, DOC, XLSX, XLS, JPEG</p>
+          <p className="mt-1 text-xs text-slate-500">PDF, DOCX, DOC, XLSX, XLS, JPEG. Select multiple files to create one invoice per file.</p>
+          {files.length > 0 && <p className="mt-1 text-sm text-sky-600 font-medium">{files.length} file(s) selected</p>}
         </div>
 
         <button

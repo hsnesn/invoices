@@ -488,6 +488,7 @@ function InvoiceTable({
   onMoveToLineManager,
   onMoveToArchived,
   onReplaceFile,
+  onAddFile,
   openPdf,
   showPreviewOnHover,
   hidePreviewOnHover,
@@ -528,10 +529,11 @@ function InvoiceTable({
   onMoveToLineManager: (id: string) => Promise<void>;
   onMoveToArchived: (id: string) => Promise<void>;
   onReplaceFile: (id: string, file: File) => Promise<void>;
-  openPdf: (id: string) => Promise<void>;
+  onAddFile?: (id: string, file: File) => Promise<void>;
+  openPdf: (id: string, storagePath?: string) => Promise<void>;
   showPreviewOnHover: (id: string) => void;
   hidePreviewOnHover: () => void;
-  openPdfInNewTab: (id: string) => void;
+  openPdfInNewTab: (id: string, storagePath?: string) => void;
   onStartEdit: (row: DisplayRow) => void;
   actionLoadingId: string | null;
   visibleColumns: string[];
@@ -931,11 +933,18 @@ function InvoiceTable({
                             ) : (
                               <div className="space-y-1 max-h-40 overflow-y-auto">
                                 {filesData.map((f, i) => (
-                                  <button key={i} onClick={() => expandedRowId && void openPdf(expandedRowId)} className="block w-full text-left rounded border border-gray-200 px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 truncate" title={f.file_name}>
+                                  <button key={i} onClick={() => expandedRowId && void openPdf(expandedRowId, f.storage_path)} className="block w-full text-left rounded border border-gray-200 px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 truncate" title={f.file_name}>
                                     <span className="inline-flex items-center gap-1"><svg className="h-3.5 w-3.5 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>{f.file_name}</span>
                                   </button>
                                 ))}
                               </div>
+                            )}
+                            {onAddFile && expandedRowId && (
+                              <label className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
+                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                Add file
+                                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAddFile(expandedRowId, f); e.target.value = ""; }} />
+                              </label>
                             )}
                           </div>
                         </div>
@@ -1040,6 +1049,9 @@ export function InvoicesBoard({
   const [rejectReason, setRejectReason] = useState("");
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareId1, setCompareId1] = useState("");
+  const [compareId2, setCompareId2] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("");
@@ -1363,22 +1375,26 @@ export function InvoicesBoard({
     setPreviewLoading(false);
   }, []);
 
-  const openPdf = useCallback(async (invoiceId: string) => {
+  const openPdf = useCallback(async (invoiceId: string, storagePath?: string) => {
     setPreviewLoading(true);
     setPreviewUrl(null);
     setPreviewHtml(null);
     try {
-      const res = await fetch(`/api/invoices/${invoiceId}/pdf`);
+      const url = storagePath
+        ? `/api/invoices/${invoiceId}/pdf?path=${encodeURIComponent(storagePath)}`
+        : `/api/invoices/${invoiceId}/pdf`;
+      const res = await fetch(url);
       const data = await res.json();
       if (!data.url) return;
       const row = rows.find((r) => r.id === invoiceId);
-      setPreviewName(row?.invNumber ?? "File");
+      setPreviewName(storagePath ? (storagePath.split("/").pop() ?? row?.invNumber ?? "File") : (row?.invNumber ?? "File"));
       setPreviewDownloadUrl(data.url);
 
       const fileRes = await fetch(data.url);
       const blob = await fileRes.blob();
       const mime = blob.type.toLowerCase();
       const fileUrl = data.url.toLowerCase();
+      const pathLower = storagePath?.toLowerCase() ?? "";
 
       if (mime.includes("pdf") || fileUrl.includes(".pdf")) {
         const blobUrl = URL.createObjectURL(blob);
@@ -1390,7 +1406,7 @@ export function InvoicesBoard({
         const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuf });
         setPreviewUrl(null);
         setPreviewHtml(result.value);
-      } else if (mime.includes("sheet") || mime.includes("excel") || fileUrl.includes(".xlsx") || fileUrl.includes(".xls")) {
+      } else if (mime.includes("sheet") || mime.includes("excel") || fileUrl.includes(".xlsx") || fileUrl.includes(".xls") || pathLower.endsWith(".xlsx") || pathLower.endsWith(".xls")) {
         const XLSX = await import("xlsx");
         const arrayBuf = await blob.arrayBuffer();
         const wb = XLSX.read(arrayBuf, { type: "array" });
@@ -1445,9 +1461,12 @@ export function InvoicesBoard({
     }
   }, []);
 
-  const openPdfInNewTab = useCallback(async (id: string) => {
+  const openPdfInNewTab = useCallback(async (id: string, storagePath?: string) => {
     try {
-      const res = await fetch(`/api/invoices/${id}/pdf`);
+      const url = storagePath
+        ? `/api/invoices/${id}/pdf?path=${encodeURIComponent(storagePath)}`
+        : `/api/invoices/${id}/pdf`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
     } catch { /* */ }
@@ -1552,6 +1571,28 @@ export function InvoicesBoard({
       setActionLoadingId(null);
     }
   };
+
+  const onAddFile = useCallback(async (invoiceId: string, file: File) => {
+    setActionLoadingId(invoiceId);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/invoices/${invoiceId}/add-file`, { method: "POST", body: fd });
+      if (res.ok && expandedRowId === invoiceId) {
+        const flRes = await fetch(`/api/invoices/${invoiceId}/files`);
+        if (flRes.ok) setFilesData(await flRes.json());
+        toast.success("File added");
+      } else if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? "Add file failed");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      toast.error(msg.includes("fetch") ? "Connection error. Ensure the server is running." : msg);
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [expandedRowId]);
 
   const onToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -2122,6 +2163,12 @@ export function InvoicesBoard({
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
             Assign Dept EP
           </button>
+          {selectedIds.size === 2 && (
+            <button onClick={() => setShowCompareModal(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+              Compare
+            </button>
+          )}
           <button onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
             ✕ Close
           </button>
@@ -2135,6 +2182,110 @@ export function InvoicesBoard({
           onClose={() => setShowMoveModal(false)}
         />
       )}
+
+      {showCompareModal && (() => {
+        const ids = selectedIds.size === 2 ? Array.from(selectedIds) : [compareId1, compareId2];
+        const a = rows.find((r) => r.id === ids[0]);
+        const b = rows.find((r) => r.id === ids[1]);
+        const hasPicks = selectedIds.size === 2 || (compareId1 && compareId2 && compareId1 !== compareId2);
+        if (!hasPicks) {
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowCompareModal(false)}>
+              <div className="w-full max-w-md rounded-2xl border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-slate-800 p-6" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Compare invoices</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Select two different invoices to compare.</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Invoice 1</label>
+                    <select value={compareId1} onChange={(e) => setCompareId1(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-slate-800 dark:text-white">
+                      <option value="">Select...</option>
+                      {filtered.map((r) => (
+                        <option key={r.id} value={r.id}>{r.guest} — {r.invNumber} ({r.amount})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Invoice 2</label>
+                    <select value={compareId2} onChange={(e) => setCompareId2(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-slate-800 dark:text-white">
+                      <option value="">Select...</option>
+                      {filtered.map((r) => (
+                        <option key={r.id} value={r.id}>{r.guest} — {r.invNumber} ({r.amount})</option>
+                      ))}
+                    </select>
+                  </div>
+                  {compareId1 && compareId2 && compareId1 === compareId2 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Select two different invoices.</p>
+                  )}
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button onClick={() => setShowCompareModal(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-slate-700">Cancel</button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        if (!a || !b) return null;
+        const fields: { key: keyof DisplayRow; label: string }[] = [
+          { key: "guest", label: "Guest" },
+          { key: "title", label: "Title" },
+          { key: "producer", label: "Producer" },
+          { key: "department", label: "Department" },
+          { key: "programme", label: "Programme" },
+          { key: "topic", label: "Topic" },
+          { key: "tx1", label: "TX Date" },
+          { key: "tx2", label: "2. TX Date" },
+          { key: "tx3", label: "3. TX Date" },
+          { key: "invoiceDate", label: "Invoice Date" },
+          { key: "accountName", label: "Account Name" },
+          { key: "amount", label: "Amount" },
+          { key: "invNumber", label: "INV Number" },
+          { key: "sortCode", label: "Sort Code" },
+          { key: "accountNumber", label: "Account Number" },
+          { key: "lineManager", label: "Dept EP" },
+          { key: "paymentType", label: "Payment Type" },
+          { key: "status", label: "Status" },
+          { key: "paymentDate", label: "Payment Date" },
+        ];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowCompareModal(false)}>
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b-2 border-gray-300 px-4 py-3 dark:border-slate-600">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Compare invoices</h3>
+                <button onClick={() => setShowCompareModal(false)} className="rounded-lg px-3 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-slate-700">Close</button>
+              </div>
+              <div className="overflow-auto max-h-[calc(90vh-60px)] p-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-gray-200 dark:border-slate-600">
+                      <th className="text-left py-2 pr-4 font-semibold text-gray-700 dark:text-gray-300 w-36">Field</th>
+                      <th className="text-left py-2 px-2 font-semibold text-sky-700 dark:text-sky-300 min-w-[180px]">{a.guest} ({a.invNumber})</th>
+                      <th className="text-left py-2 px-2 font-semibold text-sky-700 dark:text-sky-300 min-w-[180px]">{b.guest} ({b.invNumber})</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fields.map(({ key, label }) => {
+                      const va = String((a as Record<string, unknown>)[key] ?? "—");
+                      const vb = String((b as Record<string, unknown>)[key] ?? "—");
+                      const diff = va !== vb;
+                      return (
+                        <tr key={key} className={`border-b border-gray-100 dark:border-slate-700 ${diff ? "bg-amber-50/50 dark:bg-amber-900/20" : ""}`}>
+                          <td className="py-2 pr-4 text-gray-600 dark:text-gray-400 font-medium">{label}</td>
+                          <td className={`py-2 px-2 ${diff ? "text-amber-800 dark:text-amber-200 font-medium" : ""}`}>{va || "—"}</td>
+                          <td className={`py-2 px-2 ${diff ? "text-amber-800 dark:text-amber-200 font-medium" : ""}`}>{vb || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => void openPdf(a.id)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500">Open invoice 1</button>
+                  <button onClick={() => void openPdf(b.id)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500">Open invoice 2</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {showAssignManagerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowAssignManagerModal(false)}>
@@ -2306,6 +2457,13 @@ export function InvoicesBoard({
             className="inline-flex items-center gap-1 rounded-xl bg-violet-500 px-4 py-2 text-sm font-medium text-white hover:bg-violet-600 transition-colors shadow-sm shadow-violet-500/25"
           >
             Custom Report
+          </button>
+          <button
+            onClick={() => { setCompareId1(""); setCompareId2(""); setShowCompareModal(true); }}
+            className="inline-flex items-center gap-1 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 transition-colors shadow-sm shadow-indigo-500/25"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+            Compare
           </button>
           {showSaveFilter ? (
             <div className="flex items-center gap-1">
@@ -2481,6 +2639,7 @@ export function InvoicesBoard({
               onMoveToLineManager={onMoveToLineManager}
               onMoveToArchived={onMoveToArchived}
               onReplaceFile={onReplaceFile}
+              onAddFile={onAddFile}
               openPdf={openPdf}
               showPreviewOnHover={showPreviewOnHover}
               hidePreviewOnHover={hidePreviewOnHover}
