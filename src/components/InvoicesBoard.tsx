@@ -748,11 +748,11 @@ function InvoiceTable({
                 )}
                 </div>
               </td>}
-              {isCol("accountName") && <td className="px-4 py-3 text-sm text-gray-700">{r.accountName}</td>}
+              {isCol("accountName") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountName}>{r.accountName}</td>}
               {isCol("amount") && <td className="px-4 py-3 text-sm text-gray-700">{r.amount}</td>}
-              {isCol("invNumber") && <td className="px-4 py-3 text-sm text-gray-700">{r.invNumber}</td>}
+              {isCol("invNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.invNumber}>{r.invNumber}</td>}
               {isCol("sortCode") && <td className="px-4 py-3 text-sm text-gray-700">{r.sortCode}</td>}
-              {isCol("accountNumber") && <td className="px-4 py-3 text-sm text-gray-700">{r.accountNumber}</td>}
+              {isCol("accountNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountNumber}>{r.accountNumber}</td>}
               {isCol("lineManager") && <td className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>}
               {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
               {isCol("actions") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>

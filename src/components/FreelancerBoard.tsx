@@ -801,9 +801,9 @@ export function FreelancerBoard({
         return <span className="font-semibold text-gray-900 dark:text-white group/amt relative cursor-default">{r.amount}<span className="pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-normal text-white opacity-0 shadow-lg transition-opacity group-hover/amt:opacity-100 z-50">{r.serviceDaysCount} days × {r.serviceRate} + {r.additionalCost} add.</span></span>;
       }
       case "invoiceAmount": return <span className="font-semibold text-gray-900 dark:text-white">{r.invoiceAmount}</span>;
-      case "invNumber": return isEditing ? inp("invNumber") : r.invNumber;
-      case "beneficiary": return isEditing ? inp("beneficiary") : r.beneficiary;
-      case "accountNumber": return isEditing ? inp("accountNumber") : r.accountNumber;
+      case "invNumber": return isEditing ? inp("invNumber") : <span className="max-w-[120px] truncate block" title={r.invNumber}>{r.invNumber}</span>;
+      case "beneficiary": return isEditing ? inp("beneficiary") : <span className="max-w-[120px] truncate block" title={r.beneficiary}>{r.beneficiary}</span>;
+      case "accountNumber": return isEditing ? inp("accountNumber") : <span className="max-w-[120px] truncate block" title={r.accountNumber}>{r.accountNumber}</span>;
       case "sortCode": return isEditing ? inp("sortCode") : r.sortCode;
       case "department": return isEditing ? <select value={editDraft?.departmentId ?? ""} onChange={e => onChangeDraft("departmentId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">Select...</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select> : <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>;
       case "department2": return isEditing ? inp("department2") : r.department2;
