@@ -33,7 +33,7 @@ ${body}
 </div></div></body></html>`;
 }
 
-/** Salary payment confirmation: no Invoice Approval Workflow header/footer, TRT Work UK Finance Team at bottom */
+/** Salary payment confirmation: no Invoice Approval Workflow header/footer, TRT World UK Finance Team at bottom */
 function wrapSalaryPayment(body: string) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
@@ -44,8 +44,8 @@ function wrapSalaryPayment(body: string) {
 ${body}
 </div>
 <div style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center">
-<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1e293b">TRT Work UK Finance Team</p>
-<p style="margin:0;font-size:12px;color:#64748b;line-height:1.5">If you think there is an error, please contact <a href="mailto:london.operations@trtworld.com" style="color:#2563eb;text-decoration:none">london.operations@trtworld.com</a> immediately.</p>
+<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1e293b">TRT World UK Finance Team</p>
+<p style="margin:0;font-size:12px;color:#64748b;line-height:1.5">If you think there is an error, please contact <a href="mailto:london.finance@trtworld.com" style="color:#2563eb;text-decoration:none">london.finance@trtworld.com</a> immediately.</p>
 </div></div></body></html>`;
 }
 
