@@ -237,7 +237,12 @@ export function FreelancerBoard({
   const [columnPickerPos, setColumnPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => { setHydrated(true); setVisibleColumns(loadStorage(COL_STORAGE_KEY, [...DEFAULT_VISIBLE])); }, []);
+  useEffect(() => {
+    setHydrated(true);
+    const stored = loadStorage<string[]>(COL_STORAGE_KEY, [...DEFAULT_VISIBLE]);
+    const normalized = DEFAULT_VISIBLE.filter((k) => stored.includes(k));
+    setVisibleColumns(normalized.length > 0 ? normalized : [...DEFAULT_VISIBLE]);
+  }, []);
 
   useEffect(() => {
     if (!showColumnPicker) { setColumnPickerPos(null); return; }
@@ -257,7 +262,13 @@ export function FreelancerBoard({
   }, [showColumnPicker]);
 
   const toggleColumn = useCallback((key: string) => {
-    setVisibleColumns(prev => { const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]; localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(next)); return next; });
+    setVisibleColumns(prev => {
+      const next = prev.includes(key)
+        ? prev.filter(k => k !== key)
+        : DEFAULT_VISIBLE.filter(k => prev.includes(k) || k === key);
+      localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
   }, []);
   const isCol = (key: string) => visibleColumns.includes(key);
   const COLUMNS = ALL_COLUMNS.filter(c => isCol(c.key));

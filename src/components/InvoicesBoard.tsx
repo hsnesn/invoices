@@ -1082,7 +1082,9 @@ export function InvoicesBoard({
 
   useEffect(() => {
     setHydrated(true);
-    setVisibleColumns(loadFromStorage("invoice_visible_columns", [...DEFAULT_VISIBLE_COLUMNS]));
+    const stored = loadFromStorage<string[]>("invoice_visible_columns", [...DEFAULT_VISIBLE_COLUMNS]);
+    const normalized = DEFAULT_VISIBLE_COLUMNS.filter((k) => stored.includes(k));
+    setVisibleColumns(normalized.length > 0 ? normalized : [...DEFAULT_VISIBLE_COLUMNS]);
     setSavedFilters(loadFromStorage<SavedFilter[]>("invoice_saved_filters", []));
     setRecentFilters(loadFromStorage<SavedFilter["filters"][]>(RECENT_FILTERS_KEY, []));
   }, []);
@@ -1565,10 +1567,12 @@ export function InvoicesBoard({
     }
   }, [selectedIds]);
 
-  // Column visibility
+  // Column visibility (order follows DEFAULT_VISIBLE_COLUMNS = ready_for_payment layout)
   const toggleColumn = useCallback((key: string) => {
     setVisibleColumns((prev) => {
-      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      const next = prev.includes(key)
+        ? prev.filter((k) => k !== key)
+        : DEFAULT_VISIBLE_COLUMNS.filter((k) => prev.includes(k) || k === key);
       localStorage.setItem("invoice_visible_columns", JSON.stringify(next));
       return next;
     });
