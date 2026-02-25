@@ -273,7 +273,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
       if (!raw) return { value: null, certain: false };
       const obj = JSON.parse(raw) as { value?: string | number | null; certain?: boolean };
       const v = obj?.value;
-      const certain = obj?.certain === true;
+      const certain = obj?.certain !== false; // use value unless explicitly uncertain
       if (v == null || v === "") return { value: null, certain: false };
       if (typeof v === "number") return { value: v, certain };
       return { value: String(v).trim() || null, certain };
@@ -283,7 +283,8 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   }
 
   function applyFieldResult(key: string, result: { value: string | number | null; certain: boolean }) {
-    if (!result.certain || result.value == null || result.value === "") return;
+    if (result.value == null || result.value === "") return;
+    if (result.certain === false) return; // skip only when explicitly uncertain
     const val = result.value;
     if (key === "gross_amount") {
       (parsed as Record<string, unknown>)[key] = typeof val === "number" ? val : parseNumberLike(String(val));
@@ -303,6 +304,10 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
       for (const { key, result } of results) {
         applyFieldResult(key, result);
       }
+      const aiFieldCount = Object.keys(parsed).filter((k) => parsed[k as keyof typeof parsed] != null).length;
+      if (aiFieldCount < 2) {
+        parsed = { ...regexParsed, ...parsed };
+      }
     } else {
       extractionError = "Document has no extractable text. Text-based PDFs only (no scanned images).";
       parsed = regexParsed;
@@ -317,6 +322,8 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
         for (const { key, result } of results) {
           applyFieldResult(key, result);
         }
+        const aiFieldCount = Object.keys(parsed).filter((k) => parsed[k as keyof typeof parsed] != null).length;
+        if (aiFieldCount < 2) parsed = { ...regexParsed, ...parsed };
         extractionError = null;
       } else {
         parsed = regexParsed;
