@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAdminOrOperations } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { EMAIL_STAGE_KEYS } from "@/lib/email-settings";
 
@@ -16,10 +16,7 @@ const TEMPLATE_KEYS = [
 
 export async function GET() {
   try {
-    const { profile } = await requireAuth();
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    await requireAdminOrOperations();
     const supabase = createAdminClient();
     const { data: templates } = await supabase
       .from("email_templates")
@@ -56,10 +53,7 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { profile } = await requireAuth();
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    await requireAdminOrOperations();
     const body = (await request.json()) as {
       templates?: { template_key: string; subject_template?: string | null; body_template?: string | null }[];
       stages?: { stage_key: string; enabled: boolean }[];

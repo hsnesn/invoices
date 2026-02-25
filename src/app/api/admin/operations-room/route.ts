@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminOrOperations } from "@/lib/auth";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("operations_room_members")
@@ -38,7 +38,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const body = await request.json();
     const { user_id } = body;
     if (!user_id) return NextResponse.json({ error: "user_id is required" }, { status: 400 });
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const user_id = searchParams.get("user_id");

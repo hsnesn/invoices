@@ -584,7 +584,7 @@ export async function POST(
       } else {
         return NextResponse.json({ error: "Invalid finance action" }, { status: 400 });
       }
-    } else if (profile.role === "submitter" || isOwner) {
+    } else if ((profile.role === "submitter" || isOwner) && profile.role !== "viewer") {
       if (to_status === "pending_manager" && fromStatus === "rejected") {
         await supabase
           .from("invoice_workflows")

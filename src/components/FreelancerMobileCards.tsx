@@ -112,7 +112,7 @@ export function FreelancerMobileCards({
         {rows.map((r) => {
         const isSubmitter = r.submitterId === currentUserId;
         const canApp = canApprove(r);
-        const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin");
+        const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
         const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
         const canOpsRoomApprove = isOperationsRoomMember && (r.status === "approved_by_manager" || r.status === "pending_admin");
         const canAdminApprove = currentRole === "admin" && (r.status === "approved_by_manager" || r.status === "pending_admin");

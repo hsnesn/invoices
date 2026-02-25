@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminOrOperations } from "@/lib/auth";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("department_managers")
@@ -37,7 +37,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const body = await request.json();
     const { department_id, manager_user_id } = body;
     if (!department_id || !manager_user_id) {
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const department_id = searchParams.get("department_id");

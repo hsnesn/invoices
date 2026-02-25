@@ -79,6 +79,13 @@ export async function requireAdmin() {
   return { profile };
 }
 
+/** Require admin or operations role. Used for Setup APIs so operations can view/edit. */
+export async function requireAdminOrOperations() {
+  const { profile } = await requireAuth();
+  if (profile.role !== "admin" && profile.role !== "operations") redirect("/invoices");
+  return { profile };
+}
+
 /** Require page access per allowed_pages. Admin bypasses. Redirects to dashboard if not allowed. */
 export async function requirePageAccess(pageKey: PageKey) {
   const { session, profile } = await requireAuth();

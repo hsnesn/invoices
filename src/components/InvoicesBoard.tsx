@@ -452,7 +452,7 @@ function InvoiceTable({
                 ) : r.status === "rejected" ? (
                   <div className="flex items-center justify-center gap-1">
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title={r.rejectionReason || "Rejected"}>✗</span>
-                    {(r.submitterId === currentUserId || currentRole === "admin") && (
+                    {(r.submitterId === currentUserId || currentRole === "admin") && currentRole !== "viewer" && (
                       <button
                         onClick={() => void onResubmit(r.id)}
                         disabled={actionLoadingId === r.id}
@@ -570,7 +570,7 @@ function InvoiceTable({
               {isCol("actions") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 {(() => {
                   const submitterCanEdit = isSubmitter && (r.status === "pending_manager" || r.status === "submitted");
-                  const submitterCanResubmit = isSubmitter && r.status === "rejected";
+                  const submitterCanResubmit = isSubmitter && r.status === "rejected" && currentRole !== "viewer";
                   const managerOrAdmin = currentRole === "manager" || currentRole === "admin";
 
                   if (editingId === r.id) {

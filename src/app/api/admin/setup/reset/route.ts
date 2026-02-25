@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminOrOperations } from "@/lib/auth";
 
 const DEFAULT_DEPARTMENTS = [
   "Programmes",
@@ -27,7 +27,7 @@ const DEFAULT_PROGRAMS: [string, string][] = [
 
 export async function POST() {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const supabase = createAdminClient();
 
     const { error: errProg } = await supabase.from("programs").delete().neq("id", "00000000-0000-0000-0000-000000000000");

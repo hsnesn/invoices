@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminOrOperations } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("profiles")

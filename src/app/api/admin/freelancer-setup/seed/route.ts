@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminOrOperations } from "@/lib/auth";
 
 const SERVICE_DESCRIPTIONS = [
   "Audio Production Services",
@@ -31,7 +31,7 @@ const ADDITIONAL_COST_REASONS = [
 
 export async function POST() {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const supabase = createAdminClient();
 
     await supabase.from("freelancer_setup_items").delete().eq("category", "service_description");

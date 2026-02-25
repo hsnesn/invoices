@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminOrOperations } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
     const supabase = createAdminClient();
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const body = await request.json();
     const { category, value } = body;
     if (!category || !value?.trim()) return NextResponse.json({ error: "category and value are required" }, { status: 400 });
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const body = await request.json();
     const { id, value } = body;
     if (!id || !value?.trim()) return NextResponse.json({ error: "id and value are required" }, { status: 400 });
@@ -53,7 +53,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminOrOperations();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
