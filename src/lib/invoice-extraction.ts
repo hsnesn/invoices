@@ -59,6 +59,15 @@ function looksLikeName(s: string | null | undefined): boolean {
   return /[A-Za-z]{2,}/.test(s.trim());
 }
 
+function looksLikeLocation(s: string | null | undefined): boolean {
+  if (!s?.trim()) return false;
+  const v = s.trim();
+  if (/^(london|uk|united\s*kingdom|england|manchester|birmingham|leeds|glasgow|edinburgh|coventry|enfield)(\s+(uk|uk\.?))?$/i.test(v)) return true;
+  if (/^[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}$/i.test(v)) return true; // UK postcode
+  if (/^(road|street|avenue|drive|lane|place|way)\s*$/i.test(v)) return true;
+  return false;
+}
+
 const BENEFICIARY_LABEL_PATTERNS = [
   /^(appearance|invoice|payment|submission|transaction|due|service|delivery|effective)\s+date$/i,
   /^date\s+(of|for)\b/i,
@@ -146,6 +155,8 @@ function regexExtractFromText(text: string) {
     /(?:company\s+name|business\s+name|trading\s+as)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
     /(?:bank\s+name)[:\-]?\s*[^:]+-\s*([A-Za-z0-9 '&.,-]+(?:Ltd|Inc|LLC)\.?)/i,
   ]);
+  const companyFromDomain = full.match(/([a-z0-9]+)(?:\.co\.uk|\.com|\.net|\.org)/i)?.[1];
+  const companyFromDomainName = companyFromDomain ? companyFromDomain.charAt(0).toUpperCase() + companyFromDomain.slice(1).toLowerCase() : null;
   const currency =
     full.match(/\b(GBP|EUR|USD|TRY)\b/i)?.[1]?.toUpperCase() ??
     (full.includes("£") ? "GBP" : null);
@@ -179,13 +190,17 @@ function regexExtractFromText(text: string) {
   for (const line of lines) {
     if (beneficiary) break;
     if (/invoice|vat|tax|subtotal|total|amount|sort|account|date/i.test(line)) continue;
+    if (looksLikeLocation(line)) continue;
+    if (/^(ltd|inc|llc)\.?$/i.test(line)) continue; // skip suffix-only lines
     if (/^[A-Za-z][A-Za-z0-9 '&.,-]{2,80}$/.test(line)) {
       beneficiary = line;
       break;
     }
   }
+  if (!beneficiary && companyFromDomainName) beneficiary = companyFromDomainName;
 
-  const rawCompany = companyFromLabel && /[A-Za-z]{2,}/.test(companyFromLabel) && !/^\d+$/.test(companyFromLabel.replace(/\s/g, "")) ? companyFromLabel : null;
+  let rawCompany = companyFromLabel && /[A-Za-z]{2,}/.test(companyFromLabel) && !/^\d+$/.test(companyFromLabel.replace(/\s/g, "")) && !looksLikeLocation(companyFromLabel) ? companyFromLabel : null;
+  if (!rawCompany && companyFromDomainName) rawCompany = companyFromDomainName;
   return {
     beneficiary_name: stripInternalRefs(beneficiary),
     company_name: stripInternalRefs(rawCompany),
@@ -249,7 +264,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
 
   const FIELD_PROMPTS: Record<string, string> = {
     beneficiary_name: `Extract ONLY the beneficiary/account holder name from this invoice. Person or company who receives payment. Look for "Account holder name", "Payee name", "Beneficiary", "Name on account". NO address. NEVER use date, invoice number, or amount. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
-    company_name: `Extract ONLY the company/business NAME (e.g. "FluentWorld Ltd", "ABC Ltd"). Look for the company name in the header or "Bank Name" line. NEVER use "Company Reg. No." - that is a registration number (digits), NOT a name. Company name must contain letters.` + CERTAIN_SUFFIX,
+    company_name: `Extract ONLY the company/business NAME (e.g. "FluentWorld Ltd", "Byproductions"). Look for the company name in the header, domain (e.g. byproductions.co.uk), or "Bank Name" line. NEVER use: "Company Reg. No.", "London UK", "London", "UK", "United Kingdom", or any city/country/location name. Company name must be a business name, not a place.` + CERTAIN_SUFFIX,
     account_number: `Extract ONLY the bank account number. Look for "Account No", "Account No :", "Account Number" - the 8-digit number where payment is sent (often near "Account Holder" or "Sort Code"). UK accounts: typically 8 digits. NEVER use phone numbers, Company Reg. No., or VAT No. Digits only.` + CERTAIN_SUFFIX,
     sort_code: `Extract ONLY the UK sort code from the bank details. Look for "Sort Code", "Sort/Branch Code". Exactly 6 digits. NEVER use Company Reg. No. or other numbers.` + CERTAIN_SUFFIX,
     invoice_number: `Extract ONLY the invoice number. Look for "Invoice No." or "Invoice Number" - often format like INV-123. NEVER use "Company Reg. No.", "Registration No.", "VAT No." - those are different. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
@@ -289,7 +304,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     if (result.value == null || result.value === "") return;
     if (result.certain === false) return; // skip only when explicitly uncertain
     const val = result.value;
-    if (key === "company_name" && typeof val === "string" && /^\d+$/.test(val.replace(/\s/g, ""))) return; // reject pure numbers (e.g. Company Reg. No.)
+    if (key === "company_name" && typeof val === "string" && (/^\d+$/.test(val.replace(/\s/g, "")) || looksLikeLocation(val))) return; // reject numbers or locations
     if (key === "gross_amount") {
       (parsed as Record<string, unknown>)[key] = typeof val === "number" ? val : parseNumberLike(String(val));
     } else {
@@ -350,6 +365,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
       parsed.beneficiary_name &&
       (looksLikeDate(parsed.beneficiary_name) ||
         looksLikeFieldLabel(parsed.beneficiary_name) ||
+        looksLikeLocation(parsed.beneficiary_name) ||
         !looksLikeName(parsed.beneficiary_name))
     )
       parsed.beneficiary_name = undefined;
@@ -359,7 +375,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   let companyName: string | null = null;
   if (parsed.company_name) {
     const c = stripInternalRefs(parsed.company_name);
-    if (c && looksLikeName(c) && !looksLikeDate(c) && !looksLikeFieldLabel(c)) companyName = c;
+    if (c && looksLikeName(c) && !looksLikeDate(c) && !looksLikeFieldLabel(c) && !looksLikeLocation(c)) companyName = c;
   }
   if (!companyName && parsed.beneficiary_name) {
     companyName = parsed.beneficiary_name;
