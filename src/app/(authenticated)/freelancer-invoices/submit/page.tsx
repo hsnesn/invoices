@@ -37,6 +37,10 @@ export default function FreelancerSubmitPage() {
   const [submissionDate] = useState(today);
   const [currency, setCurrency] = useState("GBP");
   const [invNumber, setInvNumber] = useState("");
+  const [accountDetailsChanged, setAccountDetailsChanged] = useState(false);
+  const [beneficiaryName, setBeneficiaryName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [sortCode, setSortCode] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -69,6 +73,10 @@ export default function FreelancerSubmitPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (files.length === 0) { setError("Please select at least one file"); return; }
+    if (accountDetailsChanged && (!beneficiaryName.trim() || !accountNumber.trim() || !sortCode.trim())) {
+      setError("When account details have changed, please fill Beneficiary name, Account number and Sort code.");
+      return;
+    }
     if (!contractorName.trim()) { setError("Contractor name is required"); return; }
     if (!serviceDescription) { setError("Service description is required"); return; }
     if (!serviceMonth) { setError("Month is required"); return; }
@@ -92,6 +100,12 @@ export default function FreelancerSubmitPage() {
     fd.append("booked_by", bookedBy);
     fd.append("currency", currency);
     fd.append("inv_number", invNumber.trim());
+    fd.append("account_details_changed", accountDetailsChanged ? "1" : "0");
+    if (accountDetailsChanged) {
+      fd.append("beneficiary_name", beneficiaryName.trim());
+      fd.append("account_number", accountNumber.trim());
+      fd.append("sort_code", sortCode.trim());
+    }
 
     try {
       const res = await fetch("/api/freelancer-invoices/upload", { method: "POST", body: fd });
@@ -256,9 +270,34 @@ export default function FreelancerSubmitPage() {
           <input value={submissionDate} readOnly className={inputCls + " bg-gray-50 dark:bg-gray-700"} />
         </div>
 
-        {/* 14. Files */}
+        {/* 14. My account details have changed */}
+        <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/20 p-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={accountDetailsChanged} onChange={(e) => setAccountDetailsChanged(e.target.checked)} className="h-4 w-4 rounded border-amber-500 text-amber-600" />
+            <span className={labelCls + " mb-0"}>My account details have changed</span>
+          </label>
+          <p className={hintCls + " mt-1"}>If checked, enter your new bank details below.</p>
+          {accountDetailsChanged && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Beneficiary name <span className="text-red-500">*</span></label>
+                <input value={beneficiaryName} onChange={(e) => setBeneficiaryName(e.target.value)} className={inputCls} placeholder="Account holder name" required={accountDetailsChanged} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Account number <span className="text-red-500">*</span></label>
+                <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 8))} className={inputCls} placeholder="8 digits" maxLength={8} required={accountDetailsChanged} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Sort code <span className="text-red-500">*</span></label>
+                <input value={sortCode} onChange={(e) => setSortCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className={inputCls} placeholder="6 digits (e.g. 12-34-56)" maxLength={8} required={accountDetailsChanged} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 15. Files */}
         <div>
-          <label className={labelCls}>14. Files</label>
+          <label className={labelCls}>15. Files</label>
           <p className={hintCls}>You can add multiple documents (invoice, timesheet, etc.)</p>
           <div className="relative mt-2 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-10 text-center dark:border-gray-600 dark:bg-gray-700/30 hover:border-teal-400 transition-colors">
             <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls" multiple onChange={(e) => { const newFiles = Array.from(e.target.files ?? []); setFiles((prev) => [...prev, ...newFiles]); e.target.value = ""; }} className="absolute inset-0 cursor-pointer opacity-0" />

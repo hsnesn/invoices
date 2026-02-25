@@ -48,9 +48,17 @@ export async function POST(request: NextRequest) {
     }
     const { session } = await requireAuth();
     const formData = await request.formData();
-    const filesRaw = formData.getAll("file");
-    const files = (Array.isArray(filesRaw) ? filesRaw : [filesRaw]).filter((f): f is File => f instanceof File);
-    const file = files[0] ?? (formData.get("file") as File | null);
+    const files: File[] = [];
+    const entries = Array.from(formData.entries());
+    for (let i = 0; i < entries.length; i++) {
+      const [key, value] = entries[i];
+      if (key === "file" && value instanceof File) files.push(value);
+    }
+    if (files.length === 0) {
+      const single = formData.get("file") as File | null;
+      if (single instanceof File) files.push(single);
+    }
+    const file = files[0] ?? null;
     const department_id = formData.get("department_id") as string | null;
     const program_id = formData.get("program_id") as string | null;
     const currency = (formData.get("currency") as string) || "GBP";
@@ -71,6 +79,10 @@ export async function POST(request: NextRequest) {
     const department_2 = formData.get("department_2") as string | null;
     const istanbul_team = formData.get("istanbul_team") as string | null;
     const inv_number = (formData.get("inv_number") as string | null)?.trim() || null;
+    const account_details_changed = formData.get("account_details_changed") === "1";
+    const beneficiary_name = (formData.get("beneficiary_name") as string | null)?.trim() || null;
+    const account_number = (formData.get("account_number") as string | null)?.trim() || null;
+    const sort_code = (formData.get("sort_code") as string | null)?.trim() || null;
 
     const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
     const fileExtFromName = file?.name?.split(".").pop()?.toLowerCase() ?? "";
@@ -138,10 +150,21 @@ export async function POST(request: NextRequest) {
     await supabase.from("invoice_files").insert({ invoice_id: invoiceId, storage_path: storagePath, file_name: file.name, sort_order: 0 });
 
     const seedInvNumber = inv_number || file.name.replace(/\.[^.]+$/, "");
-    await supabase.from("invoice_extracted_fields").upsert(
-      { invoice_id: invoiceId, invoice_number: seedInvNumber, extracted_currency: currency, needs_review: true, manager_confirmed: false, raw_json: { source_file_name: file.name, inv_number: inv_number ?? undefined }, updated_at: new Date().toISOString() },
-      { onConflict: "invoice_id" }
-    );
+    const extPayload: Record<string, unknown> = {
+      invoice_id: invoiceId,
+      invoice_number: seedInvNumber,
+      extracted_currency: currency,
+      needs_review: true,
+      manager_confirmed: false,
+      raw_json: { source_file_name: file.name, inv_number: inv_number ?? undefined },
+      updated_at: new Date().toISOString(),
+    };
+    if (account_details_changed && (beneficiary_name || account_number || sort_code)) {
+      if (beneficiary_name) extPayload.beneficiary_name = beneficiary_name;
+      if (account_number) extPayload.account_number = account_number;
+      if (sort_code) extPayload.sort_code = sort_code;
+    }
+    await supabase.from("invoice_extracted_fields").upsert(extPayload, { onConflict: "invoice_id" });
 
     await supabase.from("freelancer_invoice_fields").insert({
       invoice_id: invoiceId,
@@ -179,6 +202,14 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch { /* keep upload successful */ }
+
+    if (account_details_changed && (beneficiary_name || account_number || sort_code)) {
+      const extUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (beneficiary_name) extUpdate.beneficiary_name = beneficiary_name;
+      if (account_number) extUpdate.account_number = account_number;
+      if (sort_code) extUpdate.sort_code = sort_code;
+      await supabase.from("invoice_extracted_fields").update(extUpdate).eq("invoice_id", invoiceId);
+    }
 
     for (let i = 1; i < files.length; i++) {
       const f = files[i];

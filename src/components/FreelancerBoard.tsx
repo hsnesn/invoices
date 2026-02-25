@@ -460,6 +460,18 @@ export function FreelancerBoard({
     }, 400);
   }, [openFile]);
 
+  const showFilePreviewOnHover = useCallback((id: string, path: string, fileName: string) => {
+    if (previewHideRef.current) {
+      clearTimeout(previewHideRef.current);
+      previewHideRef.current = null;
+    }
+    if (previewShowRef.current) clearTimeout(previewShowRef.current);
+    previewShowRef.current = setTimeout(() => {
+      void openFile(id, path, fileName);
+      previewShowRef.current = null;
+    }, 400);
+  }, [openFile]);
+
   const hidePreviewOnHover = useCallback(() => {
     if (previewShowRef.current) {
       clearTimeout(previewShowRef.current);
@@ -786,6 +798,7 @@ export function FreelancerBoard({
           invoiceId={r.id}
           canEdit={!!(isSubmitter || currentRole === "admin" || currentRole === "manager")}
           openFile={openFile}
+          showFilePreviewOnHover={showFilePreviewOnHover}
           onReplaceFile={onReplaceFile}
           onAddFile={onAddFile}
           actionLoadingId={actionLoadingId}
@@ -1204,6 +1217,7 @@ function FreelancerFilesCell({
   invoiceId,
   canEdit,
   openFile,
+  showFilePreviewOnHover,
   onReplaceFile,
   onAddFile,
   actionLoadingId,
@@ -1212,6 +1226,7 @@ function FreelancerFilesCell({
   invoiceId: string;
   canEdit: boolean;
   openFile: (id: string, path?: string, fileName?: string) => void;
+  showFilePreviewOnHover: (id: string, path: string, fileName: string) => void;
   onReplaceFile: (id: string, file: File, onSuccess?: () => void) => void;
   onAddFile: (id: string, file: File, onSuccess?: () => void) => void;
   actionLoadingId: string | null;
@@ -1246,6 +1261,7 @@ function FreelancerFilesCell({
             <button
               key={i}
               onClick={() => void openFile(invoiceId, f.storage_path, f.file_name)}
+              onMouseEnter={() => showFilePreviewOnHover(invoiceId, f.storage_path, f.file_name)}
               className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-400 dark:hover:bg-sky-800/60 transition-colors"
               title={f.file_name}
             >
