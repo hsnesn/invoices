@@ -1013,6 +1013,10 @@ export function InvoicesBoard({
   const columnsAnchorRef = useRef<HTMLDivElement>(null);
   const [columnPickerPos, setColumnPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
 
   useEffect(() => {
     if (!showColumnPicker) {
@@ -2129,6 +2133,15 @@ export function InvoicesBoard({
           >
             {sortDir === "asc" ? "↑" : "↓"}
           </button>
+          {(currentRole === "admin" || currentRole === "operations" || currentRole === "finance") && (
+            <button
+              onClick={() => { setShowImportModal(true); setImportResult(null); setImportFile(null); }}
+              className="inline-flex items-center gap-1 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 transition-colors shadow-sm shadow-indigo-500/25"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+              Import Excel
+            </button>
+          )}
           <button
             onClick={() => void exportToExcel(filtered)}
             className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors shadow-sm shadow-emerald-500/25"
@@ -2361,6 +2374,95 @@ export function InvoicesBoard({
           </section>
         );
       })}
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !importing && setShowImportModal(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Import Guest Invoices</h3>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Import paid and no payment needed invoices from Excel. Invoice files can be added manually later via the Edit button.
+            </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+              Expected columns: Guest Name, Title, Producer, Payment Type (Paid/Unpaid), Department, Programme, Topic, Invoice Date, TX Date 1, TX Date 2, TX Date 3, Account Name, Amount, INV Number, Sort Code, Account Number, Payment Date (for paid).
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                const XLSX = await import("xlsx");
+                const template = [
+                  { "Guest Name": "Example Paid", "Title": "Title", "Producer": "Producer", "Payment Type": "Paid", "Department": "", "Programme": "", "Topic": "", "Invoice Date": "2025-01-15", "TX Date 1": "2025-01-15", "TX Date 2": "", "TX Date 3": "", "Account Name": "Account Name", "Amount": "1000", "INV Number": "INV-001", "Sort Code": "600923", "Account Number": "12345678", "Payment Date": "2025-01-31" },
+                  { "Guest Name": "Example Unpaid", "Title": "Title", "Producer": "Producer", "Payment Type": "Unpaid", "Department": "", "Programme": "", "Topic": "", "Invoice Date": "2025-01-15", "TX Date 1": "2025-01-15", "TX Date 2": "", "TX Date 3": "", "Account Name": "", "Amount": "0", "INV Number": "INV-002", "Sort Code": "", "Account Number": "", "Payment Date": "" },
+                ];
+                const ws = XLSX.utils.json_to_sheet(template);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Import");
+                XLSX.writeFile(wb, "guest-invoices-import-template.xlsx");
+              }}
+              className="mt-2 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+            >
+              Download template
+            </button>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Excel file (.xlsx, .xls)</label>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => { setImportFile(e.target.files?.[0] ?? null); setImportResult(null); }}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+            {importResult && (
+              <div className={`mt-4 rounded-lg border p-3 text-sm ${importResult.errors?.length ? "border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/20" : "border-emerald-300 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-900/20"}`}>
+                <p className="font-medium text-emerald-800 dark:text-emerald-200">{importResult.created} invoice(s) imported.</p>
+                {importResult.errors && importResult.errors.length > 0 && (
+                  <ul className="mt-2 list-disc pl-4 text-amber-800 dark:text-amber-200">
+                    {importResult.errors.slice(0, 10).map((err, i) => <li key={i}>{err}</li>)}
+                    {importResult.errors.length > 10 && <li>...and {importResult.errors.length - 10} more</li>}
+                  </ul>
+                )}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => !importing && setShowImportModal(false)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+                {importResult ? "Close" : "Cancel"}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!importFile || importing) return;
+                  setImporting(true);
+                  setImportResult(null);
+                  try {
+                    const fd = new FormData();
+                    fd.append("file", importFile);
+                    const res = await fetch("/api/invoices/import-excel", { method: "POST", body: fd });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                      setImportResult({ created: data.created ?? 0, errors: data.errors });
+                      if ((data.created ?? 0) > 0) {
+                        toast.success(`${data.created} invoice(s) imported`);
+                        setTimeout(() => window.location.reload(), 1500);
+                      }
+                    } else {
+                      toast.error((data as { error?: string }).error ?? "Import failed");
+                    }
+                  } catch {
+                    toast.error("Import failed");
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+                disabled={!importFile || importing}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {importing ? "Importing..." : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editModalRow && (
         <EditGuestInvoiceModal
