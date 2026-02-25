@@ -10,6 +10,7 @@ type DisplayRow = {
   submissionDate: string;
   additionalCost: string;
   amount: string;
+  currency?: string;
   invNumber: string;
   beneficiary: string;
   accountNumber: string;
@@ -152,6 +153,7 @@ export function FreelancerMobileCards({
                   { label: "Additional Cost", value: r.additionalCost },
                   { label: "Add. Cost Reason", value: r.additionalCostReason },
                   { label: "Amount", value: r.amount },
+                  { label: "Currency", value: r.currency ? (r.currency === "USD" ? "USD ($)" : r.currency === "EUR" ? "EUR (€)" : "GBP (£)") : "—" },
                   { label: "Approver", value: r.deptManager },
                   { label: "Service Desc.", value: r.serviceDescription },
                   { label: "Paid Date", value: r.paidDate },

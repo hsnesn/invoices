@@ -37,6 +37,7 @@ type DisplayRow = {
   id: string; submitterId: string; contractor: string; submittedBy: string; companyName: string; submissionDate: string;
   additionalCost: string; additionalCostNum: number; amount: string; amountNum: number;
   invNumber: string; beneficiary: string; accountNumber: string; sortCode: string;
+  currency: string;
   deptManager: string; deptManagerId: string; department: string; departmentId: string;
   department2: string; serviceDaysCount: string; days: string; serviceRate: string;
   month: string; bookedBy: string; serviceDescription: string; additionalCostReason: string;
@@ -93,6 +94,7 @@ const ALL_COLUMNS = [
   { key: "additionalCost", label: "Additional Cost" },
   { key: "additionalCostReason", label: "Add. Cost Reason" },
   { key: "amount", label: "Amount" },
+  { key: "currency", label: "Currency" },
   { key: "invNumber", label: "INV Number" },
   { key: "beneficiary", label: "Beneficiary" },
   { key: "accountNumber", label: "Account Nu." },
@@ -126,9 +128,10 @@ function statusToGroup(status: string): GroupKey {
   }
 }
 
-function fmtCurrency(v: number | null | undefined) {
+function fmtCurrency(v: number | null | undefined, currency?: string) {
   if (v == null) return "—";
-  return `£${v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  const sym = currency === "USD" ? "$" : currency === "EUR" ? "€" : "£";
+  return `${sym}${v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 function daysSince(d: string) { return Math.floor((Date.now() - new Date(d).getTime()) / 86400000); }
@@ -162,31 +165,33 @@ export function FreelancerBoard({
     const rate = fl?.service_rate_per_day ?? 0;
     const addCost = fl?.additional_cost ?? 0;
     const computedAmount = daysCount * rate + addCost;
+    const cur = (ext?.extracted_currency ?? inv.currency ?? "GBP") as string;
     return {
       id: inv.id, submitterId: inv.submitter_user_id,
       contractor: fl?.contractor_name ?? "—", submittedBy: profMap[inv.submitter_user_id] ?? "—",
       companyName: (() => { const c = fl?.company_name ?? ""; const p = fl?.contractor_name ?? "—"; if (!c || /trt/i.test(c)) return p || "—"; return c; })(),
       submissionDate: inv.created_at ? new Date(inv.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—",
-      additionalCost: addCost > 0 ? fmtCurrency(addCost) : "—", additionalCostNum: addCost,
-      amount: computedAmount > 0 ? fmtCurrency(computedAmount) : "—", amountNum: computedAmount,
+      additionalCost: addCost > 0 ? fmtCurrency(addCost, cur) : "—", additionalCostNum: addCost,
+      amount: computedAmount > 0 ? fmtCurrency(computedAmount, cur) : "—", amountNum: computedAmount,
       invNumber: ext?.invoice_number ?? "—", beneficiary: ext?.beneficiary_name ?? "—",
       accountNumber: ext?.account_number ?? "—", sortCode: ext?.sort_code ?? "—",
+      currency: cur,
       deptManager: wf?.manager_user_id ? profMap[wf.manager_user_id] ?? "—" : "—",
       deptManagerId: wf?.manager_user_id ?? "",
       department: inv.department_id ? deptMap[inv.department_id] ?? "—" : "—", departmentId: inv.department_id ?? "",
       department2: fl?.department_2 ?? "—",
       serviceDaysCount: fl?.service_days_count?.toString() ?? "—", days: fl?.service_days ?? "—",
-      serviceRate: fl?.service_rate_per_day ? `£${fl.service_rate_per_day}` : "—",
+      serviceRate: fl?.service_rate_per_day ? `${cur === "USD" ? "$" : cur === "EUR" ? "€" : "£"}${fl.service_rate_per_day}` : "—",
       month: fl?.service_month ?? "—", bookedBy: fl?.booked_by ?? "—",
       serviceDescription: fl?.service_description ?? "—", additionalCostReason: fl?.additional_cost_reason ?? "—",
       status, rejectionReason: wf?.rejection_reason ?? "", createdAt: inv.created_at,
       paidDate: wf?.paid_date ?? "", group: statusToGroup(status),
       ...(function () {
         const m: string[] = [];
-        if (!ext?.beneficiary_name) m.push("Alacaklı");
-        if (!ext?.account_number) m.push("Hesap No");
+        if (!ext?.beneficiary_name) m.push("Beneficiary");
+        if (!ext?.account_number) m.push("Account No");
         if (!ext?.sort_code) m.push("Sort Code");
-        if (!ext?.invoice_number) m.push("Fatura No");
+        if (!ext?.invoice_number) m.push("INV No");
         return { hasMissingInfo: m.length > 0 || ext?.needs_review === true, missingFields: m };
       })(),
     };
@@ -339,13 +344,13 @@ export function FreelancerBoard({
     handleRowDblClick(); setEditingId(row.id);
     setEditDraft({
       contractor: row.contractor === "—" ? "" : row.contractor, companyName: row.companyName === "—" ? "" : row.companyName,
-      additionalCost: row.additionalCost === "—" ? "" : row.additionalCost.replace(/[£,]/g, ""),
+      additionalCost: row.additionalCost === "—" ? "" : row.additionalCost.replace(/[£$€,\s]/g, ""),
       invNumber: row.invNumber === "—" ? "" : row.invNumber, beneficiary: row.beneficiary === "—" ? "" : row.beneficiary,
       accountNumber: row.accountNumber === "—" ? "" : row.accountNumber, sortCode: row.sortCode === "—" ? "" : row.sortCode,
       deptManagerId: row.deptManagerId, departmentId: row.departmentId,
       department2: row.department2 === "—" ? "" : row.department2,
       serviceDaysCount: row.serviceDaysCount === "—" ? "" : row.serviceDaysCount, days: row.days === "—" ? "" : row.days,
-      serviceRate: row.serviceRate === "—" ? "" : row.serviceRate.replace(/[£,]/g, ""),
+      serviceRate: row.serviceRate === "—" ? "" : row.serviceRate.replace(/[£$€,\s]/g, ""),
       month: row.month === "—" ? "" : row.month, bookedBy: row.bookedBy === "—" ? "" : row.bookedBy,
       serviceDescription: row.serviceDescription === "—" ? "" : row.serviceDescription,
       additionalCostReason: row.additionalCostReason === "—" ? "" : row.additionalCostReason,
@@ -807,9 +812,10 @@ export function FreelancerBoard({
       );
       case "additionalCost": return isEditing ? inp("additionalCost") : r.additionalCost;
       case "amount": {
-        if (isEditing) { const d = parseFloat(editDraft?.serviceDaysCount ?? "0") || 0; const rt = parseFloat(editDraft?.serviceRate ?? "0") || 0; const ac = parseFloat(editDraft?.additionalCost ?? "0") || 0; const t = d * rt + ac; return <span className="font-semibold text-blue-700 dark:text-blue-300">{t > 0 ? fmtCurrency(t) : "—"}</span>; }
+        if (isEditing) { const d = parseFloat(editDraft?.serviceDaysCount ?? "0") || 0; const rt = parseFloat(editDraft?.serviceRate ?? "0") || 0; const ac = parseFloat(editDraft?.additionalCost ?? "0") || 0; const t = d * rt + ac; return <span className="font-semibold text-blue-700 dark:text-blue-300">{t > 0 ? fmtCurrency(t, r.currency) : "—"}</span>; }
         return <span className="font-semibold text-gray-900 dark:text-white group/amt relative cursor-default">{r.amount}<span className="pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-normal text-white opacity-0 shadow-lg transition-opacity group-hover/amt:opacity-100 z-50">{r.serviceDaysCount} days × {r.serviceRate} + {r.additionalCost} add.</span></span>;
       }
+      case "currency": return <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{r.currency === "USD" ? "USD ($)" : r.currency === "EUR" ? "EUR (€)" : "GBP (£)"}</span>;
       case "invNumber": return isEditing ? inp("invNumber") : <span className="max-w-[120px] truncate block" title={r.invNumber}>{r.invNumber}</span>;
       case "beneficiary": return isEditing ? inp("beneficiary") : <span className="max-w-[120px] truncate block" title={r.beneficiary}>{r.beneficiary}</span>;
       case "accountNumber": return isEditing ? inp("accountNumber") : <span className="max-w-[120px] truncate block" title={r.accountNumber}>{r.accountNumber}</span>;
@@ -1330,7 +1336,7 @@ function CompareTable({ rows, ids }: { rows: DisplayRow[]; ids: string[] }) {
     { label: "Service Days", key: "serviceDaysCount" }, { label: "Month", key: "month" },
     { label: "Days", key: "days" }, { label: "Rate/Day", key: "serviceRate" },
     { label: "Additional Cost", key: "additionalCost" }, { label: "Add. Cost Reason", key: "additionalCostReason" },
-    { label: "Amount", key: "amount" }, { label: "INV Number", key: "invNumber" },
+    { label: "Amount", key: "amount" }, { label: "Currency", key: "currency" }, { label: "INV Number", key: "invNumber" },
     { label: "Beneficiary", key: "beneficiary" },
     { label: "Account Number", key: "accountNumber" }, { label: "Sort Code", key: "sortCode" },
     { label: "Approver", key: "deptManager" },

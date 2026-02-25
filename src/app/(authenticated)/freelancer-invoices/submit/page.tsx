@@ -81,6 +81,8 @@ export default function FreelancerSubmitPage() {
     if (!serviceDescription) { setError("Service description is required"); return; }
     if (!serviceMonth) { setError("Month is required"); return; }
     if (selectedDays.size === 0) { setError("Please select at least one day"); return; }
+    if (!bookedBy) { setError("Booked by is required"); return; }
+    if (!invNumber.trim()) { setError("INV Number is required"); return; }
     setLoading(true); setError("");
 
     const fd = new FormData();
@@ -172,8 +174,8 @@ export default function FreelancerSubmitPage() {
 
         {/* 5. Booked by */}
         <div>
-          <label className={labelCls}>5. Booked by</label>
-          <select value={bookedBy} onChange={(e) => setBookedBy(e.target.value)} className={inputCls}>
+          <label className={labelCls}>5. Booked by <span className="text-red-500">*</span></label>
+          <select value={bookedBy} onChange={(e) => setBookedBy(e.target.value)} className={inputCls} required>
             <option value="">Select...</option>
             {bookedByOptions.map((b) => <option key={b.id} value={b.value}>{b.value}</option>)}
           </select>
@@ -221,7 +223,7 @@ export default function FreelancerSubmitPage() {
           <label className={labelCls}>9. Service rate (per day) <span className="text-red-500">*</span></label>
           <p className={hintCls}>Rate applicable to each service delivery day, as agreed under the freelance services contract</p>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">£</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency === "USD" ? "$" : currency === "EUR" ? "€" : "£"}</span>
             <input type="number" step="0.01" min={0} value={serviceRatePerDay} onChange={(e) => setServiceRatePerDay(e.target.value)} className={inputCls + " pl-7"} required />
           </div>
         </div>
@@ -230,22 +232,15 @@ export default function FreelancerSubmitPage() {
         <div>
           <label className={labelCls}>10. Additional Cost</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">£</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency === "USD" ? "$" : currency === "EUR" ? "€" : "£"}</span>
             <input type="number" step="0.01" min={0} value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} className={inputCls + " pl-7"} />
           </div>
+          <p className={hintCls}>If you did different work than your normal daily work (e.g. Field Cameraman, Studio Cameraman, Program Editor), specify the role and which day it was.</p>
         </div>
 
-        {/* 11. INV Number */}
+        {/* 11. Additional Cost Reason */}
         <div>
-          <label className={labelCls}>11. INV Number</label>
-          <p className={hintCls}>Short number or code (e.g. INV-001, 123)</p>
-          <input value={invNumber} onChange={(e) => setInvNumber(e.target.value.slice(0, 50))} placeholder="e.g. INV-001" maxLength={50} className={inputCls} />
-          <p className="text-right text-[11px] text-gray-400">{invNumber.length}/50</p>
-        </div>
-
-        {/* 12. Additional Cost Reason */}
-        <div>
-          <label className={labelCls}>12. Additional Cost Reason</label>
+          <label className={labelCls}>11. Additional Cost Reason</label>
           <select value={additionalCostReason} onChange={(e) => setAdditionalCostReason(e.target.value)} className={inputCls}>
             <option value="">None</option>
             {costReasons.map((r) => <option key={r.id} value={r.value}>{r.value}</option>)}
@@ -256,12 +251,45 @@ export default function FreelancerSubmitPage() {
         </div>
 
         {/* Computed Amount */}
-        <div className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-3 dark:bg-teal-900/20 dark:border-teal-800">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-teal-700 dark:text-teal-400">Computed Amount</span>
-            <span className="text-lg font-bold text-teal-800 dark:text-teal-300">£{computedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span>
-          </div>
-          <p className="text-xs text-teal-600 dark:text-teal-500 mt-1">({serviceDaysCountAuto} days × £{serviceRatePerDay || 0}/day) + £{additionalCost || 0} additional</p>
+        {(() => {
+          const sym = currency === "USD" ? "$" : currency === "EUR" ? "€" : "£";
+          return (
+            <div className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-3 dark:bg-teal-900/20 dark:border-teal-800">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-teal-700 dark:text-teal-400">Computed Amount</span>
+                <span className="text-lg font-bold text-teal-800 dark:text-teal-300">{sym}{computedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <p className="text-xs text-teal-600 dark:text-teal-500 mt-1">({serviceDaysCountAuto} days × {sym}{serviceRatePerDay || 0}/day) + {sym}{additionalCost || 0} additional</p>
+            </div>
+          );
+        })()}
+
+        {/* INV Number (below computed amount) */}
+        <div>
+          <label className={labelCls}>12. INV Number <span className="text-red-500">*</span></label>
+          <p className={hintCls}>Short number or code (e.g. INV-001, 123)</p>
+          <input value={invNumber} onChange={(e) => setInvNumber(e.target.value.slice(0, 50))} placeholder="e.g. INV-001" maxLength={50} className={inputCls} required />
+          <p className="text-right text-[11px] text-gray-400">{invNumber.length}/50</p>
+        </div>
+
+        {/* Currency */}
+        <div className="rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50 p-4">
+          <label className="flex items-center gap-2 cursor-pointer mb-2">
+            <input type="checkbox" checked={currency !== "GBP"} onChange={(e) => { setCurrency(e.target.checked ? "USD" : "GBP"); }} className="h-4 w-4 rounded border-gray-300 text-teal-600" />
+            <span className={labelCls + " mb-0"}>Currency is not GBP</span>
+          </label>
+          {currency !== "GBP" && (
+            <div className="mt-2 flex gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="currency" value="USD" checked={currency === "USD"} onChange={() => setCurrency("USD")} className="h-4 w-4 text-teal-600" />
+                <span className="text-sm font-medium">USD ($)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="currency" value="EUR" checked={currency === "EUR"} onChange={() => setCurrency("EUR")} className="h-4 w-4 text-teal-600" />
+                <span className="text-sm font-medium">EUR (€)</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* 13. Submission Date */}
@@ -321,9 +349,6 @@ export default function FreelancerSubmitPage() {
             )}
           </div>
         </div>
-
-        {/* Currency (hidden but sent) */}
-        <input type="hidden" value={currency} />
 
         <button type="submit" disabled={loading} className="w-full rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-teal-500 disabled:opacity-50 transition-all">
           {loading ? (

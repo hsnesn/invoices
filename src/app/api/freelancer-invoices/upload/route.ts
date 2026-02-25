@@ -185,6 +185,13 @@ export async function POST(request: NextRequest) {
     try {
       await runInvoiceExtraction(invoiceId, session.user.id);
 
+      const extOverrides: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (inv_number?.trim()) extOverrides.invoice_number = inv_number.trim();
+      if (currency && ["GBP", "USD", "EUR"].includes(currency)) extOverrides.extracted_currency = currency;
+      if (inv_number?.trim() || (currency && ["GBP", "USD", "EUR"].includes(currency))) {
+        await supabase.from("invoice_extracted_fields").update(extOverrides).eq("invoice_id", invoiceId);
+      }
+
       const { data: extracted } = await supabase
         .from("invoice_extracted_fields")
         .select("beneficiary_name, gross_amount")
