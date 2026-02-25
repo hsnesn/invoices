@@ -765,6 +765,12 @@ export function FreelancerBoard({
     return map;
   }, [filteredRows]);
 
+  const groupSums = useMemo(() => {
+    const result: Record<string, { additional: number; amount: number }> = {};
+    for (const g of GROUPS) { const gr = groupedRows[g.key] ?? []; result[g.key] = { additional: gr.reduce((s, r) => s + r.additionalCostNum, 0), amount: gr.reduce((s, r) => s + r.amountNum, 0) }; }
+    return result;
+  }, [groupedRows]);
+
   const contractorGroups = useMemo(() => {
     const m = new Map<string, DisplayRow[]>();
     for (const r of filteredRows) {
@@ -828,13 +834,6 @@ export function FreelancerBoard({
     if (currentRole === "manager" && r.deptManagerId === currentUserId) return true;
     return false;
   };
-
-  /* ---------- Group sums ---------- */
-  const groupSums = useMemo(() => {
-    const result: Record<string, { additional: number; amount: number }> = {};
-    for (const g of GROUPS) { const gr = groupedRows[g.key] ?? []; result[g.key] = { additional: gr.reduce((s, r) => s + r.additionalCostNum, 0), amount: gr.reduce((s, r) => s + r.amountNum, 0) }; }
-    return result;
-  }, [groupedRows]);
 
   /* ---------- Render cell ---------- */
   const renderCell = (r: DisplayRow, col: string) => {
