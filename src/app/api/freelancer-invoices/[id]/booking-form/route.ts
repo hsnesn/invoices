@@ -3,6 +3,14 @@ import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateBookingFormPdf } from "@/lib/booking-form/pdf-generator";
 
+/** ASCII-only filename for Content-Disposition header (RFC 2616) */
+function asciiFilename(name: string): string {
+  const tr: Record<string, string> = { ş: "s", ğ: "g", ı: "i", ö: "o", ü: "u", ç: "c", Ş: "S", Ğ: "G", İ: "I", Ö: "O", Ü: "U", Ç: "C" };
+  let s = name;
+  for (const [k, v] of Object.entries(tr)) s = s.replaceAll(k, v);
+  return s.replace(/[^\x20-\x7E]/g, "_").replace(/\s+/g, "_").replace(/_+/g, "_").slice(0, 120) || "booking-form";
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -62,7 +70,7 @@ export async function GET(
         return new NextResponse(Buffer.from(buf), {
           headers: {
             "Content-Type": "application/pdf",
-            "Content-Disposition": `inline; filename="${storedFile.file_name}"`,
+            "Content-Disposition": `inline; filename="${asciiFilename(storedFile.file_name || "booking-form.pdf")}"`,
           },
         });
       }
@@ -125,10 +133,11 @@ export async function GET(
       approvalDate,
     });
 
+    const safeName = asciiFilename(`Booking_Form_${contractorName}_${displayMonth}.pdf`);
     return new NextResponse(Buffer.from(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="Booking_Form_${contractorName.replace(/\s+/g, "_")}_${displayMonth}.pdf"`,
+        "Content-Disposition": `inline; filename="${safeName}"`,
       },
     });
   } catch (e) {
