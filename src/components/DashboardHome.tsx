@@ -134,7 +134,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   const isViewer = profile.role === "viewer";
   const isOperations = profile.role === "operations";
   const userPages = profile.allowed_pages;
-  const { data: stats } = useSWR<Stats>("/api/dashboard/stats", fetcher);
+  const { data: stats, mutate } = useSWR<Stats>("/api/dashboard/stats", fetcher, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+  });
 
   const visiblePages = PAGES.filter((p) => {
     if (p.viewerHidden && isViewer) return false;
@@ -172,7 +175,18 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
       {/* Metric Cards */}
       {stats && (
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-8">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs text-gray-500 dark:text-gray-400">Updates every 30s</span>
+            <button
+              type="button"
+              onClick={() => void mutate()}
+              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+            >
+              Refresh
+            </button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
             <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Guest Pending</p>
             <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{stats.guest.pending}</p>
