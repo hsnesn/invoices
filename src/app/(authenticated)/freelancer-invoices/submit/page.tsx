@@ -4,8 +4,34 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const ALL_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** Build month+year options: next 24 months from current */
+function buildMonthYearOptions(): { value: string; label: string }[] {
+  const now = new Date();
+  const opts: { value: string; label: string }[] = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const month = MONTH_NAMES[d.getMonth()];
+    const year = d.getFullYear();
+    opts.push({ value: `${month} ${year}`, label: `${month} ${year}` });
+  }
+  return opts;
+}
+
+const MONTH_YEAR_OPTIONS = buildMonthYearOptions();
+
+/** Get number of days in a month (1–31) */
+function getDaysInMonth(monthYear: string): number[] {
+  if (!monthYear) return [];
+  const [monthName, yearStr] = monthYear.split(" ");
+  const mi = MONTH_NAMES.indexOf(monthName);
+  if (mi < 0 || !yearStr) return [];
+  const y = parseInt(yearStr, 10);
+  if (Number.isNaN(y)) return [];
+  const last = new Date(y, mi + 1, 0).getDate();
+  return Array.from({ length: last }, (_, i) => i + 1);
+}
 
 type SetupItem = { id: string; value: string };
 
@@ -59,7 +85,13 @@ export default function FreelancerSubmitPage() {
     });
   };
 
-  const serviceDaysCountAuto = selectedDays.size;
+  // When month changes, keep only days that exist in the new month
+  const daysInSelectedMonth = getDaysInMonth(serviceMonth);
+  const validSelectedDays = new Set(
+    Array.from(selectedDays).filter((d) => daysInSelectedMonth.includes(d))
+  );
+
+  const serviceDaysCountAuto = validSelectedDays.size;
 
   const computedAmount = (() => {
     const days = serviceDaysCountAuto;
@@ -78,7 +110,7 @@ export default function FreelancerSubmitPage() {
     if (!contractorName.trim()) { setError("Contractor name is required"); return; }
     if (!serviceDescription) { setError("Service description is required"); return; }
     if (!serviceMonth) { setError("Month is required"); return; }
-    if (selectedDays.size === 0) { setError("Please select at least one day"); return; }
+    if (validSelectedDays.size === 0) { setError("Please select at least one day"); return; }
     if (!bookedBy) { setError("Booked by is required"); return; }
     if (!invNumber.trim()) { setError("INV Number is required"); return; }
     const addCostNum = parseFloat(additionalCost) || 0;
@@ -97,7 +129,7 @@ export default function FreelancerSubmitPage() {
     fd.append("istanbul_team", "");
     fd.append("service_description", serviceDescription);
     fd.append("service_days_count", String(serviceDaysCountAuto));
-    fd.append("service_days", Array.from(selectedDays).sort((a, b) => a - b).join(", "));
+    fd.append("service_days", Array.from(validSelectedDays).sort((a, b) => a - b).join(", "));
     fd.append("service_rate_per_day", serviceRatePerDay);
     fd.append("service_month", serviceMonth);
     fd.append("additional_cost", additionalCost);
@@ -194,30 +226,57 @@ export default function FreelancerSubmitPage() {
         {/* 7. Month */}
         <div>
           <label className={labelCls}>7. Month <span className="text-red-500">*</span></label>
+          <p className={hintCls}>Select month and year; then pick days on the calendar below</p>
           <select value={serviceMonth} onChange={(e) => setServiceMonth(e.target.value)} className={inputCls} required>
-            <option value="">Select...</option>
-            {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
+            <option value="">Select month and year...</option>
+            {MONTH_YEAR_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
         </div>
 
-        {/* 8. Days */}
+        {/* 8. Days - Calendar picker */}
         <div>
           <label className={labelCls}>8. Days <span className="text-red-500">*</span></label>
-          <div className="grid grid-cols-8 gap-2 mt-2">
-            {ALL_DAYS.map((day) => (
-              <label key={day} className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedDays.has(day)}
-                  onChange={() => toggleDay(day)}
-                  className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-                />
-                {day}
-              </label>
-            ))}
-          </div>
-          {selectedDays.size > 0 && (
-            <p className="mt-2 text-xs text-teal-600">{selectedDays.size} days selected: {Array.from(selectedDays).sort((a, b) => a - b).join(", ")}</p>
+          <p className={hintCls}>Click dates on the calendar to select or deselect. Days are stored as numbers (e.g. 4, 5, 15).</p>
+          {serviceMonth ? (
+            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50 p-4">
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                  <div key={d} className="text-xs font-medium text-gray-500 dark:text-gray-400 py-1">{d}</div>
+                ))}
+                {(() => {
+                  const [monthName, yearStr] = serviceMonth.split(" ");
+                  const mi = MONTH_NAMES.indexOf(monthName);
+                  const y = parseInt(yearStr || "0", 10);
+                  const firstDay = new Date(y, mi, 1).getDay();
+                  const daysInMonth = getDaysInMonth(serviceMonth);
+                  const pad = Array.from({ length: firstDay }, (_, i) => <div key={`pad-${i}`} className="h-9" />);
+                  const dayCells = daysInMonth.map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleDay(day)}
+                      className={`h-9 w-9 rounded-md text-sm font-medium transition-colors ${
+                        selectedDays.has(day)
+                          ? "bg-teal-600 text-white hover:bg-teal-500"
+                          : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 border border-gray-200 dark:border-gray-600"
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ));
+                  return [...pad, ...dayCells];
+                })()}
+              </div>
+              {validSelectedDays.size > 0 && (
+                <p className="mt-3 text-xs text-teal-600 dark:text-teal-400">
+                  {validSelectedDays.size} day(s) selected: {Array.from(validSelectedDays).sort((a, b) => a - b).join(", ")}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Select a month above to see the calendar</p>
           )}
         </div>
 
