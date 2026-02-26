@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { toast } from "sonner";
+import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { EmptyState } from "./EmptyState";
 import { FreelancerMobileCards } from "./FreelancerMobileCards";
 
@@ -395,7 +396,7 @@ export function FreelancerBoard({
       setEditModalRow(null);
       refreshAndKeepVisible();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(toUserFriendlyError(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -421,7 +422,7 @@ export function FreelancerBoard({
       const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        toast.error((d as { error?: string }).error ?? "Delete failed");
+        toast.error(getApiErrorMessage(d as { error?: string } | null));
         return;
       }
       refreshAndKeepVisible();
@@ -447,7 +448,7 @@ export function FreelancerBoard({
         if (listRes.ok) setNotesData(await listRes.json());
       } else {
         const d = await res.json().catch(() => ({}));
-        toast.error(d?.error ?? "Failed to add note.");
+        toast.error(getApiErrorMessage(d));
       }
     } catch {
       toast.error("Failed to add note. Check your connection.");
@@ -526,8 +527,8 @@ export function FreelancerBoard({
     try {
       const fd = new FormData(); fd.append("file", file);
       const res = await fetch(`/api/invoices/${invoiceId}/replace-file`, { method: "POST", body: fd });
-      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); toast.error(d?.error ?? "File replacement failed"); }
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Upload failed"); }
+      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); toast.error(getApiErrorMessage(d)); }
+    } catch (err) { toast.error(toUserFriendlyError(err)); }
     finally { setActionLoadingId(null); }
   }, []);
 
@@ -536,8 +537,8 @@ export function FreelancerBoard({
     try {
       const fd = new FormData(); fd.append("file", file);
       const res = await fetch(`/api/invoices/${invoiceId}/add-file`, { method: "POST", body: fd });
-      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); toast.error(d?.error ?? "Add file failed"); }
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Upload failed"); }
+      if (res.ok) { onSuccess?.(); } else { const d = await res.json().catch(() => null); toast.error(getApiErrorMessage(d)); }
+    } catch (err) { toast.error(toUserFriendlyError(err)); }
     finally { setActionLoadingId(null); }
   }, []);
 
@@ -546,7 +547,7 @@ export function FreelancerBoard({
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
-        toast.error((d as { error?: string }).error ?? "Booking form could not be loaded");
+        toast.error(getApiErrorMessage(d as { error?: string } | null));
         return;
       }
       const blob = await r.blob();
@@ -563,7 +564,7 @@ export function FreelancerBoard({
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
-        toast.error((d as { error?: string }).error ?? "Booking form could not be loaded");
+        toast.error(getApiErrorMessage(d as { error?: string } | null));
         return;
       }
       const blob = await r.blob();
@@ -584,7 +585,7 @@ export function FreelancerBoard({
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form/trigger`, { method: "POST" });
       const d = await r.json().catch(() => null);
       if (r.ok) toast.success(d?.skipped ? "Already sent (idempotent)" : "Booking form emails sent to Line Manager and London Operations.");
-      else toast.error(d?.error ?? "Failed to send booking form emails");
+      else toast.error(getApiErrorMessage(d));
     } catch { toast.error("Error sending booking form emails"); }
     finally { setActionLoadingId(null); }
   }, []);
@@ -634,7 +635,7 @@ export function FreelancerBoard({
     setSingleDownloading(true);
     try {
       const res = await fetch(`/api/invoices/${id}/download-files`);
-      if (!res.ok) { const data = await res.json().catch(() => null); toast.error(data?.error ?? "Download failed"); return; }
+      if (!res.ok) { const data = await res.json().catch(() => null); toast.error(getApiErrorMessage(data)); return; }
       const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `invoice-${id}-files.zip`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } finally { setSingleDownloading(false); }
   }, []);
@@ -712,12 +713,13 @@ export function FreelancerBoard({
     }
   }, [selectedIds, refreshAndKeepVisible]);
 
-  /* ---------- Duplicate detection ---------- */
+  /* ---------- Duplicate detection: same contractor + amount (+ invoice number when available) ---------- */
   const duplicates = useMemo(() => {
     const seen = new Map<string, string[]>();
     rows.forEach(r => {
       if (r.amountNum === 0 || r.contractor === "—") return;
-      const key = `${r.contractor.toLowerCase().trim()}|${r.amountNum}`;
+      const inv = (r.invNumber && r.invNumber !== "—") ? r.invNumber.trim().toLowerCase() : "";
+      const key = inv ? `${r.contractor.toLowerCase().trim()}|${r.amountNum}|${inv}` : `${r.contractor.toLowerCase().trim()}|${r.amountNum}`;
       const arr = seen.get(key) ?? [];
       arr.push(r.id);
       seen.set(key, arr);
@@ -1323,7 +1325,7 @@ export function FreelancerBoard({
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Reject Invoice</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">The submitter will be notified and can make corrections then resubmit.</p>
-            <textarea autoFocus value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Enter rejection reason..." rows={3} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            <textarea autoFocus value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Enter rejection reason..." rows={3} aria-label="Rejection reason" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
             <div className="mt-4 flex items-center justify-end gap-2">
               <button onClick={() => { setRejectModalId(null); setRejectReason(""); }} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">Cancel</button>
               <button onClick={() => void submitReject()} disabled={!rejectReason.trim() || actionLoadingId === rejectModalId} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 shadow-sm">{actionLoadingId === rejectModalId ? "Rejecting..." : "Reject Invoice"}</button>

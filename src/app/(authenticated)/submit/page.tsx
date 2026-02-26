@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
+import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { GenerateInvoiceForm } from "@/components/GenerateInvoiceForm";
 
 const fetcher = (url: string) =>
@@ -51,6 +52,7 @@ function SubmitPageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (deptError) setError(deptError.message ?? "Failed to load departments");
@@ -72,6 +74,8 @@ function SubmitPageContent() {
   useEffect(() => {
     if (departmentId) setProgramId("");
   }, [departmentId]);
+
+  const markTouched = (field: string) => () => setTouched((p) => ({ ...p, [field]: true }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,7 +148,7 @@ function SubmitPageContent() {
         if (res.ok) {
           successCount++;
         } else {
-          errors.push(`${file.name}: ${(data as { error?: string }).error || "Upload failed"}`);
+          errors.push(`${file.name}: ${getApiErrorMessage(data as { error?: string } | null)}`);
         }
       }
       setLoading(false);
@@ -161,8 +165,7 @@ function SubmitPageContent() {
       }
     } catch (err) {
       setLoading(false);
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      setError(msg.includes("fetch") ? "Connection error. Make sure the server is running." : msg);
+      setError(toUserFriendlyError(err));
     }
   };
 
@@ -175,18 +178,26 @@ function SubmitPageContent() {
         </div>
       </div>
 
-      <div className="mb-6 flex gap-2 border-b border-slate-200 dark:border-slate-600">
+      <div className="mb-6 flex gap-2 border-b border-slate-200 dark:border-slate-600" role="tablist" aria-label="Submission method">
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === "upload"}
+          aria-controls="upload-panel"
+          id="tab-upload"
           onClick={() => setTab("upload")}
-          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${tab === "upload" ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"}`}
+          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${tab === "upload" ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"}`}
         >
           Upload Invoice
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === "generate"}
+          aria-controls="generate-panel"
+          id="tab-generate"
           onClick={() => setTab("generate")}
-          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${tab === "generate" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"}`}
+          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${tab === "generate" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"}`}
         >
           Generate Invoice
         </button>
@@ -204,26 +215,36 @@ function SubmitPageContent() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block text-sm font-semibold text-slate-800">
+          <label htmlFor="guestName" className="block text-sm font-semibold text-slate-800">
             Guest Name <span className="text-red-500">*</span>
           </label>
           <input
+            id="guestName"
             value={guestName}
             onChange={(e) => setGuestName(e.target.value.slice(0, 255))}
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
+            onBlur={markTouched("guestName")}
+            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 aria-[invalid=true]:border-red-500"
+            aria-invalid={touched.guestName && !guestName.trim() ? true : undefined}
+            aria-describedby={touched.guestName && !guestName.trim() ? "guestName-error" : undefined}
           />
+          {touched.guestName && !guestName.trim() && <p id="guestName-error" className="mt-1 text-sm text-red-600" role="alert">Guest name is required</p>}
           <p className="mt-1 text-right text-sm text-slate-500">{guestName.length}/255</p>
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-800">
+          <label htmlFor="title" className="block text-sm font-semibold text-slate-800">
             Title <span className="text-red-500">*</span>
           </label>
           <input
+            id="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
+            onBlur={markTouched("title")}
+            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 aria-[invalid=true]:border-red-500"
+            aria-invalid={touched.title && !title.trim() ? true : undefined}
+            aria-describedby={touched.title && !title.trim() ? "title-error" : undefined}
           />
+          {touched.title && !title.trim() && <p id="title-error" className="mt-1 text-sm text-red-600" role="alert">Title is required</p>}
         </div>
 
         <div>
@@ -249,39 +270,49 @@ function SubmitPageContent() {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-800">
+          <label htmlFor="departmentId" className="block text-sm font-semibold text-slate-800">
             Department <span className="text-red-500">*</span>
           </label>
           <select
+            id="departmentId"
             value={departmentId}
             onChange={(e) => setDepartmentId(e.target.value)}
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
+            onBlur={markTouched("departmentId")}
+            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 aria-[invalid=true]:border-red-500"
+            aria-invalid={touched.departmentId && !departmentId ? true : undefined}
+            aria-describedby={touched.departmentId && !departmentId ? "departmentId-error" : undefined}
           >
             <option value="">Select...</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
+          {touched.departmentId && !departmentId && <p id="departmentId-error" className="mt-1 text-sm text-red-600" role="alert">Department is required</p>}
         </div>
         <div>
-          <label className="block text-sm font-semibold text-slate-800">
+          <label htmlFor="programId" className="block text-sm font-semibold text-slate-800">
             Programme Name <span className="text-red-500">*</span>
           </label>
           <select
+            id="programId"
             value={programId}
             onChange={(e) => setProgramId(e.target.value)}
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
+            onBlur={markTouched("programId")}
+            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 aria-[invalid=true]:border-red-500"
             disabled={!departmentId}
+            aria-invalid={touched.programId && !!departmentId && !programId ? true : undefined}
+            aria-describedby={touched.programId && departmentId && !programId ? "programId-error" : undefined}
           >
             <option value="">Select...</option>
             {programs.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {touched.programId && departmentId && !programId && <p id="programId-error" className="mt-1 text-sm text-red-600" role="alert">Programme is required</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-800">
+          <label htmlFor="invoiceDate" className="block text-sm font-semibold text-slate-800">
             Invoice Date <span className="text-red-500">*</span>
           </label>
           <input
@@ -366,17 +397,19 @@ function SubmitPageContent() {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-800">
+          <label htmlFor="invoiceFiles" className="block text-sm font-semibold text-slate-800">
             Invoice File(s) <span className="text-red-500">*</span>
           </label>
           <input
+            id="invoiceFiles"
             type="file"
             accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg"
             multiple
             onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            aria-describedby="files-hint"
             className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 file:mr-4 file:rounded file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-white"
           />
-          <p className="mt-1 text-xs text-slate-500">PDF, DOCX, DOC, XLSX, XLS, JPEG. Select multiple files to create one invoice per file.</p>
+          <p id="files-hint" className="mt-1 text-xs text-slate-500">PDF, DOCX, DOC, XLSX, XLS, JPEG. Select multiple files to create one invoice per file.</p>
           {files.length > 0 && <p className="mt-1 text-sm text-sky-600 font-medium">{files.length} file(s) selected</p>}
         </div>
 

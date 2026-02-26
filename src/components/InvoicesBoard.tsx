@@ -4,6 +4,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspens
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { toast } from "sonner";
+import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { EmptyState } from "./EmptyState";
 import { InvoiceMobileCards } from "./InvoiceMobileCards";
 
@@ -1450,7 +1451,7 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Failed to mark as paid");
+        toast.error(getApiErrorMessage(data));
       }
     } finally {
       setActionLoadingId(null);
@@ -1603,7 +1604,7 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Failed to move");
+        toast.error(getApiErrorMessage(data));
       }
     } finally {
       setActionLoadingId(null);
@@ -1624,7 +1625,7 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Failed to move");
+        toast.error(getApiErrorMessage(data));
       }
     } finally {
       setActionLoadingId(null);
@@ -1644,11 +1645,10 @@ export function InvoicesBoard({
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "File replacement failed");
+        toast.error(getApiErrorMessage(data));
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      toast.error(msg.includes("fetch") ? "Connection error. Ensure the server is running." : msg);
+      toast.error(toUserFriendlyError(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -1666,11 +1666,10 @@ export function InvoicesBoard({
         toast.success("File added");
       } else if (!res.ok) {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Add file failed");
+        toast.error(getApiErrorMessage(data));
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      toast.error(msg.includes("fetch") ? "Connection error. Ensure the server is running." : msg);
+      toast.error(toUserFriendlyError(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -1707,7 +1706,7 @@ export function InvoicesBoard({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Download failed");
+        toast.error(getApiErrorMessage(data));
         return;
       }
       const blob = await res.blob();
@@ -1730,7 +1729,7 @@ export function InvoicesBoard({
       const res = await fetch(`/api/invoices/${id}/download-files`);
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Download failed");
+        toast.error(getApiErrorMessage(data));
         return;
       }
       const blob = await res.blob();
@@ -1798,7 +1797,7 @@ export function InvoicesBoard({
         setNewNote("");
       } else {
         const d = await res.json().catch(() => ({}));
-        toast.error(d?.error ?? "Failed to add note.");
+        toast.error(getApiErrorMessage(d));
       }
     } catch {
       toast.error("Failed to add note. Check your connection.");
@@ -1981,12 +1980,13 @@ export function InvoicesBoard({
     }
   }, [selectedIds]);
 
-  // Duplicate detection
+  // Duplicate detection: same guest + amount (+ invoice number when available)
   const duplicates = useMemo(() => {
     const seen = new Map<string, string[]>();
     rows.forEach((r) => {
       if (r.amount === "—" || !r.guest || r.guest === "—") return;
-      const key = `${r.guest.toLowerCase().trim()}|${r.amount}`;
+      const inv = (r.invNumber && r.invNumber !== "—") ? r.invNumber.trim().toLowerCase() : "";
+      const key = inv ? `${r.guest.toLowerCase().trim()}|${r.amount}|${inv}` : `${r.guest.toLowerCase().trim()}|${r.amount}`;
       const arr = seen.get(key) ?? [];
       arr.push(r.id);
       seen.set(key, arr);
@@ -2145,7 +2145,7 @@ export function InvoicesBoard({
       setEditModalRow(null);
       window.location.reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(toUserFriendlyError(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -3054,7 +3054,7 @@ export function InvoicesBoard({
                         setTimeout(() => window.location.reload(), 1500);
                       }
                     } else {
-                      toast.error((data as { error?: string }).error ?? "Import failed");
+                      toast.error(getApiErrorMessage(data as { error?: string } | null));
                     }
                   } catch {
                     toast.error("Import failed");
@@ -3097,6 +3097,7 @@ export function InvoicesBoard({
               onChange={(e) => setRejectReason(e.target.value)}
               rows={4}
               autoFocus
+              aria-label="Rejection reason"
               placeholder="Rejection reason..."
               className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:ring-1 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             />
@@ -3104,6 +3105,7 @@ export function InvoicesBoard({
               <button
                 onClick={() => { setRejectModalId(null); setRejectReason(""); }}
                 className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                aria-label="Cancel rejection"
               >
                 Cancel
               </button>

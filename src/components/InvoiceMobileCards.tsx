@@ -210,14 +210,16 @@ export function InvoiceMobileCards({
                       <button
                         onClick={() => void onManagerApprove(r.id)}
                         disabled={actionLoadingId === r.id}
-                        className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                        className="flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 touch-manipulation"
+                        aria-label="Approve invoice"
                       >
                         {actionLoadingId === r.id ? "…" : "✓ Approve"}
                       </button>
                       <button
                         onClick={() => void onRejectInvoice(r.id)}
                         disabled={actionLoadingId === r.id}
-                        className="flex-1 min-w-[100px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                        className="flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 touch-manipulation"
+                        aria-label="Reject invoice"
                       >
                         ✗ Reject
                       </button>
@@ -227,7 +229,8 @@ export function InvoiceMobileCards({
                     <button
                       onClick={() => void onResubmit(r.id)}
                       disabled={actionLoadingId === r.id}
-                      className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      className="flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 touch-manipulation"
+                      aria-label="Resubmit invoice"
                     >
                       {actionLoadingId === r.id ? "…" : "↻ Resubmit"}
                     </button>
@@ -236,7 +239,8 @@ export function InvoiceMobileCards({
                     <button
                       onClick={() => void onMarkPaid(r.id)}
                       disabled={actionLoadingId === r.id}
-                      className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      className="flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 touch-manipulation"
+                      aria-label="Mark as paid"
                     >
                       {actionLoadingId === r.id ? "…" : "£ Mark Paid"}
                     </button>
@@ -245,7 +249,8 @@ export function InvoiceMobileCards({
                     <button
                       onClick={() => void onRejectInvoice(r.id)}
                       disabled={actionLoadingId === r.id}
-                      className="flex-1 min-w-[100px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                      className="flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 touch-manipulation"
+                      aria-label="Reject invoice"
                     >
                       ✗ Reject
                     </button>

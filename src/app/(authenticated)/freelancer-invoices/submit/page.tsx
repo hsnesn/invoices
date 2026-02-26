@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -62,6 +63,7 @@ export default function FreelancerSubmitPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch("/api/profile").then(async (r) => {
@@ -93,6 +95,8 @@ export default function FreelancerSubmitPage() {
     const add = parseFloat(additionalCost) || 0;
     return days * rate + add;
   })();
+
+  const markTouched = (field: string) => () => setTouched((p) => ({ ...p, [field]: true }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,9 +145,9 @@ export default function FreelancerSubmitPage() {
     try {
       const res = await fetch("/api/freelancer-invoices/upload", { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Upload failed"); return; }
+      if (!res.ok) { setError(getApiErrorMessage(data)); return; }
       router.push("/freelancer-invoices");
-    } catch (err) { setError((err as Error).message); }
+    } catch (err) { setError(toUserFriendlyError(err)); }
     finally { setLoading(false); }
   };
 
@@ -167,29 +171,32 @@ export default function FreelancerSubmitPage() {
 
         {/* 1. Service Provider */}
         <div>
-          <label className={labelCls}>1. Service Provider <span className="text-red-500">*</span></label>
+          <label htmlFor="contractorName" className={labelCls}>1. Service Provider <span className="text-red-500">*</span></label>
           <p className={hintCls}>Limited company name or trading name (as on certificate of incorporation)</p>
-          <input value={contractorName} onChange={(e) => setContractorName(e.target.value)} className={inputCls} required maxLength={255} />
+          <input id="contractorName" value={contractorName} onChange={(e) => setContractorName(e.target.value)} onBlur={markTouched("contractorName")} className={inputCls} required maxLength={255} aria-invalid={touched.contractorName && !contractorName.trim() ? true : undefined} aria-describedby={touched.contractorName && !contractorName.trim() ? "contractorName-error" : undefined} />
+          {touched.contractorName && !contractorName.trim() && <p id="contractorName-error" className="mt-1 text-sm text-red-600" role="alert">Service provider is required</p>}
           <p className="text-right text-[11px] text-gray-400">{contractorName.length}/255</p>
         </div>
 
         {/* 2. Scope of Services */}
         <div>
-          <label className={labelCls}>2. Scope of Services <span className="text-red-500">*</span></label>
+          <label htmlFor="serviceDescription" className={labelCls}>2. Scope of Services <span className="text-red-500">*</span></label>
           <p className={hintCls}>Deliverables / services as per the contract for services</p>
-          <select value={serviceDescription} onChange={(e) => setServiceDescription(e.target.value)} className={inputCls} required>
+          <select id="serviceDescription" value={serviceDescription} onChange={(e) => setServiceDescription(e.target.value)} onBlur={markTouched("serviceDescription")} className={inputCls} required aria-invalid={touched.serviceDescription && !serviceDescription ? true : undefined} aria-describedby={touched.serviceDescription && !serviceDescription ? "serviceDescription-error" : undefined}>
             <option value="">Select...</option>
             {serviceDescriptions.map((s) => <option key={s.id} value={s.value}>{s.value}</option>)}
           </select>
+          {touched.serviceDescription && !serviceDescription && <p id="serviceDescription-error" className="mt-1 text-sm text-red-600" role="alert">Service description is required</p>}
         </div>
 
         {/* 3. Department */}
         <div>
-          <label className={labelCls}>3. Department <span className="text-red-500">*</span></label>
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className={inputCls} required>
+          <label htmlFor="departmentId" className={labelCls}>3. Department <span className="text-red-500">*</span></label>
+          <select id="departmentId" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} onBlur={markTouched("departmentId")} className={inputCls} required aria-invalid={touched.departmentId && !departmentId ? true : undefined} aria-describedby={touched.departmentId && !departmentId ? "departmentId-error" : undefined}>
             <option value="">Select...</option>
             {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
+          {touched.departmentId && !departmentId && <p id="departmentId-error" className="mt-1 text-sm text-red-600" role="alert">Department is required</p>}
         </div>
 
         {/* 4. Department 2 */}
