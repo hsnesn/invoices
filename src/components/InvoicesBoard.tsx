@@ -931,10 +931,11 @@ function InvoiceTable({
                             {filesData.length === 0 ? (
                               <p className="text-xs text-gray-400">No files.</p>
                             ) : (
-                              <div className="space-y-1 max-h-40 overflow-y-auto">
+                              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
                                 {filesData.map((f, i) => (
-                                  <button key={i} onClick={() => expandedRowId && void openPdf(expandedRowId, f.storage_path)} className="block w-full text-left rounded border border-gray-200 px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 truncate" title={f.file_name}>
-                                    <span className="inline-flex items-center gap-1"><svg className="h-3.5 w-3.5 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>{f.file_name}</span>
+                                  <button key={i} onClick={() => expandedRowId && void openPdf(expandedRowId, f.storage_path)} className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 truncate max-w-[200px]" title={f.file_name}>
+                                    <svg className="h-3.5 w-3.5 flex-shrink-0 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+                                    <span className="truncate">{f.file_name}</span>
                                   </button>
                                 ))}
                               </div>

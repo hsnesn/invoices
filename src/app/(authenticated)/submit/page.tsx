@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
+import { GenerateInvoiceForm } from "@/components/GenerateInvoiceForm";
 
 const fetcher = (url: string) =>
   fetch(url).then(async (r) => {
@@ -19,7 +20,10 @@ export default function SubmitPage() {
   );
 }
 
+type Tab = "upload" | "generate";
+
 function SubmitPageContent() {
+  const [tab, setTab] = useState<Tab>("upload");
   const today = new Date().toISOString().slice(0, 10);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -163,14 +167,35 @@ function SubmitPageContent() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-white p-8 text-slate-900 shadow-sm">
+    <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-white p-8 text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-5xl font-bold tracking-tight text-sky-700">TRT<span className="text-slate-800">WORLD</span></h1>
-          <h2 className="mt-4 text-5xl font-semibold text-slate-900">Guest Invoice Submission</h2>
+          <h1 className="text-5xl font-bold tracking-tight text-sky-700">TRT<span className="text-slate-800 dark:text-slate-200">WORLD</span></h1>
+          <h2 className="mt-4 text-5xl font-semibold text-slate-900 dark:text-slate-100">Guest Invoice Submission</h2>
         </div>
       </div>
 
+      <div className="mb-6 flex gap-2 border-b border-slate-200 dark:border-slate-600">
+        <button
+          type="button"
+          onClick={() => setTab("upload")}
+          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${tab === "upload" ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"}`}
+        >
+          Upload Invoice
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("generate")}
+          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${tab === "generate" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"}`}
+        >
+          Generate Invoice
+        </button>
+      </div>
+
+      {tab === "generate" ? (
+        <GenerateInvoiceForm />
+      ) : (
+      <>
       {rejectedId && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
           Resubmitting after rejection. Link previous invoice when creating the new one.
@@ -373,6 +398,8 @@ function SubmitPageContent() {
         <div className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">
           {success}
         </div>
+      )}
+      </>
       )}
     </div>
   );
