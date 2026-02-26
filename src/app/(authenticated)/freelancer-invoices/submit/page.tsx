@@ -284,7 +284,7 @@ export default function FreelancerSubmitPage() {
               </div>
               {validSelectedDays.size > 0 && (
                 <p className="mt-3 text-xs text-teal-600 dark:text-teal-400">
-                  {validSelectedDays.size} day(s) selected: {Array.from(validSelectedDays).sort((a, b) => a - b).join(", ")}
+                  <span className="text-lg font-bold text-red-600 dark:text-red-400">{validSelectedDays.size}</span> day(s) selected: {Array.from(validSelectedDays).sort((a, b) => a - b).join(", ")}
                 </p>
               )}
             </div>
