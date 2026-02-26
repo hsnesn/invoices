@@ -240,10 +240,10 @@ export default function FreelancerSubmitPage() {
           <label className={labelCls}>8. Days <span className="text-red-500">*</span></label>
           <p className={hintCls}>Click dates on the calendar to select or deselect. Days are stored as numbers (e.g. 4, 5, 15).</p>
           {serviceMonth ? (
-            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50 p-4">
-              <div className="grid grid-cols-7 gap-1 text-center">
+            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50 p-4 max-w-md">
+              <div className="grid grid-cols-7 gap-2 place-items-center w-full">
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                  <div key={d} className="text-xs font-medium text-gray-500 dark:text-gray-400 py-1">{d}</div>
+                  <div key={d} className="w-full flex justify-center text-xs font-medium text-gray-500 dark:text-gray-400 py-1.5">{d}</div>
                 ))}
                 {(() => {
                   const [monthName, yearStr] = serviceMonth.split(" ");
@@ -251,13 +251,13 @@ export default function FreelancerSubmitPage() {
                   const y = parseInt(yearStr || "0", 10);
                   const firstDay = new Date(y, mi, 1).getDay();
                   const daysInMonth = getDaysInMonth(serviceMonth);
-                  const pad = Array.from({ length: firstDay }, (_, i) => <div key={`pad-${i}`} className="h-9" />);
+                  const pad = Array.from({ length: firstDay }, (_, i) => <div key={`pad-${i}`} />);
                   const dayCells = daysInMonth.map((day) => (
                     <button
                       key={day}
                       type="button"
                       onClick={() => toggleDay(day)}
-                      className={`h-9 w-9 rounded-md text-sm font-medium transition-colors ${
+                      className={`w-full aspect-square max-w-9 min-w-8 flex items-center justify-center rounded-md text-sm font-medium transition-colors ${
                         selectedDays.has(day)
                           ? "bg-teal-600 text-white hover:bg-teal-500"
                           : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 border border-gray-200 dark:border-gray-600"
