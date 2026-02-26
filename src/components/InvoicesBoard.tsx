@@ -496,6 +496,7 @@ function InvoiceTable({
   showPreviewOnHover,
   hidePreviewOnHover,
   openPdfInNewTab,
+  onDownloadFile,
   onStartEdit,
   actionLoadingId,
   visibleColumns,
@@ -537,6 +538,7 @@ function InvoiceTable({
   showPreviewOnHover: (id: string, storagePath?: string) => void;
   hidePreviewOnHover: () => void;
   openPdfInNewTab: (id: string, storagePath?: string) => void;
+  onDownloadFile?: (id: string, storagePath: string, fileName: string) => void;
   onStartEdit: (row: DisplayRow) => void;
   actionLoadingId: string | null;
   visibleColumns: string[];
@@ -796,10 +798,19 @@ function InvoiceTable({
                     );
                   })
                 )}
+                {r.files.length > 0 && onDownloadFile && (
+                  <button
+                    onClick={() => onDownloadFile(r.id, r.files[0].storage_path, r.files[0].file_name)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-400 dark:hover:bg-sky-800/60 transition-colors"
+                    title="Download"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                  </button>
+                )}
                 {(r.submitterId === currentUserId || currentRole === "admin" || currentRole === "manager") && (
                   <>
-                    <label className="inline-flex h-7 w-7 items-center justify-center rounded border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 cursor-pointer dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-800/40 transition-colors" title="Replace">
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                    <label className="inline-flex h-7 w-7 items-center justify-center rounded border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 cursor-pointer dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-800/40 transition-colors" title="Replace (upload)">
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                       <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg,.png" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onReplaceFile(r.id, f); e.target.value = ""; }} />
                     </label>
                     <label className="inline-flex h-7 w-7 items-center justify-center rounded border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 cursor-pointer dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-800/40 transition-colors" title="Add file">
@@ -1234,11 +1245,11 @@ export function InvoicesBoard({
       const group = calcGroup(status, paymentType);
 
       const missingFields: string[] = [];
-      if (!ext?.beneficiary_name || (accountNameRaw === "—" && !ext.beneficiary_name)) missingFields.push("Alacaklı");
-      if (!ext?.account_number || accountNumber === "—") missingFields.push("Hesap No");
+      if (!ext?.beneficiary_name || (accountNameRaw === "—" && !ext.beneficiary_name)) missingFields.push("Beneficiary");
+      if (!ext?.account_number || accountNumber === "—") missingFields.push("Account No");
       if (!ext?.sort_code || sortCode === "—") missingFields.push("Sort Code");
-      if (!ext?.gross_amount || amount === "—") missingFields.push("Tutar");
-      if (!ext?.invoice_number) missingFields.push("Fatura No");
+      if (!ext?.gross_amount || amount === "—") missingFields.push("Amount");
+      if (!ext?.invoice_number) missingFields.push("Invoice No");
       const hasMissingInfo = missingFields.length > 0 || ext?.needs_review === true;
 
       const invFiles = (inv as { invoice_files?: { storage_path: string; file_name: string; sort_order: number }[] | null }).invoice_files;
@@ -1509,6 +1520,27 @@ export function InvoicesBoard({
       const data = await res.json();
       if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
     } catch { /* */ }
+  }, []);
+
+  const onDownloadFile = useCallback(async (invoiceId: string, storagePath: string, fileName: string) => {
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/pdf?path=${encodeURIComponent(storagePath)}`);
+      const data = await res.json();
+      if (!data?.url) return;
+      const fileRes = await fetch(data.url);
+      const blob = await fileRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      toast.success("Download started");
+    } catch {
+      toast.error("Download failed");
+    }
   }, []);
 
   const onDeleteInvoice = async (invoiceId: string) => {
@@ -2660,6 +2692,21 @@ export function InvoicesBoard({
                 onStartEdit={onStartEdit}
                 openPdf={openPdf}
                 actionLoadingId={actionLoadingId}
+                expandedRowId={expandedRowId}
+                onToggleExpand={(id) => void toggleExpandRow(id)}
+                timelineData={timelineData}
+                filesData={filesData}
+                notesData={notesData}
+                newNote={newNote}
+                onNewNoteChange={setNewNote}
+                onAddNote={() => void addNote()}
+                detailLoading={detailLoading}
+                showPreview={(id, path) => void openPdf(id, path)}
+                onDownloadFile={onDownloadFile}
+                onAddFile={onAddFile}
+                departmentPairs={departmentPairs}
+                programPairs={programPairs}
+                profilePairs={profilePairs}
               />
             </div>
             <div className="hidden md:block">
@@ -2683,6 +2730,7 @@ export function InvoicesBoard({
               showPreviewOnHover={showPreviewOnHover}
               hidePreviewOnHover={hidePreviewOnHover}
               openPdfInNewTab={openPdfInNewTab}
+              onDownloadFile={onDownloadFile}
               onStartEdit={onStartEdit}
               actionLoadingId={actionLoadingId}
               visibleColumns={currentRole === "admin" ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
@@ -2709,6 +2757,149 @@ export function InvoicesBoard({
           </section>
         );
       })}
+
+      {/* Mobile detail sheet - Timeline, Files, Notes */}
+      {expandedRowId && (
+        <div
+          className="md:hidden fixed inset-0 z-40 flex flex-col bg-white dark:bg-slate-900"
+          aria-modal
+          role="dialog"
+        >
+          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Invoice Details</h3>
+            <button
+              onClick={() => toggleExpandRow(expandedRowId)}
+              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-700 dark:text-gray-400 dark:hover:text-white"
+              aria-label="Close"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {detailLoading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-gray-500 dark:text-gray-400">
+                <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75"/></svg>
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h4>
+                  {timelineData.length === 0 ? (
+                    <p className="text-xs text-gray-400">No events yet.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {timelineData.map((ev) => {
+                        const changes = (ev.payload as Record<string, unknown>)?.changes as Record<string, { from: string; to: string }> | undefined;
+                        const hasChanges = changes && Object.keys(changes).length > 0;
+                        const deptMap = Object.fromEntries(departmentPairs);
+                        const progMap = Object.fromEntries(programPairs);
+                        const profMap = Object.fromEntries(profilePairs);
+                        const resolveName = (field: string, val: string) => {
+                          if (!val || val === "—" || val === "Unassigned") return val;
+                          if (field === "department_id") return deptMap[val] ?? val;
+                          if (field === "program_id") return progMap[val] ?? val;
+                          if (field === "manager") return profMap[val] ?? val;
+                          return val;
+                        };
+                        const eventIcon = ev.event_type === "invoice_updated" ? "bg-amber-400" : ev.event_type === "invoice_extracted" ? "bg-cyan-400" : ev.event_type.includes("reject") ? "bg-red-400" : ev.event_type.includes("approv") ? "bg-green-400" : ev.event_type.includes("paid") ? "bg-purple-400" : "bg-blue-400";
+                        return (
+                          <div key={ev.id} className="flex items-start gap-2 text-xs">
+                            <div className={`mt-0.5 h-2 w-2 rounded-full ${eventIcon} flex-shrink-0`} />
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">{ev.actor_name}</span>
+                              <span className="text-gray-500"> — {ev.event_type.replace(/_/g, " ")}</span>
+                              {ev.from_status && ev.to_status && (
+                                <span className="text-gray-400"> ({ev.from_status} → {ev.to_status})</span>
+                              )}
+                              {ev.payload && typeof (ev.payload as Record<string, string>).rejection_reason === "string" && (
+                                <span className="text-red-600"> — {(ev.payload as Record<string, string>).rejection_reason}</span>
+                              )}
+                              {hasChanges && (
+                                <div className="mt-1 space-y-0.5 rounded bg-gray-50 border border-gray-200 px-2 py-1.5 dark:bg-gray-800 dark:border-gray-700">
+                                  {Object.entries(changes!).map(([field, { from, to }]) => (
+                                    <div key={field} className="flex items-center gap-1 text-[11px]">
+                                      <span className="font-medium text-gray-600 dark:text-gray-400 capitalize">{field.replace(/_/g, " ")}:</span>
+                                      <span className="text-red-500 line-through">{resolveName(field, from) || "—"}</span>
+                                      <span className="text-gray-400">→</span>
+                                      <span className="text-green-600 font-medium">{resolveName(field, to) || "—"}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="text-gray-400 mt-0.5">{new Date(ev.created_at).toLocaleString("en-GB")}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Files</h4>
+                  {filesData.length === 0 ? (
+                    <p className="text-xs text-gray-400">No files.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {filesData.map((f, i) => (
+                        <button
+                          key={i}
+                          onClick={() => void openPdf(expandedRowId, f.storage_path)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                        >
+                          <svg className="h-4 w-4 flex-shrink-0 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+                          <span className="truncate max-w-[180px]">{f.file_name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {onAddFile && (
+                    <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                      Add file
+                      <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAddFile(expandedRowId, f); e.target.value = ""; }} />
+                    </label>
+                  )}
+                </div>
+                <div>
+                  <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Notes</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto mb-2">
+                    {notesData.length === 0 ? (
+                      <p className="text-xs text-gray-400">No notes yet.</p>
+                    ) : (
+                      notesData.map((n) => (
+                        <div key={n.id} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs dark:border-gray-700 dark:bg-gray-800">
+                          <div className="flex justify-between">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">{n.author_name}</span>
+                            <span className="text-gray-400">{new Date(n.created_at).toLocaleString("en-GB")}</span>
+                          </div>
+                          <p className="mt-1 text-gray-600 dark:text-gray-400">{n.content}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Add a note..."
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                      onKeyDown={(e) => { if (e.key === "Enter") void addNote(); }}
+                    />
+                    <button
+                      onClick={() => void addNote()}
+                      disabled={!newNote.trim()}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !importing && setShowImportModal(false)}>
@@ -2826,22 +3017,22 @@ export function InvoicesBoard({
       )}
 
       {rejectModalId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-gray-900">Reject Invoice</h3>
-            <p className="mt-2 text-sm text-gray-600">Please enter the reason for rejection:</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800 dark:border dark:border-slate-700">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Reject Invoice</h3>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please enter the reason for rejection:</p>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               rows={4}
               autoFocus
               placeholder="Rejection reason..."
-              className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:ring-1 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             />
             <div className="mt-4 flex justify-end gap-3">
               <button
                 onClick={() => { setRejectModalId(null); setRejectReason(""); }}
-                className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>

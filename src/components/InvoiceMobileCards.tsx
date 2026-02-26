@@ -35,6 +35,23 @@ type DisplayRow = {
   files: { storage_path: string; file_name: string }[];
 };
 
+type TimelineEvent = {
+  id: number;
+  event_type: string;
+  from_status: string | null;
+  to_status: string | null;
+  payload: Record<string, unknown> | null;
+  actor_name: string;
+  created_at: string;
+};
+
+type NoteItem = {
+  id: number;
+  content: string;
+  author_name: string;
+  created_at: string;
+};
+
 function statusLabel(s: string): string {
   if (s === "pending_manager" || s === "submitted") return "Pending";
   if (s === "ready_for_payment") return "Ready for Payment";
@@ -57,6 +74,21 @@ export function InvoiceMobileCards({
   onStartEdit,
   openPdf,
   actionLoadingId,
+  expandedRowId = null,
+  onToggleExpand,
+  timelineData = [],
+  filesData = [],
+  notesData = [],
+  newNote = "",
+  onNewNoteChange,
+  onAddNote,
+  detailLoading = false,
+  showPreview,
+  onDownloadFile,
+  onAddFile,
+  departmentPairs = [],
+  programPairs = [],
+  profilePairs = [],
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -66,8 +98,23 @@ export function InvoiceMobileCards({
   onResubmit: (id: string) => void;
   onMarkPaid: (id: string) => void;
   onStartEdit?: (row: DisplayRow) => void;
-  openPdf: (id: string) => void;
+  openPdf: (id: string, storagePath?: string) => void;
   actionLoadingId: string | null;
+  expandedRowId?: string | null;
+  onToggleExpand?: (id: string) => void;
+  timelineData?: TimelineEvent[];
+  filesData?: { storage_path: string; file_name: string }[];
+  notesData?: NoteItem[];
+  newNote?: string;
+  onNewNoteChange?: (v: string) => void;
+  onAddNote?: () => void;
+  detailLoading?: boolean;
+  showPreview?: (id: string, storagePath?: string) => void;
+  onDownloadFile?: (id: string, storagePath: string, fileName: string) => void;
+  onAddFile?: (id: string, file: File) => void;
+  departmentPairs?: [string, string][];
+  programPairs?: [string, string][];
+  profilePairs?: [string, string][];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -150,13 +197,49 @@ export function InvoiceMobileCards({
                 ))}
               </div>
 
+              {r.hasMissingInfo && r.missingFields?.length > 0 && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-200">
+                  <span className="font-semibold">Missing:</span> {r.missingFields.join(", ")}
+                </div>
+              )}
+
               {r.status === "rejected" && r.rejectionReason && (
                 <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300">
                   <span className="font-semibold">Rejection:</span> {r.rejectionReason}
                 </div>
               )}
 
+              {/* Files - tap to preview */}
+              {((r.files?.length ?? 0) > 0 || (expandedRowId === r.id && filesData.length > 0)) && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400">Files</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {(expandedRowId === r.id ? filesData : r.files ?? []).map((f, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (showPreview) showPreview(r.id, f.storage_path);
+                          else void openPdf(r.id, f.storage_path);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                      >
+                        <svg className="h-3.5 w-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+                        <span className="truncate max-w-[120px]">{f.file_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                {onToggleExpand && (
+                  <button
+                    onClick={() => onToggleExpand(r.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                  >
+                    {expandedRowId === r.id ? "Hide details" : "View details"}
+                  </button>
+                )}
                 {canEdit && (
                   <button
                     onClick={() => onStartEdit?.(r)}
