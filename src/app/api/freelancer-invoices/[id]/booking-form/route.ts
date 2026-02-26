@@ -60,7 +60,7 @@ export async function GET(
     const companyName = !companyRaw || /trt/i.test(companyRaw) ? "—" : companyRaw;
     const serviceDesc = (fl?.service_description as string) ?? "—";
     const serviceDays = Number(fl?.service_days_count) || 0;
-    const serviceMonth = (fl?.service_month as string) ?? "—";
+    const serviceMonthRaw = (fl?.service_month as string) ?? "—";
     const daysDetail = (fl?.service_days as string) ?? "—";
     const rate = Number(fl?.service_rate_per_day) || 0;
     const additionalCost = Number(fl?.additional_cost) || 0;
@@ -69,10 +69,10 @@ export async function GET(
     const totalAmount = serviceDays * rate + additionalCost;
 
     const approvalDate = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "numeric", year: "numeric" });
-    let displayMonth = serviceMonth;
-    if (displayMonth !== "—" && !/\d{4}/.test(displayMonth)) {
-      displayMonth = `${displayMonth} ${new Date().getFullYear()}`;
-    }
+    // Month cell shows only month name (no year)
+    const displayMonth = serviceMonthRaw !== "—" && /\d{4}/.test(serviceMonthRaw)
+      ? serviceMonthRaw.replace(/\s+\d{4}$/, "").trim()
+      : serviceMonthRaw;
 
     const displayName = companyName !== "—" ? `${companyName} ${contractorName !== "—" ? contractorName : ""}`.trim() : contractorName;
 
@@ -96,7 +96,7 @@ export async function GET(
     return new NextResponse(Buffer.from(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="Booking_Form_${contractorName.replace(/\s+/g, "_")}_${serviceMonth}.pdf"`,
+        "Content-Disposition": `inline; filename="Booking_Form_${contractorName.replace(/\s+/g, "_")}_${displayMonth}.pdf"`,
       },
     });
   } catch (e) {

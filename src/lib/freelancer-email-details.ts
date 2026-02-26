@@ -45,7 +45,8 @@ export function buildFreelancerEmailDetails(
       : "—";
 
   const companyOrPerson = getCompanyOrPerson(fl);
-  const monthYear = (fl?.service_month ?? "").trim() || "—";
+  const monthRaw = (fl?.service_month ?? "").trim() || "—";
+  const monthYear = monthRaw !== "—" && /\d{4}/.test(monthRaw) ? monthRaw.replace(/\s+\d{4}$/, "").trim() : monthRaw;
 
   return {
     companyOrPerson,
@@ -56,7 +57,7 @@ export function buildFreelancerEmailDetails(
     contractor: (fl?.contractor_name ?? "").trim() || "—",
     company: (fl?.company_name ?? "").trim() || "—",
     serviceDescription: (fl?.service_description ?? "").trim() || "—",
-    month: (fl?.service_month ?? "").trim() || "—",
+    month: monthYear,
     daysCount: days,
     ratePerDay: rate,
     additionalCost: addCost,

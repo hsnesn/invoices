@@ -184,7 +184,10 @@ export function FreelancerBoard({
       department2: fl?.department_2 ?? "—",
       serviceDaysCount: fl?.service_days_count?.toString() ?? "—", days: fl?.service_days ?? "—",
       serviceRate: fl?.service_rate_per_day ? `${cur === "USD" ? "$" : cur === "EUR" ? "€" : "£"}${fl.service_rate_per_day}` : "—",
-      month: fl?.service_month ?? "—", bookedBy: fl?.booked_by ?? "—",
+      month: (() => {
+        const m = fl?.service_month ?? "—";
+        return m !== "—" && /\d{4}/.test(m) ? m.replace(/\s+\d{4}$/, "").trim() : m;
+      })(), bookedBy: fl?.booked_by ?? "—",
       serviceDescription: fl?.service_description ?? "—", additionalCostReason: fl?.additional_cost_reason ?? "—",
       status, rejectionReason: wf?.rejection_reason ?? "", createdAt: inv.created_at,
       paidDate: wf?.paid_date ?? "", group: statusToGroup(status),

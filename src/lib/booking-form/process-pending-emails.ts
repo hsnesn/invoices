@@ -58,8 +58,9 @@ async function loadBookingFormData(
   }
 
   let serviceMonth = (flObj.service_month as string) ?? "—";
-  if (serviceMonth !== "—" && !/\d{4}/.test(serviceMonth)) {
-    serviceMonth = `${serviceMonth} ${approvedAt.getFullYear()}`;
+  // Month cell shows only month name (no year)
+  if (serviceMonth !== "—" && /\d{4}/.test(serviceMonth)) {
+    serviceMonth = serviceMonth.replace(/\s+\d{4}$/, "").trim();
   }
 
   const approvalDate = approvedAt.toLocaleString("en-GB", {
