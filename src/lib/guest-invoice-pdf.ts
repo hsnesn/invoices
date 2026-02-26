@@ -112,9 +112,9 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
     y += 8;
   }
 
-  // Table: Programme Name | Topic | Date | Amount — Amount right-aligned
-  const colWidths = [45, 50, 35, 40];
-  const headers = ["Programme Name", "Topic", "Date", "Amount"];
+  // Table: Topic | Date | Amount — Amount right-aligned
+  const colWidths = [95, 35, 40];
+  const headers = ["Topic", "Date", "Amount"];
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setFillColor(30, 64, 120);
@@ -122,7 +122,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   doc.setTextColor(255, 255, 255);
   let x = mx;
   headers.forEach((h, i) => {
-    if (i === 3) doc.text(h, mx + cw - 2, y + 6.5, { align: "right" });
+    if (i === 2) doc.text(h, mx + cw - 2, y + 6.5, { align: "right" });
     else doc.text(h, x + 2, y + 6.5);
     x += colWidths[i];
   });
@@ -139,12 +139,10 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
     doc.setFillColor(255, 255, 255);
     doc.rect(mx, y, cw, rowHeight, "F");
     x = mx;
-    doc.text((row.programmeName || "").slice(0, 25), x + 2, y + 6);
+    doc.text((row.topic || "").slice(0, 55), x + 2, y + 6);
     x += colWidths[0];
-    doc.text((row.topic || "").slice(0, 28), x + 2, y + 6);
-    x += colWidths[1];
     doc.text(row.date || "", x + 2, y + 6);
-    x += colWidths[2];
+    x += colWidths[1];
     doc.text(fmtAmount(row.amount, data.currency), mx + cw - 2, y + 6, { align: "right" });
     y += rowHeight;
   }
@@ -193,9 +191,9 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
 
   if (data.paypal?.trim()) {
     doc.setFont("helvetica", "bold");
-    doc.text("PayPal:", mx, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.paypal.trim(), mx + 22, y);
+    doc.setTextColor(180, 0, 0);
+    doc.text(`PayPal: ${data.paypal.trim()}`, mx, y);
+    doc.setTextColor(40, 40, 40);
     y += 8;
   }
 
