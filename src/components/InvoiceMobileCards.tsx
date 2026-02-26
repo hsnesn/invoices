@@ -71,6 +71,7 @@ export function InvoiceMobileCards({
   onRejectInvoice,
   onResubmit,
   onMarkPaid,
+  onDeleteInvoice,
   onStartEdit,
   openPdf,
   actionLoadingId,
@@ -97,6 +98,7 @@ export function InvoiceMobileCards({
   onRejectInvoice: (id: string) => void;
   onResubmit: (id: string) => void;
   onMarkPaid: (id: string) => void;
+  onDeleteInvoice?: (id: string) => void;
   onStartEdit?: (row: DisplayRow) => void;
   openPdf: (id: string, storagePath?: string) => void;
   actionLoadingId: string | null;
@@ -148,6 +150,7 @@ export function InvoiceMobileCards({
           const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
           const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
           const canEdit = (currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status))) && onStartEdit;
+          const canDeletePending = isSubmitter && (r.status === "submitted" || r.status === "pending_manager") && onDeleteInvoice;
           const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
           return (
           <div
@@ -246,6 +249,15 @@ export function InvoiceMobileCards({
                     className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
                   >
                     Edit
+                  </button>
+                )}
+                {canDeletePending && (
+                  <button
+                    onClick={() => void onDeleteInvoice?.(r.id)}
+                    disabled={actionLoadingId === r.id}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
+                  >
+                    {actionLoadingId === r.id ? "Deleting..." : "Delete"}
                   </button>
                 )}
                 <button

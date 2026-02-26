@@ -868,6 +868,9 @@ function InvoiceTable({
                     return (
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
+                        <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
+                          {actionLoadingId === r.id ? "Deleting..." : "Delete"}
+                        </button>
                       </div>
                     );
                   }
@@ -2684,6 +2687,7 @@ export function InvoicesBoard({
                 onRejectInvoice={onRejectInvoice}
                 onResubmit={onResubmit}
                 onMarkPaid={onMarkPaid}
+                onDeleteInvoice={onDeleteInvoice}
                 onStartEdit={onStartEdit}
                 openPdf={openPdf}
                 actionLoadingId={actionLoadingId}

@@ -344,27 +344,42 @@ export async function PATCH(
   }
 }
 
+const PENDING_STATUSES_FOR_SUBMITTER_DELETE = ["submitted", "pending_manager"];
+
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { session, profile } = await requireAuth();
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id: invoiceId } = await params;
     const supabase = createAdminClient();
 
     const { data: invoice } = await supabase
       .from("invoices")
-      .select("id, storage_path")
+      .select("id, storage_path, submitter_user_id")
       .eq("id", invoiceId)
       .single();
 
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    const isAdmin = profile.role === "admin";
+    const isSubmitter = invoice.submitter_user_id === session.user.id;
+    const { data: wf } = await supabase
+      .from("invoice_workflows")
+      .select("status")
+      .eq("invoice_id", invoiceId)
+      .single();
+    const status = (wf?.status as string) ?? "submitted";
+
+    const canDelete =
+      isAdmin ||
+      (isSubmitter && PENDING_STATUSES_FOR_SUBMITTER_DELETE.includes(status));
+
+    if (!canDelete) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     await createAuditEvent({
@@ -373,6 +388,16 @@ export async function DELETE(
       event_type: "invoice_deleted",
       payload: {},
     });
+
+    const { data: files } = await supabase
+      .from("invoice_files")
+      .select("storage_path")
+      .eq("invoice_id", invoiceId);
+    const pathsToRemove: string[] = [];
+    if (invoice.storage_path) pathsToRemove.push(invoice.storage_path);
+    for (const f of files ?? []) {
+      if (f.storage_path && !pathsToRemove.includes(f.storage_path)) pathsToRemove.push(f.storage_path);
+    }
 
     const { error: deleteError } = await supabase
       .from("invoices")
@@ -386,8 +411,8 @@ export async function DELETE(
       );
     }
 
-    if (invoice.storage_path) {
-      await supabase.storage.from(BUCKET).remove([invoice.storage_path]);
+    if (pathsToRemove.length > 0) {
+      await supabase.storage.from(BUCKET).remove(pathsToRemove);
     }
 
     return NextResponse.json({ success: true });
