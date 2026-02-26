@@ -151,6 +151,7 @@ export function InvoiceMobileCards({
           const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
           const canEdit = (currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status))) && onStartEdit;
           const canDeletePending = isSubmitter && (r.status === "submitted" || r.status === "pending_manager") && onDeleteInvoice;
+          const canAddFile = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status) && onAddFile;
           const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
           return (
           <div
@@ -213,7 +214,7 @@ export function InvoiceMobileCards({
               )}
 
               {/* Files - tap to preview */}
-              {((r.files?.length ?? 0) > 0 || (expandedRowId === r.id && filesData.length > 0)) && (
+              {((r.files?.length ?? 0) > 0 || (expandedRowId === r.id && filesData.length > 0) || canAddFile) && (
                 <div className="space-y-1.5">
                   <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400">Files</h4>
                   <div className="flex flex-wrap gap-2">
@@ -230,6 +231,13 @@ export function InvoiceMobileCards({
                         <span className="truncate max-w-[120px]">{f.file_name}</span>
                       </button>
                     ))}
+                    {canAddFile && (
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-800/50">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                        Add file
+                        <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg,.png" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAddFile?.(r.id, f); e.target.value = ""; }} />
+                      </label>
+                    )}
                   </div>
                 </div>
               )}
