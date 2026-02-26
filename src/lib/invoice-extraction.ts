@@ -439,11 +439,33 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     if (templateMatched.company_name) parsed.company_name = templateMatched.company_name;
   }
 
+  // Use regex results first to reduce AI calls (faster upload)
+  const regexHas = (k: string) => {
+    const v = (regexParsed as Record<string, unknown>)[k];
+    if (k === "gross_amount") return typeof v === "number" && v > 0;
+    if (k === "invoice_number") return typeof v === "string" && v.trim().length >= 3;
+    if (k === "invoice_date") return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim());
+    if (k === "currency") return typeof v === "string" && ["GBP", "EUR", "USD", "TRY"].includes((v as string).toUpperCase());
+    return v != null && String(v).trim() !== "";
+  };
+  const fieldsFromRegex = templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS);
+  for (const k of fieldsFromRegex) {
+    if (regexHas(k)) {
+      const v = (regexParsed as Record<string, unknown>)[k];
+      (parsed as Record<string, unknown>)[k] = v;
+    }
+  }
+
   try {
     if (!openai) throw new Error("OPENAI_API_KEY missing");
 
     if (hasText) {
-      const fieldsToExtract = templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS);
+      const fieldsToExtract = (templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS)).filter(
+        (k) => !regexHas(k)
+      );
+      if (fieldsToExtract.length === 0) {
+        // Regex got everything, skip AI
+      } else {
       const results = await Promise.all(
         fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
       );
@@ -463,6 +485,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
       const aiFieldCount = Object.keys(parsed).filter((k) => parsed[k as keyof typeof parsed] != null).length;
       if (aiFieldCount < 2) {
         parsed = { ...regexParsed, ...parsed };
+      }
       }
     } else {
       extractionError = "Document has no extractable text. Text-based PDFs only (no scanned images).";
