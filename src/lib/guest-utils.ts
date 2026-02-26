@@ -1,3 +1,16 @@
+/** Parse service_description for "Producer: Name" line and return producer name. */
+export function parseProducerFromServiceDesc(desc: string | null | undefined): string | null {
+  if (!desc?.trim()) return null;
+  for (const line of desc.split("\n")) {
+    const l = line.trim();
+    if (l.toLowerCase().startsWith("producer:")) {
+      const val = l.slice(l.indexOf(":") + 1).trim();
+      return val || null;
+    }
+  }
+  return null;
+}
+
 /** Parse service_description (key: value lines) and return guest name for Guest invoices. */
 export function parseGuestNameFromServiceDesc(desc: string | null | undefined): string | undefined {
   if (!desc?.trim()) return undefined;

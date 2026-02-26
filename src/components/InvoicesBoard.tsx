@@ -784,11 +784,9 @@ function InvoiceTable({
                     return (
                       <button
                         key={f.storage_path || `${i}-${f.file_name}`}
-                        onClick={() => void openPdf(r.id, f.storage_path)}
-                        onMouseEnter={() => showPreviewOnHover(r.id, f.storage_path)}
-                        onMouseLeave={hidePreviewOnHover}
+                        onClick={(e) => { e.stopPropagation(); void openPdf(r.id, f.storage_path); }}
                         className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-400 dark:hover:bg-sky-800/60 transition-colors"
-                        title={f.file_name}
+                        title={`${f.file_name} — Click to preview`}
                       >
                         {isImage ? (
                           <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4l-2-2H4a2 2 0 00-2 2zm2 6a1 1 0 011-1h6a1 1 0 011 1v4a1 1 0 01-1 1H7a1 1 0 01-1-1V9z" clipRule="evenodd"/></svg>
