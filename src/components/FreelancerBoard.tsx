@@ -354,10 +354,17 @@ export function FreelancerBoard({
     } finally { setDetailLoading(false); }
   }, [expandedRowId]);
 
-  const handleRowClick = useCallback((id: string) => {
+  const handleRowClick = useCallback((r: DisplayRow) => {
+    const canSelect =
+      (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") ||
+      (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status));
+    if (canSelect && onToggleSelect) {
+      onToggleSelect(r.id);
+      return;
+    }
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = setTimeout(() => { void toggleExpandRow(id); clickTimerRef.current = null; }, 250);
-  }, [toggleExpandRow]);
+    clickTimerRef.current = setTimeout(() => { void toggleExpandRow(r.id); clickTimerRef.current = null; }, 250);
+  }, [toggleExpandRow, currentRole, currentUserId, onToggleSelect]);
   const handleRowDblClick = useCallback(() => { if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; } }, []);
 
   const onStartEdit = useCallback((row: DisplayRow) => {
@@ -1172,7 +1179,7 @@ export function FreelancerBoard({
                       const isDuplicate = duplicates.has(r.id);
                       return (
                         <React.Fragment key={r.id}>
-                          <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={editable ? () => { handleRowDblClick(); onStartEdit(r); } : handleRowDblClick}>
+                          <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => handleRowClick(r)} onDoubleClick={editable ? () => { handleRowDblClick(); onStartEdit(r); } : handleRowDblClick}>
                             {((currentRole === "admin") || (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)) || (currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer")) && (
                               <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center gap-1">

@@ -101,7 +101,7 @@ export default function FreelancerSubmitPage() {
       setError("When account details have changed, please fill Beneficiary name, Account number and Sort code.");
       return;
     }
-    if (!contractorName.trim()) { setError("Contractor name is required"); return; }
+    if (!contractorName.trim()) { setError("Service provider is required"); return; }
     if (!serviceDescription) { setError("Service description is required"); return; }
     if (!serviceMonth) { setError("Month is required"); return; }
     if (validSelectedDays.size === 0) { setError("Please select at least one day"); return; }
@@ -109,7 +109,7 @@ export default function FreelancerSubmitPage() {
     if (!invNumber.trim()) { setError("INV Number is required"); return; }
     const addCostNum = parseFloat(additionalCost) || 0;
     if (addCostNum > 0 && !additionalCostReasonCustom.trim()) {
-      setError("When Additional Cost is entered, Additional Cost Reason is required.");
+      setError("When Additional Fees is entered, Additional Fees Reason is required.");
       return;
     }
     setLoading(true); setError("");
@@ -165,18 +165,18 @@ export default function FreelancerSubmitPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800">
 
-        {/* 1. Name */}
+        {/* 1. Service Provider */}
         <div>
-          <label className={labelCls}>1. Name <span className="text-red-500">*</span></label>
-          <p className={hintCls}>Contractor or Company Name</p>
+          <label className={labelCls}>1. Service Provider <span className="text-red-500">*</span></label>
+          <p className={hintCls}>Limited company name or trading name (as on certificate of incorporation)</p>
           <input value={contractorName} onChange={(e) => setContractorName(e.target.value)} className={inputCls} required maxLength={255} />
           <p className="text-right text-[11px] text-gray-400">{contractorName.length}/255</p>
         </div>
 
-        {/* 2. Service Description */}
+        {/* 2. Scope of Services */}
         <div>
-          <label className={labelCls}>2. Service Description <span className="text-red-500">*</span></label>
-          <p className={hintCls}>Please select the service provided as part of the agreed freelance engagement</p>
+          <label className={labelCls}>2. Scope of Services <span className="text-red-500">*</span></label>
+          <p className={hintCls}>Deliverables / services as per the contract for services</p>
           <select value={serviceDescription} onChange={(e) => setServiceDescription(e.target.value)} className={inputCls} required>
             <option value="">Select...</option>
             {serviceDescriptions.map((s) => <option key={s.id} value={s.value}>{s.value}</option>)}
@@ -248,10 +248,10 @@ export default function FreelancerSubmitPage() {
           </div>
         </div>
 
-        {/* 8. Days - Calendar picker */}
+        {/* 8. Service Delivery Days - Calendar picker */}
         <div>
-          <label className={labelCls}>8. Days <span className="text-red-500">*</span></label>
-          <p className={hintCls}>Click dates on the calendar to select or deselect. Days are stored as numbers (e.g. 4, 5, 15).</p>
+          <label className={labelCls}>8. Service Delivery Days <span className="text-red-500">*</span></label>
+          <p className={hintCls}>Dates on which services were delivered under the contract. Click to select or deselect.</p>
           {serviceMonth ? (
             <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50 p-4 max-w-md">
               <div className="grid grid-cols-7 gap-2 place-items-center w-full">
@@ -293,10 +293,10 @@ export default function FreelancerSubmitPage() {
           )}
         </div>
 
-        {/* 9. Service rate (per day) */}
+        {/* 9. Agreed Daily Rate */}
         <div>
-          <label className={labelCls}>9. Service rate (per day) <span className="text-red-500">*</span></label>
-          <p className={hintCls}>Rate applicable to each service delivery day, as agreed under the freelance services contract</p>
+          <label className={labelCls}>9. Agreed Daily Rate <span className="text-red-500">*</span></label>
+          <p className={hintCls}>Fee per service delivery day, as specified in the contract for services</p>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency === "USD" ? "$" : currency === "EUR" ? "€" : "£"}</span>
             <input type="number" step="0.01" min={0} value={serviceRatePerDay} onChange={(e) => setServiceRatePerDay(e.target.value)} className={inputCls + " pl-7"} required />
@@ -315,20 +315,20 @@ export default function FreelancerSubmitPage() {
           </div>
         </div>
 
-        {/* 10. Additional Cost */}
+        {/* 10. Additional Fees */}
         <div>
-          <label className={labelCls}>10. Additional Cost</label>
+          <label className={labelCls}>10. Additional Fees</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currency === "USD" ? "$" : currency === "EUR" ? "€" : "£"}</span>
             <input type="number" step="0.01" min={0} value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} className={inputCls + " pl-7"} />
           </div>
-          <p className={hintCls}>If the services provided differed from the originally agreed scope of services (for example, location-based camera operation, studio-based camera operation, or editing services), please specify the nature of the services delivered and the relevant date(s). If you rented out your equipment, please specify which equipment and on which dates.</p>
+          <p className={hintCls}>Disbursements or scope variations as per contract (e.g. equipment hire, location-based services). Specify the nature of services and relevant date(s) in the reason field below.</p>
         </div>
 
-        {/* 11. Additional Cost Reason */}
+        {/* 11. Additional Fees Reason */}
         <div>
-          <label className={labelCls}>11. Additional Cost Reason {(parseFloat(additionalCost) || 0) > 0 ? <span className="text-red-500">*</span> : null}</label>
-          <input value={additionalCostReasonCustom} onChange={(e) => setAdditionalCostReasonCustom(e.target.value.slice(0, 75))} placeholder="Describe the reason for additional cost..." maxLength={75} className={inputCls} required={(parseFloat(additionalCost) || 0) > 0} />
+          <label className={labelCls}>11. Additional Fees Reason {(parseFloat(additionalCost) || 0) > 0 ? <span className="text-red-500">*</span> : null}</label>
+          <input value={additionalCostReasonCustom} onChange={(e) => setAdditionalCostReasonCustom(e.target.value.slice(0, 75))} placeholder="Describe the reason for additional fees..." maxLength={75} className={inputCls} required={(parseFloat(additionalCost) || 0) > 0} />
           {additionalCostReasonCustom.length > 0 && <p className="text-right text-[11px] text-gray-400 mt-0.5">{additionalCostReasonCustom.length}/75</p>}
         </div>
 
@@ -341,7 +341,7 @@ export default function FreelancerSubmitPage() {
                 <span className="text-sm font-medium text-teal-700 dark:text-teal-400">Computed Amount</span>
                 <span className="text-lg font-bold text-teal-800 dark:text-teal-300">{sym}{computedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span>
               </div>
-              <p className="text-xs text-teal-600 dark:text-teal-500 mt-1">({serviceDaysCountAuto} days × {sym}{serviceRatePerDay || 0}/day) + {sym}{additionalCost || 0} additional</p>
+              <p className="text-xs text-teal-600 dark:text-teal-500 mt-1">({serviceDaysCountAuto} service delivery days × {sym}{serviceRatePerDay || 0}/day) + {sym}{additionalCost || 0} additional fees</p>
             </div>
           );
         })()}
@@ -388,7 +388,7 @@ export default function FreelancerSubmitPage() {
         {/* 15. Files */}
         <div>
           <label className={labelCls}>15. Files</label>
-          <p className={hintCls}>You can add multiple documents (invoice, timesheet, etc.)</p>
+          <p className={hintCls}>Invoice and supporting documents (e.g. service delivery record)</p>
           <div className="relative mt-2 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-10 text-center dark:border-gray-600 dark:bg-gray-700/30 hover:border-teal-400 transition-colors">
             <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls" multiple onChange={(e) => { const newFiles = Array.from(e.target.files ?? []); setFiles((prev) => [...prev, ...newFiles]); e.target.value = ""; }} className="absolute inset-0 cursor-pointer opacity-0" />
             {files.length > 0 ? (

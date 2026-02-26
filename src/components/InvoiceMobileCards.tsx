@@ -161,10 +161,15 @@ export function InvoiceMobileCards({
           const canDeletePending = isSubmitter && (r.status === "submitted" || r.status === "pending_manager" || r.status === "rejected") && onDeleteInvoice;
           const canAddFile = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status) && onAddFile;
           const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
+          const canSelectRow = canBulkSelect && onToggleSelect && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") && (currentRole !== "submitter" || (r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)));
           return (
           <div
             key={r.id}
-            className={`flex-shrink-0 w-[calc(100%-2rem)] min-w-[calc(100%-2rem)] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${
+            role={canSelectRow ? "button" : undefined}
+            tabIndex={canSelectRow ? 0 : undefined}
+            onClick={canSelectRow ? () => onToggleSelect!(r.id) : undefined}
+            onKeyDown={canSelectRow ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleSelect!(r.id); } } : undefined}
+            className={`flex-shrink-0 w-[calc(100%-2rem)] min-w-[calc(100%-2rem)] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
               r.status === "rejected"
                 ? "border-rose-300 dark:border-rose-700"
                 : "border-slate-200 dark:border-slate-600"
@@ -234,7 +239,7 @@ export function InvoiceMobileCards({
 
               {/* Files - tap to preview */}
               {((r.files?.length ?? 0) > 0 || (expandedRowId === r.id && filesData.length > 0) || canAddFile) && (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
                   <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400">Files</h4>
                   <div className="flex flex-wrap gap-2">
                     {(expandedRowId === r.id ? filesData : r.files ?? []).map((f, i) => (
@@ -261,7 +266,7 @@ export function InvoiceMobileCards({
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
                 {onToggleExpand && (
                   <button
                     onClick={() => onToggleExpand(r.id)}

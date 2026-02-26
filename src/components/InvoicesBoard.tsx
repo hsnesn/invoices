@@ -573,10 +573,14 @@ function InvoiceTable({
   const FILE_EXTS = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
 
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleRowClick = useCallback((id: string) => {
+  const handleRowClick = useCallback((r: DisplayRow) => {
+    if (canRowBulkSelect(r)) {
+      onToggleSelect(r.id);
+      return;
+    }
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = setTimeout(() => { onToggleExpand(id); clickTimerRef.current = null; }, 250);
-  }, [onToggleExpand]);
+    clickTimerRef.current = setTimeout(() => { onToggleExpand(r.id); clickTimerRef.current = null; }, 250);
+  }, [onToggleExpand, onToggleSelect]);
   const handleRowDblClick = useCallback(() => {
     if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
   }, []);
@@ -626,7 +630,7 @@ function InvoiceTable({
               const startEditOnDblClick = (e: React.MouseEvent) => { handleRowDblClick(); if (canEditRow) { e.stopPropagation(); e.preventDefault(); onStartEdit(r); } };
               return (
               <React.Fragment key={r.id}>
-              <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={startEditOnDblClick}>
+              <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => handleRowClick(r)} onDoubleClick={startEditOnDblClick}>
               {isCol("checkbox") && canBulkSelect && (
               <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                 {canRowBulkSelect(r) ? (

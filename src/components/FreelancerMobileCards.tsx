@@ -131,10 +131,15 @@ export function FreelancerMobileCards({
         const canAdminApprove = currentRole === "admin" && (r.status === "approved_by_manager" || r.status === "pending_admin");
         const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApp) || canOpsRoomApprove || canAdminApprove;
 
+        const canSelectRow = canBulkSelect && onToggleSelect && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer" || (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)));
         return (
           <div
             key={r.id}
-            className={`flex-shrink-0 w-[calc(100%-2rem)] min-w-[calc(100%-2rem)] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${
+            role={canSelectRow ? "button" : undefined}
+            tabIndex={canSelectRow ? 0 : undefined}
+            onClick={canSelectRow ? () => onToggleSelect!(r.id) : undefined}
+            onKeyDown={canSelectRow ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleSelect!(r.id); } } : undefined}
+            className={`flex-shrink-0 w-[calc(100%-2rem)] min-w-[calc(100%-2rem)] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
               r.status === "rejected"
                 ? "border-rose-300 dark:border-rose-700"
                 : "border-slate-200 dark:border-slate-600"
@@ -196,7 +201,7 @@ export function FreelancerMobileCards({
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => void openFile(r.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-sky-100 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"

@@ -7,9 +7,9 @@ const fmtCurrency = (v: number) =>
   `£${v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 /**
- * Generate Booking Form PDF with exact field labels per spec.
- * Fields: Name, Service Description, Amount, Department, Department 2,
- * Number of days, Month, Days, Service rate (per day), Additional Cost, Additional Cost Reason.
+ * Generate Booking Form PDF with IR35-compliant field labels.
+ * Fields: Service Provider, Scope of Services, Amount, Department, Department 2,
+ * Service delivery days, Month, Days, Agreed daily rate, Additional fees, Additional fees reason.
  */
 export function generateBookingFormPdf(data: BookingFormData): ArrayBuffer {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -42,21 +42,21 @@ export function generateBookingFormPdf(data: BookingFormData): ArrayBuffer {
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 30, 30);
-  doc.text('TRT WORLD LONDON "DAILY" FREELANCE BOOKING FORM', pw / 2, y, { align: "center" });
+  doc.text("TRT WORLD LONDON — FREELANCE SERVICES BOOKING FORM", pw / 2, y, { align: "center" });
   y += 12;
 
   const fields: [string, string][] = [
-    ["Name", data.name],
-    ["Service Description", data.serviceDescription],
+    ["Service Provider", data.name],
+    ["Scope of Services", data.serviceDescription],
     ["Amount", fmtCurrency(data.amount)],
     ["Department", data.department],
     ["Department 2", data.department2],
-    ["Number of days", String(data.numberOfDays)],
+    ["Service delivery days", String(data.numberOfDays)],
     ["Month", data.month],
     ["Days", data.days],
-    ["Service rate (per day)", fmtCurrency(data.serviceRatePerDay)],
-    ["Additional Cost", data.additionalCost > 0 ? fmtCurrency(data.additionalCost) : ""],
-    ["Additional Cost Reason", data.additionalCostReason],
+    ["Agreed daily rate (£)", fmtCurrency(data.serviceRatePerDay)],
+    ["Additional fees", data.additionalCost > 0 ? fmtCurrency(data.additionalCost) : ""],
+    ["Additional fees reason", data.additionalCostReason],
   ];
 
   const labelW = 58;
@@ -90,14 +90,12 @@ export function generateBookingFormPdf(data: BookingFormData): ArrayBuffer {
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(80, 80, 80);
-  doc.text(
-    "This form is filled, duly signed and the details above are understood by both parties.",
-    pw / 2,
-    y,
-    { align: "center" }
+  const footerLines = doc.splitTextToSize(
+    "This booking form confirms the scope of services, delivery dates and fees as agreed between the Client and the Service Provider under the contract for services.",
+    cw - 10
   );
-
-  y += 14;
+  doc.text(footerLines, pw / 2, y, { align: "center" });
+  y += footerLines.length * 5 + 4;
 
   doc.setFillColor(55, 65, 81);
   doc.rect(mx, y, cw, 8, "F");
