@@ -167,13 +167,14 @@ export function InvoiceMobileCards({
           const canAddFile = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status) && onAddFile;
           const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
           const canSelectRow = canBulkSelect && onToggleSelect && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") && (currentRole !== "submitter" || (r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)));
+          const handleCardClick = canSelectRow ? (e: React.MouseEvent) => {
+            if ((e.target as HTMLElement).closest("button, a, input, label, [role='button']")) return;
+            onToggleSelect!(r.id);
+          } : undefined;
           return (
           <div
             key={r.id}
-            role={canSelectRow ? "button" : undefined}
-            tabIndex={canSelectRow ? 0 : undefined}
-            onClick={canSelectRow ? () => onToggleSelect!(r.id) : undefined}
-            onKeyDown={canSelectRow ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleSelect!(r.id); } } : undefined}
+            onClick={handleCardClick}
             className={`flex-shrink-0 w-[85vw] max-w-[min(400px,calc(100vw-2rem))] min-w-[280px] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
               r.status === "rejected"
                 ? "border-rose-300 dark:border-rose-700"
@@ -188,7 +189,6 @@ export function InvoiceMobileCards({
                       type="checkbox"
                       checked={selectedIds?.has(r.id) ?? false}
                       onChange={() => onToggleSelect(r.id)}
-                      onClick={(e) => e.stopPropagation()}
                       className="mt-1 h-4 w-4 shrink-0 rounded border-2 border-gray-300 text-blue-600 accent-blue-600"
                     />
                   )}
@@ -204,7 +204,7 @@ export function InvoiceMobileCards({
 
               {/* Action buttons - prominent at top for mobile */}
               {((r.status === "pending_manager" || r.status === "submitted") && canApprove) || canResubmit || canMarkPaid || (canReject && r.status !== "pending_manager" && r.status !== "submitted") ? (
-                <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-200 dark:border-gray-600" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-200 dark:border-gray-600">
                   {(r.status === "pending_manager" || r.status === "submitted") && canApprove && (
                     <>
                       <button
@@ -295,7 +295,7 @@ export function InvoiceMobileCards({
 
               {/* Files - tap to preview */}
               {((r.files?.length ?? 0) > 0 || (expandedRowId === r.id && filesData.length > 0) || canAddFile) && (
-                <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                <div className="space-y-1.5">
                   <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400">Files</h4>
                   <div className="flex flex-wrap gap-2">
                     {(expandedRowId === r.id ? filesData : r.files ?? []).map((f, i) => (
@@ -322,7 +322,7 @@ export function InvoiceMobileCards({
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                 {onToggleExpand && (
                   <button
                     onClick={() => onToggleExpand(r.id)}
