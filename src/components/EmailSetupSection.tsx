@@ -13,6 +13,17 @@ const STAGE_LABELS: Record<string, string> = {
   admin_approved: "Admin approved",
 };
 
+const EMAIL_RECIPIENTS: { stage: string; label: string; recipients: string }[] = [
+  { stage: "submission", label: "Invoice submitted", recipients: "Submitter, Dept EP (line manager)" },
+  { stage: "manager_approved", label: "Manager approved", recipients: "Submitter, Admins, Operations room" },
+  { stage: "manager_rejected", label: "Manager rejected", recipients: "Submitter only" },
+  { stage: "ready_for_payment", label: "Ready for payment", recipients: "Submitter, Finance" },
+  { stage: "paid", label: "Payment completed", recipients: "Guest: Producers only. Contractor: Submitter, Admins" },
+  { stage: "manager_assigned", label: "Manager assigned", recipients: "Assigned Dept EP only" },
+  { stage: "resubmitted", label: "Resubmitted", recipients: "Dept EP only (not all managers)" },
+  { stage: "admin_approved", label: "Admin approved", recipients: "Submitter, Finance" },
+];
+
 const TEMPLATE_LABELS: Record<string, string> = {
   submission: "Invoice submitted",
   manager_approved: "Manager approved",
@@ -157,6 +168,35 @@ export function EmailSetupSection() {
 
   return (
     <div className="space-y-6">
+      {/* Who receives each email type */}
+      <div className="rounded-xl border border-gray-200 border-l-4 border-l-cyan-500 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
+        <h2 className="mb-1 font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-cyan-500" />
+          Email recipients by type
+        </h2>
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+          Reference: which email goes to whom. Users must have &quot;Receive invoice emails&quot; enabled in their profile.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <th className="py-2 pr-4 text-left font-medium text-gray-700 dark:text-gray-300">Email type</th>
+                <th className="py-2 text-left font-medium text-gray-700 dark:text-gray-300">Recipients</th>
+              </tr>
+            </thead>
+            <tbody>
+              {EMAIL_RECIPIENTS.map((r) => (
+                <tr key={r.stage} className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 text-gray-800 dark:text-gray-200">{r.label}</td>
+                  <td className="py-2.5 text-gray-600 dark:text-gray-400">{r.recipients}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {message && (
         <div
           className={`rounded-lg border p-3 text-sm ${
