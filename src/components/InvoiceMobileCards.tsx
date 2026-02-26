@@ -32,6 +32,7 @@ type DisplayRow = {
   group: "pending_line_manager" | "ready_for_payment" | "paid_invoices" | "no_payment_needed" | "rejected";
   hasMissingInfo: boolean;
   missingFields: string[];
+  files: { storage_path: string; file_name: string }[];
 };
 
 function statusLabel(s: string): string {

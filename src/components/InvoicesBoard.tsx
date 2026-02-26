@@ -13,6 +13,7 @@ import { departmentBadgeStyle, programmeBadgeStyle, GUEST_SECTION_COLORS } from 
 
 type InvoiceRow = {
   id: string;
+  storage_path?: string | null;
   submitter_user_id: string;
   service_description: string | null;
   currency: string;
@@ -28,6 +29,7 @@ type InvoiceRow = {
     manager_user_id: string | null;
     paid_date: string | null;
   }[] | null;
+  invoice_files?: { storage_path: string; file_name: string; sort_order: number }[] | null;
   invoice_extracted_fields: {
     invoice_number: string | null;
     beneficiary_name: string | null;
@@ -70,6 +72,7 @@ type DisplayRow = {
   group: "pending_line_manager" | "ready_for_payment" | "paid_invoices" | "no_payment_needed" | "rejected";
   hasMissingInfo: boolean;
   missingFields: string[];
+  files: { storage_path: string; file_name: string }[];
 };
 
 type TimelineEvent = {
@@ -531,7 +534,7 @@ function InvoiceTable({
   onReplaceFile: (id: string, file: File) => Promise<void>;
   onAddFile?: (id: string, file: File) => Promise<void>;
   openPdf: (id: string, storagePath?: string) => Promise<void>;
-  showPreviewOnHover: (id: string) => void;
+  showPreviewOnHover: (id: string, storagePath?: string) => void;
   hidePreviewOnHover: () => void;
   openPdfInNewTab: (id: string, storagePath?: string) => void;
   onStartEdit: (row: DisplayRow) => void;
@@ -768,16 +771,42 @@ function InvoiceTable({
                   e.dataTransfer.clearData();
                 }}
               >
-                <div className="flex items-center gap-1">
-                <button onClick={() => void openPdf(r.id)} className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"><svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4zM6 10h8v2H6v-2zm0 4h5v2H6v-2z"/></svg>Open</button>
-                {(r.submitterId === currentUserId || currentRole === "admin" || currentRole === "manager") && (
-                  <label className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-800/40">
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>Replace
-                    <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onReplaceFile(r.id, f); e.target.value = ""; }} />
-                  </label>
+                <div className="flex flex-wrap items-center gap-0.5">
+                {r.files.length === 0 ? (
+                  <span className="text-xs text-gray-400">—</span>
+                ) : (
+                  r.files.map((f, i) => {
+                    const ext = (f.file_name.split(".").pop() ?? "").toLowerCase();
+                    const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext);
+                    return (
+                      <button
+                        key={f.storage_path || `${i}-${f.file_name}`}
+                        onClick={() => void openPdf(r.id, f.storage_path)}
+                        onMouseEnter={() => showPreviewOnHover(r.id, f.storage_path)}
+                        onMouseLeave={hidePreviewOnHover}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-400 dark:hover:bg-sky-800/60 transition-colors"
+                        title={f.file_name}
+                      >
+                        {isImage ? (
+                          <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4l-2-2H4a2 2 0 00-2 2zm2 6a1 1 0 011-1h6a1 1 0 011 1v4a1 1 0 01-1 1H7a1 1 0 01-1-1V9z" clipRule="evenodd"/></svg>
+                        ) : (
+                          <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+                        )}
+                      </button>
+                    );
+                  })
                 )}
                 {(r.submitterId === currentUserId || currentRole === "admin" || currentRole === "manager") && (
-                  <span className="text-[10px] text-gray-400">or drop</span>
+                  <>
+                    <label className="inline-flex h-7 w-7 items-center justify-center rounded border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 cursor-pointer dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-800/40 transition-colors" title="Replace">
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                      <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg,.png" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onReplaceFile(r.id, f); e.target.value = ""; }} />
+                    </label>
+                    <label className="inline-flex h-7 w-7 items-center justify-center rounded border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 cursor-pointer dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-800/40 transition-colors" title="Add file">
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                      <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg,.png" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAddFile?.(r.id, f); e.target.value = ""; }} />
+                    </label>
+                  </>
                 )}
                 </div>
               </td>}
@@ -1212,6 +1241,14 @@ export function InvoicesBoard({
       if (!ext?.invoice_number) missingFields.push("Fatura No");
       const hasMissingInfo = missingFields.length > 0 || ext?.needs_review === true;
 
+      const invFiles = (inv as { invoice_files?: { storage_path: string; file_name: string; sort_order: number }[] | null }).invoice_files;
+      const files: { storage_path: string; file_name: string }[] =
+        invFiles && invFiles.length > 0
+          ? [...invFiles].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((f) => ({ storage_path: f.storage_path, file_name: f.file_name }))
+          : inv.storage_path
+            ? [{ storage_path: inv.storage_path, file_name: inv.storage_path.split("/").pop() ?? "invoice.pdf" }]
+            : [];
+
       return {
         id: inv.id,
         submitterId: inv.submitter_user_id,
@@ -1242,6 +1279,7 @@ export function InvoicesBoard({
         group,
         hasMissingInfo,
         missingFields,
+        files,
       } satisfies DisplayRow;
     });
   }, [invoices, departmentMap, programMap, profileMap]);
@@ -1431,14 +1469,14 @@ export function InvoicesBoard({
     }
   }, [rows]);
 
-  const showPreviewOnHover = useCallback((id: string) => {
+  const showPreviewOnHover = useCallback((id: string, storagePath?: string) => {
     if (previewHideRef.current) {
       clearTimeout(previewHideRef.current);
       previewHideRef.current = null;
     }
     if (previewShowRef.current) clearTimeout(previewShowRef.current);
     previewShowRef.current = setTimeout(() => {
-      void openPdf(id);
+      void openPdf(id, storagePath);
       previewShowRef.current = null;
     }, 400);
   }, [openPdf]);

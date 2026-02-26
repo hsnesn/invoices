@@ -46,6 +46,7 @@ export default async function InvoicesPage() {
     .from("invoices")
     .select(`
       id,
+      storage_path,
       service_description,
       currency,
       created_at,
@@ -56,7 +57,8 @@ export default async function InvoicesPage() {
       previous_invoice_id,
       submitter_user_id,
       invoice_workflows(status, rejection_reason, manager_user_id, paid_date),
-      invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency, raw_json, needs_review)
+      invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency, raw_json, needs_review),
+      invoice_files(storage_path, file_name, sort_order)
     `)
     .neq("invoice_type", "freelancer")
     .order("created_at", { ascending: false })

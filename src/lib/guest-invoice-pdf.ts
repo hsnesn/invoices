@@ -169,13 +169,18 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   doc.setTextColor(30, 64, 120);
   doc.text(`TOTAL: ${fmtAmount(data.totalAmount, data.currency)}`, mx, y);
   doc.setTextColor(40, 40, 40);
-  y += 16;
+  y += 20;
 
-  // Payment section — PayPal (if any) then bank details at bottom
+  // Payment details — always at the very bottom, after a separator
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.5);
+  doc.line(mx, y, pw - mx, y);
+  y += 12;
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(30, 64, 120);
-  doc.text("PAYMENT", mx, y);
+  doc.text("PAYMENT DETAILS", mx, y);
   doc.setTextColor(40, 40, 40);
   y += 8;
 
@@ -190,7 +195,6 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
     y += 8;
   }
 
-  // Bank transfer details at bottom
   doc.setFont("helvetica", "bold");
   doc.text("Bank transfer:", mx, y);
   doc.setFont("helvetica", "normal");

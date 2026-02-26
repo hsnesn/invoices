@@ -1,15 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PDFDocument } from "pdf-lib";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendSubmissionEmail } from "@/lib/email";
-import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { isEmailStageEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance, type GuestInvoiceExpense } from "@/lib/guest-invoice-pdf";
 
 const BUCKET = "invoices";
+const A4_WIDTH = 595.28;
+const A4_HEIGHT = 841.89;
+
+async function mergeSupportingFilesIntoPdf(
+  mainPdfBuffer: ArrayBuffer,
+  supportingFiles: { file: File; buf: Buffer }[]
+): Promise<Uint8Array> {
+  const MERGEABLE_EXT = ["pdf", "jpg", "jpeg", "png"];
+  const toMerge = supportingFiles.filter(({ file }) => {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    return ext && MERGEABLE_EXT.includes(ext);
+  });
+  if (toMerge.length === 0) return new Uint8Array(mainPdfBuffer);
+
+  const mainDoc = await PDFDocument.load(mainPdfBuffer);
+
+  for (const { file, buf } of toMerge) {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext === "pdf") {
+      try {
+        const srcDoc = await PDFDocument.load(buf);
+        const pages = await mainDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+        pages.forEach((p) => mainDoc.addPage(p));
+      } catch {
+        // Skip invalid PDF
+      }
+    } else if (["jpg", "jpeg", "png"].includes(ext ?? "")) {
+      try {
+        const page = mainDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+        const bytes = new Uint8Array(buf);
+        const image = ext === "png"
+          ? await mainDoc.embedPng(bytes)
+          : await mainDoc.embedJpg(bytes);
+        const dims = image.scaleToFit(A4_WIDTH - 40, A4_HEIGHT - 40);
+        page.drawImage(image, {
+          x: 20 + (A4_WIDTH - 40 - dims.width) / 2,
+          y: A4_HEIGHT - 20 - dims.height,
+          width: dims.width,
+          height: dims.height,
+        });
+      } catch {
+        // Skip invalid image
+      }
+    }
+  }
+
+  return mainDoc.save();
+}
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type ManagerProfile = { id: string; department_id: string | null; program_ids: string[] | null };
@@ -76,7 +124,7 @@ export async function POST(request: NextRequest) {
     if (!data.accountName?.trim() || !data.accountNumber?.trim() || !data.sortCode?.trim()) {
       return NextResponse.json({ error: "Account name, account number and sort code are required" }, { status: 400 });
     }
-    if (!safeDepartmentId || !safeProgramId) return NextResponse.json({ error: "Department and programme are required" }, { status: 400 });
+    if (!safeDepartmentId) return NextResponse.json({ error: "Department is required" }, { status: 400 });
     if (!data.title?.trim() || !data.producer?.trim()) return NextResponse.json({ error: "Title and producer are required for list display" }, { status: 400 });
 
     const appearances = data.appearances.map((a) => ({
@@ -122,12 +170,28 @@ export async function POST(request: NextRequest) {
       bankAddress: data.bankAddress?.trim(),
     };
 
-    const pdfBuffer = generateGuestInvoicePdf(pdfData);
+    let pdfBuffer = generateGuestInvoicePdf(pdfData);
+    const supportingFiles = formData.getAll("supporting_files") as File[];
+    const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg", "png"];
+    const supportingWithBuf: { file: File; buf: Buffer }[] = [];
+    for (const f of supportingFiles) {
+      if (!f?.name) continue;
+      const ext = f.name.split(".").pop()?.toLowerCase();
+      if (!ext || !ALLOWED_EXT.includes(ext)) continue;
+      supportingWithBuf.push({ file: f, buf: Buffer.from(await f.arrayBuffer()) });
+    }
+
+    let finalPdfBuffer: ArrayBuffer | Uint8Array = pdfBuffer;
+    if (supportingWithBuf.length > 0) {
+      finalPdfBuffer = await mergeSupportingFilesIntoPdf(pdfBuffer, supportingWithBuf);
+    }
+
     const safeGuestName = data.guestName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-").slice(0, 40) || "invoice";
     const invoiceFileName = `${safeGuestName}_${data.invoiceDate}_INV-${data.invNo.trim()}.pdf`;
     const pdfPath = `${session.user.id}/${invoiceId}-generated-invoice.pdf`;
 
-    const { error: uploadErr } = await supabaseAdmin.storage.from(BUCKET).upload(pdfPath, Buffer.from(pdfBuffer), {
+    const uploadBuf = finalPdfBuffer instanceof Uint8Array ? finalPdfBuffer : new Uint8Array(finalPdfBuffer);
+    const { error: uploadErr } = await supabaseAdmin.storage.from(BUCKET).upload(pdfPath, Buffer.from(uploadBuf), {
       contentType: "application/pdf",
       upsert: false,
     });
@@ -154,7 +218,9 @@ export async function POST(request: NextRequest) {
       .join("\n");
 
     const { data: dept } = await supabaseAdmin.from("departments").select("name").eq("id", safeDepartmentId).single();
-    const { data: prog } = await supabaseAdmin.from("programs").select("name").eq("id", safeProgramId).single();
+    const { data: prog } = safeProgramId
+      ? await supabaseAdmin.from("programs").select("name").eq("id", safeProgramId).single()
+      : { data: null };
     const deptName = dept?.name ?? "";
     const progName = prog?.name ?? "";
     const serviceDescWithDept = service_description
@@ -221,16 +287,13 @@ export async function POST(request: NextRequest) {
       sort_order: 0,
     });
 
-    // Add supporting files (tickets, etc.)
-    const supportingFiles = formData.getAll("supporting_files") as File[];
-    const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg", "png"];
-    for (let i = 0; i < supportingFiles.length; i++) {
-      const f = supportingFiles[i];
-      if (!f?.name) continue;
+    // Add non-mergeable supporting files (docx, xlsx) as separate entries — PDFs and images were merged into main PDF
+    const MERGEABLE_EXT = ["pdf", "jpg", "jpeg", "png"];
+    let sortOrder = 1;
+    for (const { file: f, buf } of supportingWithBuf) {
       const ext = f.name.split(".").pop()?.toLowerCase();
-      if (!ext || !ALLOWED_EXT.includes(ext)) continue;
-      const buf = Buffer.from(await f.arrayBuffer());
-      const sp = `${session.user.id}/${invoiceId}-supporting-${i}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      if (ext && MERGEABLE_EXT.includes(ext)) continue; // already merged
+      const sp = `${session.user.id}/${invoiceId}-supporting-${sortOrder}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
       const { error: sfErr } = await supabaseAdmin.storage.from(BUCKET).upload(sp, buf, {
         contentType: f.type || "application/octet-stream",
         upsert: false,
@@ -240,8 +303,9 @@ export async function POST(request: NextRequest) {
           invoice_id: invoiceId,
           storage_path: sp,
           file_name: f.name,
-          sort_order: i + 1,
+          sort_order: sortOrder,
         });
+        sortOrder++;
       }
     }
 

@@ -60,8 +60,13 @@ export function GenerateInvoiceForm() {
   }, [producerLoaded]);
 
   useEffect(() => {
-    if (departmentId) setProgramId("");
+    if (departmentId) {
+      setProgramId("");
+    }
   }, [departmentId]);
+
+  // When department has no programs (e.g. "Other departments"), program stays None
+  const departmentHasPrograms = programs.length > 0;
 
   const addAppearance = () => setAppearances((p) => [...p, { programmeName: "", topic: "", date: today, amount: "" }]);
   const removeAppearance = (i: number) => setAppearances((p) => p.filter((_, j) => j !== i));
@@ -81,7 +86,8 @@ export function GenerateInvoiceForm() {
     if (!invNo.trim()) { setError("INV NO is required"); return; }
     if (!guestName.trim()) { setError("Guest name is required"); return; }
     if (!title.trim() || !producer.trim()) { setError("Title and Producer are required for list display"); return; }
-    if (!departmentId || !programId) { setError("Department and Programme are required"); return; }
+    if (!departmentId) { setError("Department is required"); return; }
+    if (departmentHasPrograms && !programId) { setError("Programme name is required when a department with programmes is selected"); return; }
     const validAppearances = appearances.filter((a) => a.topic.trim() && a.date && parseFloat(a.amount) > 0);
     if (validAppearances.length === 0) { setError("At least one appearance with topic, date and amount is required"); return; }
     if (!accountName.trim() || !accountNumber.trim() || !sortCode.trim()) {
@@ -118,7 +124,7 @@ export function GenerateInvoiceForm() {
           sortCode: sortCode.trim(),
           bankAddress: bankAddress.trim() || undefined,
           department_id: departmentId,
-          program_id: programId,
+          program_id: programId || undefined,
           title: title.trim(),
           producer: producer.trim(),
         })
@@ -170,9 +176,11 @@ export function GenerateInvoiceForm() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Programme <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-slate-700">
+              Programme {departmentHasPrograms ? <span className="text-red-500">*</span> : <span className="text-slate-400">(None for other departments)</span>}
+            </label>
             <select value={programId} onChange={(e) => setProgramId(e.target.value)} disabled={!departmentId} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-              <option value="">Select...</option>
+              <option value="">{departmentHasPrograms ? "Select..." : "None"}</option>
               {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
