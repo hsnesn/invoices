@@ -17,8 +17,11 @@ export function ProgramManagerOverridesSection() {
     fetch("/api/admin/program-manager-overrides")
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
-        if (!r.ok && d?.error && String(d.error).toLowerCase().includes("program_manager")) {
-          setTableMissing(true);
+        if (!r.ok && d?.error) {
+          const err = String(d.error).toLowerCase();
+          if (err.includes("program_manager") || err.includes("does not exist") || err.includes("42P01")) {
+            setTableMissing(true);
+          }
           setOverrides([]);
         } else if (Array.isArray(d)) {
           setOverrides(d);
@@ -67,14 +70,28 @@ export function ProgramManagerOverridesSection() {
   const managerUsers = users.filter((u) => u.is_active !== false && (u.role === "manager" || u.role === "admin"));
 
   if (tableMissing) {
-    return null;
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
+        <h2 className="mb-2 font-medium text-amber-900 dark:text-amber-200">Newsmaker Dept EP (e.g. Simonetta Fornasiero)</h2>
+        <p className="mb-4 text-sm text-amber-800 dark:text-amber-300">
+          Run the migration to create the <code className="rounded bg-amber-200/50 px-1 dark:bg-amber-800/50">program_manager_overrides</code> table.
+        </p>
+        <p className="mb-2 text-sm text-amber-700 dark:text-amber-400">
+          Supabase Dashboard → SQL Editor → run <code className="rounded bg-amber-200/50 px-1">00037_program_manager_overrides.sql</code>
+        </p>
+        <p className="mb-4 text-xs text-amber-600 dark:text-amber-500">Or run: <code>supabase db push</code></p>
+        <button type="button" onClick={refresh} className="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-500">
+          Retry after migration
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
-      <h2 className="mb-2 font-medium text-gray-900 dark:text-white">Program-specific Dept EP</h2>
+    <div className="rounded-xl border-2 border-violet-200 bg-white p-6 shadow-sm dark:border-violet-800/50 dark:bg-gray-900/80">
+      <h2 className="mb-2 font-medium text-gray-900 dark:text-white">Newsmaker Dept EP (e.g. Simonetta Fornasiero)</h2>
       <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-        Override the default Dept EP for specific programs. When Newsmaker is selected, the chosen manager will be assigned.
+        When Newsmaker program is selected, assign this Dept EP. Choose Simonetta Fornasiero or another manager.
       </p>
       {message && (
         <div
