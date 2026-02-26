@@ -6,20 +6,11 @@ import useSWR from "swr";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-/** Build month+year options: next 24 months from current */
-function buildMonthYearOptions(): { value: string; label: string }[] {
-  const now = new Date();
-  const opts: { value: string; label: string }[] = [];
-  for (let i = 0; i < 24; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const month = MONTH_NAMES[d.getMonth()];
-    const year = d.getFullYear();
-    opts.push({ value: `${month} ${year}`, label: `${month} ${year}` });
-  }
-  return opts;
+/** Year options: 15 years back, 15 years forward from current */
+function getYearOptions(): number[] {
+  const y = new Date().getFullYear();
+  return Array.from({ length: 31 }, (_, i) => y - 15 + i);
 }
-
-const MONTH_YEAR_OPTIONS = buildMonthYearOptions();
 
 /** Get number of days in a month (1–31) */
 function getDaysInMonth(monthYear: string): number[] {
@@ -53,7 +44,10 @@ export default function FreelancerSubmitPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [department2, setDepartment2] = useState("");
   const [bookedBy, setBookedBy] = useState("");
-  const [serviceMonth, setServiceMonth] = useState("");
+  const [serviceMonth, setServiceMonth] = useState(() => {
+    const now = new Date();
+    return `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
+  });
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set());
   const [serviceRatePerDay, setServiceRatePerDay] = useState("");
   const [additionalCost, setAdditionalCost] = useState("");
@@ -216,23 +210,42 @@ export default function FreelancerSubmitPage() {
           </select>
         </div>
 
-        {/* 6. Number of service delivery days */}
-        <div>
-          <label className={labelCls}>6. Number of service delivery days <span className="text-red-500">*</span></label>
-          <p className={hintCls}>Automatically calculated from selected days (section 8)</p>
-          <input type="number" min={0} value={serviceDaysCountAuto} readOnly className={inputCls + " bg-gray-50 dark:bg-gray-700 cursor-not-allowed"} tabIndex={-1} aria-readonly />
-        </div>
+        {/* 6. Number of service delivery days - hidden, value from selected days (section 8) */}
 
         {/* 7. Month */}
         <div>
           <label className={labelCls}>7. Month <span className="text-red-500">*</span></label>
           <p className={hintCls}>Select month and year; then pick days on the calendar below</p>
-          <select value={serviceMonth} onChange={(e) => setServiceMonth(e.target.value)} className={inputCls} required>
-            <option value="">Select month and year...</option>
-            {MONTH_YEAR_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <div className="flex gap-3">
+            <select
+              value={serviceMonth ? serviceMonth.split(" ")[0] : ""}
+              onChange={(e) => {
+                const m = e.target.value;
+                const y = serviceMonth ? serviceMonth.split(" ")[1] : String(new Date().getFullYear());
+                setServiceMonth(m ? `${m} ${y}` : "");
+              }}
+              className={inputCls + " flex-1"}
+              required
+            >
+              {MONTH_NAMES.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <select
+              value={serviceMonth ? serviceMonth.split(" ")[1] : ""}
+              onChange={(e) => {
+                const y = e.target.value;
+                const m = serviceMonth ? serviceMonth.split(" ")[0] : MONTH_NAMES[new Date().getMonth()];
+                setServiceMonth(y ? `${m} ${y}` : "");
+              }}
+              className={inputCls + " flex-1"}
+              required
+            >
+              {getYearOptions().map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* 8. Days - Calendar picker */}
