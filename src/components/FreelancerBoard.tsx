@@ -873,17 +873,7 @@ export function FreelancerBoard({
       case "amount": return <span className="font-semibold text-gray-900 dark:text-white group/amt relative cursor-default">{r.amount}<span className="pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-normal text-white opacity-0 shadow-lg transition-opacity group-hover/amt:opacity-100 z-50">{r.serviceDaysCount} days × {r.serviceRate} + {r.additionalCost} add.</span></span>;
       case "currency": return <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{r.currency === "USD" ? "USD ($)" : r.currency === "EUR" ? "EUR (€)" : "GBP (£)"}</span>;
       case "invNumber": return <span className="max-w-[120px] truncate block" title={r.invNumber}>{r.invNumber}</span>;
-      case "beneficiary": return (
-        <span
-          className="max-w-[120px] truncate block cursor-pointer"
-          onMouseEnter={() => showPreviewOnHover(r.id)}
-          onMouseLeave={hidePreviewOnHover}
-          onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
-          title="Hover to preview, double-click to open in new tab"
-        >
-          {r.beneficiary}
-        </span>
-      );
+      case "beneficiary": return <span className="max-w-[120px] truncate block" title={r.beneficiary}>{r.beneficiary}</span>;
       case "accountNumber": return <span className="max-w-[120px] truncate block" title={r.accountNumber}>{r.accountNumber}</span>;
       case "sortCode": return r.sortCode;
       case "department": return <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span>;
@@ -1013,7 +1003,7 @@ export function FreelancerBoard({
       </div>
 
       {/* Click-outside overlay: clears selection when clicking empty space */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || isOperationsRoomMember) && (
+      {selectedIds.size > 0 && currentRole === "admin" && (
         <div
           className="fixed inset-0 z-30 cursor-default"
           onClick={() => setSelectedIds(new Set())}
@@ -1021,7 +1011,7 @@ export function FreelancerBoard({
         />
       )}
       {/* Bulk action bar - Fixed at bottom, Admin only */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || isOperationsRoomMember) && (
+      {selectedIds.size > 0 && currentRole === "admin" && (
         <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
@@ -1106,11 +1096,11 @@ export function FreelancerBoard({
                 <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-[2600px] w-full divide-y divide-slate-200 dark:divide-slate-600">
                   <thead className="bg-slate-50 dark:bg-slate-700/50"><tr>
-                    {(currentRole === "admin" || currentRole === "manager" || isOperationsRoomMember) && <th className="px-2 py-2 w-8"><input type="checkbox" checked={visibleRows.length > 0 && visibleRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(visibleRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" /></th>}
+                    {currentRole === "admin" && <th className="px-2 py-2 w-8"><input type="checkbox" checked={visibleRows.length > 0 && visibleRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(visibleRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" /></th>}
                     {COLUMNS.map(c => <th key={c.key} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.label}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {visibleRows.length === 0 && <tr><td colSpan={COLUMNS.length + ((currentRole === "admin" || currentRole === "manager" || isOperationsRoomMember) ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
+                    {visibleRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
                     {visibleRows.map(r => {
                       const editable = canEditRow(r);
                       const editTdCls = editable ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
@@ -1118,7 +1108,7 @@ export function FreelancerBoard({
                       return (
                         <React.Fragment key={r.id}>
                           <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={editable ? () => { handleRowDblClick(); onStartEdit(r); } : handleRowDblClick}>
-                            {(currentRole === "admin" || currentRole === "manager" || isOperationsRoomMember) && <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
+                            {currentRole === "admin" && <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
                                 <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" />
                                 {isDuplicate && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[9px] font-bold text-yellow-900" title="Possible duplicate (same contractor + amount)">!</span>}
@@ -1134,7 +1124,7 @@ export function FreelancerBoard({
                             })}
                           </tr>
                           {expandedRowId === r.id && (
-                            <tr><td colSpan={COLUMNS.length + ((currentRole === "admin" || currentRole === "manager" || isOperationsRoomMember) ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
+                            <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
                               {detailLoading ? <div className="flex items-center gap-2 text-sm text-gray-500"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>Loading...</div> : (
                                 <div className="space-y-4">
                                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
