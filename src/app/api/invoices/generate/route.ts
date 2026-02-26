@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
       guestAddress: data.guestAddress?.trim(),
       guestEmail: data.guestEmail?.trim(),
       guestPhone: data.guestPhone?.trim(),
-      departmentName: progName || deptName || undefined,
+      departmentName: deptName || undefined,
       programmeName: progName || undefined,
       appearances,
       expenses,

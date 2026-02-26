@@ -68,15 +68,17 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   doc.text(`DATE: ${(data.invoiceDate || "").toUpperCase()}`, pw - mx, y, { align: "right" });
   y += 16;
 
-  // FROM | TO side by side — TO right-aligned, larger fonts, color
-  const toX = pw - mx; // right edge for TO block
+  // FROM | TO side by side — clear column split to avoid overlap
+  const leftColEnd = 95;
+  const toX = pw - mx;
 
-  // FROM header — subtle blue
+  // FROM header (left) and TO header (right) on same line
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 64, 120);
   doc.text("FROM", mx, y);
-  y += 6;
+  doc.text("TO", toX, y, { align: "right" });
+  const toStartY = y + 8;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
@@ -87,25 +89,12 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
     data.guestEmail || "",
     data.guestPhone || "",
   ].filter(Boolean);
-  fromLines.forEach((line) => {
-    doc.text(line, mx, y);
-    y += 5.5;
+  fromLines.forEach((line, i) => {
+    doc.text(line, mx, toStartY + i * 5.5, { maxWidth: leftColEnd - mx - 2 });
   });
+  const fromBottom = fromLines.length > 0 ? toStartY + fromLines.length * 5.5 : toStartY;
 
-  const fromBottom = y;
-  y = fromBottom - fromLines.length * 5.5 - 6;
-
-  // TO header — right-aligned, accent color
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 64, 120);
-  doc.text("TO", toX, y + 6, { align: "right" });
-
-  // TO address — right-aligned, larger font
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(40, 40, 40);
-  let toY = y + 12;
+  let toY = toStartY;
   TO_ADDRESS.forEach((line) => {
     doc.text(line, toX, toY, { align: "right" });
     toY += 5.5;
@@ -113,13 +102,12 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
 
   y = Math.max(fromBottom, toY + 4) + 10;
 
-  // Department/Programme label when TRT World News or programme selected
-  const deptProgDisplay = data.programmeName || data.departmentName;
-  if (deptProgDisplay) {
+  // Department label — only department name (programme stays in table)
+  if (data.departmentName) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 64, 120);
-    doc.text(`Department: ${deptProgDisplay}`, mx, y);
+    doc.text(`Department: ${data.departmentName}`, mx, y);
     doc.setTextColor(40, 40, 40);
     y += 8;
   }
