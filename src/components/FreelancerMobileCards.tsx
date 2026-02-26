@@ -151,7 +151,7 @@ export function FreelancerMobileCards({
           <div
             key={r.id}
             onClick={handleCardClick}
-            className={`flex-shrink-0 w-[85vw] max-w-[min(400px,calc(100vw-2rem))] min-w-[280px] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
+            className={`flex-shrink-0 w-[calc(100vw-2rem)] max-w-[400px] min-w-[260px] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
               r.status === "rejected"
                 ? "border-rose-300 dark:border-rose-700"
                 : "border-slate-200 dark:border-slate-600"

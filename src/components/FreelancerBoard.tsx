@@ -947,16 +947,16 @@ export function FreelancerBoard({
 
   /* ---------- RENDER ---------- */
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-slate-800 dark:text-slate-100 max-w-full min-w-0 overflow-x-hidden">
       {actionLoadingId && (
         <div className="fixed top-0 left-0 right-0 z-50 h-1 overflow-hidden bg-slate-200 dark:bg-slate-700">
           <div className="h-full w-1/3 bg-blue-500 animate-loading-bar" />
         </div>
       )}
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Contractor Invoices</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-white shrink-0">Contractor Invoices</h1>
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <button onClick={() => setShowDashboard(!showDashboard)} className={`rounded-xl px-3 py-2 text-sm font-medium shadow-sm transition-all flex items-center gap-1.5 ${showDashboard ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200"}`}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>
             Dashboard
@@ -1006,9 +1006,11 @@ export function FreelancerBoard({
       )}
 
       {/* Filters */}
-      <div className={`rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800 ${selectedIds.size > 0 ? "relative z-40" : ""}`}>
-        <div className="flex flex-wrap items-center gap-2">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search contractor, company, beneficiary..." className="w-56 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+      <div className={`rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800 overflow-hidden ${selectedIds.size > 0 ? "relative z-40" : ""}`}>
+        <div className="flex flex-wrap items-center gap-2 overflow-x-auto md:overflow-visible min-w-0">
+          <div className="relative flex-1 min-w-[140px]">
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search contractor, company, beneficiary..." className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+          </div>
           <select value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Departments</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
           <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Months</option>{uniqueMonths.map(m => <option key={m} value={m}>{m}</option>)}</select>
           <label className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400 cursor-pointer">
@@ -1094,7 +1096,7 @@ export function FreelancerBoard({
       )}
 
       {/* Groups */}
-      <div className={selectedIds.size > 0 ? "relative z-40" : ""}>
+      <div className={`w-full min-w-0 ${selectedIds.size > 0 ? "relative z-40" : ""}`}>
       {filteredRows.length === 0 ? (
         <EmptyState
           icon={
@@ -1126,7 +1128,7 @@ export function FreelancerBoard({
             </button>
             {!collapsed && (
               <>
-                <div className="md:hidden px-4 pb-4">
+                <div className="md:hidden px-2 sm:px-4 pb-4 w-full min-w-0 overflow-x-hidden">
                   <FreelancerMobileCards
                     rows={visibleRows}
                     currentRole={currentRole}
