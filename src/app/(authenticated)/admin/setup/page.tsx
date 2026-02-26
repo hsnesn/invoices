@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { DepartmentManagersSection } from "@/components/DepartmentManagersSection";
+import { ProgramManagerOverridesSection } from "@/components/ProgramManagerOverridesSection";
 import { ProducerColorsSection } from "@/components/ProducerColorsSection";
 import { EmailSetupSection } from "@/components/EmailSetupSection";
 import { ContractorTemplatesSection } from "@/components/ContractorTemplatesSection";
@@ -391,6 +392,8 @@ function GuestInvoiceSetup() {
       </div>
 
       <DepartmentManagersSection />
+
+      <ProgramManagerOverridesSection />
 
       <ProducerColorsSection />
 

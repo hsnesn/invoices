@@ -1,6 +1,6 @@
 /**
  * Shared logic for assigning Dept EP (line manager) to guest invoices.
- * Newsmaker program -> Simonetta FORNASIERO.
+ * Program-specific overrides from Setup → Guest Invoices → Program-specific Dept EP.
  */
 
 type SupabaseAdmin = Awaited<ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>>;
@@ -26,7 +26,7 @@ function pickManager(
 
 /**
  * Resolve manager_user_id for a guest invoice.
- * When program is Newsmaker, always returns Simonetta FORNASIERO.
+ * Uses program_manager_overrides from Setup when program name matches (e.g. Newsmaker).
  */
 export async function pickManagerForGuestInvoice(
   supabase: SupabaseAdmin,
@@ -39,17 +39,14 @@ export async function pickManagerForGuestInvoice(
       .select("name")
       .eq("id", programId)
       .single();
-    const programName = (program?.name ?? "").trim();
-    if (programName && programName.toLowerCase().includes("newsmaker")) {
-      const { data: simonetta } = await supabase
-        .from("profiles")
-        .select("id")
-        .ilike("full_name", "%Simonetta Fornasiero%")
-        .eq("role", "manager")
-        .eq("is_active", true)
-        .limit(1)
+    const programName = (program?.name ?? "").trim().toLowerCase();
+    if (programName && programName.includes("newsmaker")) {
+      const { data: override, error } = await supabase
+        .from("program_manager_overrides")
+        .select("manager_user_id")
+        .eq("program_name_key", "newsmaker")
         .maybeSingle();
-      if (simonetta?.id) return simonetta.id;
+      if (!error && override?.manager_user_id) return override.manager_user_id;
     }
   }
 
