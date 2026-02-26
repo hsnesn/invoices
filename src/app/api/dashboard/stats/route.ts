@@ -83,11 +83,14 @@ export async function GET() {
       return { month: label, guest: guestCount, freelancer: flCount, total: guestCount + flCount };
     });
 
-    return NextResponse.json({
-      guest: { ...guest, total: guest.pending + guest.paid + guest.rejected },
-      freelancer: { ...freelancer, total: freelancer.pending + freelancer.paid + freelancer.rejected },
-      monthlyTrend,
-    });
+    return NextResponse.json(
+      {
+        guest: { ...guest, total: guest.pending + guest.paid + guest.rejected },
+        freelancer: { ...freelancer, total: freelancer.pending + freelancer.paid + freelancer.rejected },
+        monthlyTrend,
+      },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   } catch (err) {
     console.error("Dashboard stats error:", err);
     return NextResponse.json(

@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recha
 import type { Profile, PageKey } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const statsFetcher = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json());
 
 type Stats = {
   guest: { pending: number; paid: number; rejected: number; total: number };
@@ -134,10 +135,13 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   const isViewer = profile.role === "viewer";
   const isOperations = profile.role === "operations";
   const userPages = profile.allowed_pages;
-  const { data: stats, mutate } = useSWR<Stats>("/api/dashboard/stats", fetcher, {
-    refreshInterval: 30000,
-    revalidateOnFocus: true,
-  });
+  const isSubmitter = profile.role === "submitter";
+  const canSeeStats = !isSubmitter;
+  const { data: stats, mutate } = useSWR<Stats>(
+    canSeeStats ? "/api/dashboard/stats" : null,
+    statsFetcher,
+    { refreshInterval: 15000, revalidateOnFocus: true, dedupingInterval: 5000 }
+  );
 
   const visiblePages = PAGES.filter((p) => {
     if (p.viewerHidden && isViewer) return false;
@@ -173,8 +177,8 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       </div>
 
-      {/* Metric Cards */}
-      {stats && (
+      {/* Metric Cards - hidden from submitters */}
+      {canSeeStats && stats && (
         <div className="mb-8">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs text-gray-500 dark:text-gray-400">Updates every 30s</span>
@@ -219,8 +223,8 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       )}
 
-      {/* Mini Chart */}
-      {stats?.monthlyTrend?.length ? (
+      {/* Mini Chart - hidden from submitters */}
+      {canSeeStats && stats?.monthlyTrend?.length ? (
         <div className="mb-8 rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Invoices by Month</h2>
           <div className="mt-4 h-40">
