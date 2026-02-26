@@ -221,6 +221,23 @@ export async function triggerBookingFormWorkflow(
       return { ok: false, error: `Form save: ${uploadError.message}` };
     }
 
+    // 2b. Add to invoice_files so it appears in the Files list (at the end)
+    const { data: existingFile } = await supabase
+      .from("invoice_files")
+      .select("id")
+      .eq("invoice_id", params.invoiceId)
+      .like("storage_path", "booking-forms/%")
+      .limit(1)
+      .maybeSingle();
+    if (!existingFile) {
+      await supabase.from("invoice_files").insert({
+        invoice_id: params.invoiceId,
+        storage_path: storagePath,
+        file_name: filename,
+        sort_order: 9999,
+      });
+    }
+
     // 3. Emails sent by cron 30 seconds later (see /api/cron/booking-form-emails)
     return { ok: true };
   } catch (e) {

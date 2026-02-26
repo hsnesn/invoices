@@ -327,6 +327,19 @@ export function FreelancerBoard({
   const previewShowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (previewUrl || previewHtml || previewLoading) { setPreviewUrl(null); setPreviewHtml(null); setPreviewLoading(false); return; }
+      if (editModalRow) { setEditModalRow(null); return; }
+      if (rejectModalId) { setRejectModalId(null); return; }
+      if (compareIds.length === 2) { setCompareIds([]); return; }
+      if (showMoveModal) { setShowMoveModal(false); return; }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [previewUrl, previewHtml, previewLoading, editModalRow, rejectModalId, compareIds, showMoveModal]);
+
   /* ---------- Callbacks ---------- */
   const toggleGroup = useCallback((key: string) => { setCollapsedGroups(p => { const n = new Set(p); if (n.has(key)) n.delete(key); else n.add(key); return n; }); }, []);
 
@@ -407,6 +420,21 @@ export function FreelancerBoard({
   const onMarkPaid = useCallback((id: string) => {
     statusAction(id, { to_status: "paid", paid_date: new Date().toISOString().split("T")[0] });
   }, [statusAction]);
+
+  const onDeleteInvoice = useCallback(async (id: string) => {
+    setActionLoadingId(id);
+    try {
+      const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error ?? "Delete failed");
+        return;
+      }
+      refreshAndKeepVisible();
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [refreshAndKeepVisible]);
 
   const submitReject = useCallback(async () => {
     if (!rejectModalId || !rejectReason.trim()) return;
@@ -629,16 +657,27 @@ export function FreelancerBoard({
   const bulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Delete ${selectedIds.size} invoice(s)? This cannot be undone.`)) return;
+    const idsToDelete = currentRole === "submitter"
+      ? Array.from(selectedIds).filter(id => {
+          const r = rows.find(x => x.id === id);
+          return r && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status);
+        })
+      : Array.from(selectedIds);
+    if (idsToDelete.length === 0) {
+      toast.error("No invoices selected that you can delete.");
+      return;
+    }
     setActionLoadingId("bulk");
     try {
-      for (const id of Array.from(selectedIds)) {
+      for (const id of idsToDelete) {
         await fetch(`/api/invoices/${id}`, { method: "DELETE" });
       }
+      setSelectedIds(new Set());
       refreshAndKeepVisible();
     } finally {
       setActionLoadingId(null);
     }
-  }, [selectedIds, refreshAndKeepVisible]);
+  }, [selectedIds, currentRole, currentUserId, rows, refreshAndKeepVisible]);
 
   const bulkMoveToGroup = useCallback(async (groupKey: string) => {
     const ids = Array.from(selectedIds);
@@ -903,9 +942,21 @@ export function FreelancerBoard({
         );
       }
       case "actions": {
+        const canSubmitterEditDelete = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status);
         const canRS = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
         const canSendEmails = currentRole === "admin" && ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
-        return <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>{canRS && <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50">{actionLoadingId === r.id ? "…" : "↻ Resubmit"}</button>}{canSendEmails && <button onClick={() => void sendBookingFormEmails(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-violet-600 px-2 py-0.5 text-xs text-white hover:bg-violet-500 disabled:opacity-50" title="Send Booking Form emails to Line Manager and London Operations">{actionLoadingId === r.id ? "…" : "📧 Send"}</button>}</div>;
+        return (
+          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+            {canSubmitterEditDelete && (
+              <>
+                <button onClick={() => onStartEdit(r)} className="rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
+                <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-300">{actionLoadingId === r.id ? "…" : "Delete"}</button>
+              </>
+            )}
+            {canRS && <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50">{actionLoadingId === r.id ? "…" : "↻ Resubmit"}</button>}
+            {canSendEmails && <button onClick={() => void sendBookingFormEmails(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-violet-600 px-2 py-0.5 text-xs text-white hover:bg-violet-500 disabled:opacity-50" title="Send Booking Form emails to Line Manager and London Operations">{actionLoadingId === r.id ? "…" : "📧 Send"}</button>}
+          </div>
+        );
       }
       default: return "—";
     }
@@ -1003,15 +1054,15 @@ export function FreelancerBoard({
       </div>
 
       {/* Click-outside overlay: clears selection when clicking empty space */}
-      {selectedIds.size > 0 && currentRole === "admin" && (
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "submitter") && (
         <div
           className="fixed inset-0 z-30 cursor-default"
           onClick={() => setSelectedIds(new Set())}
           aria-hidden
         />
       )}
-      {/* Bulk action bar - Fixed at bottom, Admin only */}
-      {selectedIds.size > 0 && currentRole === "admin" && (
+      {/* Bulk action bar - Admin: full actions; Submitter: Delete only */}
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "submitter") && (
         <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
@@ -1021,6 +1072,8 @@ export function FreelancerBoard({
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             Delete
           </button>
+          {currentRole === "admin" && (
+            <>
           <button onClick={() => void exportToExcel(filteredRows.filter((r) => selectedIds.has(r.id)))} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
             Excel Export
@@ -1029,6 +1082,8 @@ export function FreelancerBoard({
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
             Move
           </button>
+            </>
+          )}
           <button onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
             ✕ Close
           </button>
@@ -1091,16 +1146,33 @@ export function FreelancerBoard({
                     downloadBookingForm={downloadBookingForm}
                     sendBookingFormEmails={sendBookingFormEmails}
                     actionLoadingId={actionLoadingId}
+                    onStartEdit={(row) => onStartEdit(row as Parameters<typeof onStartEdit>[0])}
+                    onDeleteInvoice={onDeleteInvoice}
                   />
                 </div>
                 <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-[2600px] w-full divide-y divide-slate-200 dark:divide-slate-600">
                   <thead className="bg-slate-50 dark:bg-slate-700/50"><tr>
-                    {currentRole === "admin" && <th className="px-2 py-2 w-8"><input type="checkbox" checked={visibleRows.length > 0 && visibleRows.every(r => selectedIds.has(r.id))} onChange={e => onToggleAll(visibleRows.map(r => r.id), e.target.checked)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" /></th>}
+                    {(currentRole === "admin" || currentRole === "submitter") && (
+                      <th className="px-2 py-2 w-8">
+                        <input
+                          type="checkbox"
+                          checked={(() => {
+                            const selectable = currentRole === "submitter" ? visibleRows.filter(r => r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)) : visibleRows;
+                            return selectable.length > 0 && selectable.every(r => selectedIds.has(r.id));
+                          })()}
+                          onChange={e => {
+                            const selectable = currentRole === "submitter" ? visibleRows.filter(r => r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)) : visibleRows;
+                            onToggleAll(selectable.map(r => r.id), e.target.checked);
+                          }}
+                          className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600"
+                        />
+                      </th>
+                    )}
                     {COLUMNS.map(c => <th key={c.key} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.label}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {visibleRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
+                    {visibleRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" || currentRole === "submitter" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
                     {visibleRows.map(r => {
                       const editable = canEditRow(r);
                       const editTdCls = editable ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
@@ -1108,12 +1180,14 @@ export function FreelancerBoard({
                       return (
                         <React.Fragment key={r.id}>
                           <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={editable ? () => { handleRowDblClick(); onStartEdit(r); } : handleRowDblClick}>
-                            {currentRole === "admin" && <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
-                              <div className="flex items-center gap-1">
-                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" />
-                                {isDuplicate && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[9px] font-bold text-yellow-900" title="Possible duplicate (same contractor + amount)">!</span>}
-                              </div>
-                            </td>}
+                            {((currentRole === "admin") || (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status))) && (
+                              <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center gap-1">
+                                  <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" />
+                                  {currentRole === "admin" && isDuplicate && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[9px] font-bold text-yellow-900" title="Possible duplicate (same contractor + amount)">!</span>}
+                                </div>
+                              </td>
+                            )}
                             {COLUMNS.map(c => {
                               const noEdit = ["status", "files", "submissionDate", "amount", "actions", "bookingForm"].includes(c.key) || (c.key === "submittedBy" && currentRole !== "admin");
                               return (
@@ -1124,7 +1198,7 @@ export function FreelancerBoard({
                             })}
                           </tr>
                           {expandedRowId === r.id && (
-                            <tr><td colSpan={COLUMNS.length + (currentRole === "admin" ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
+                            <tr><td colSpan={COLUMNS.length + (currentRole === "admin" || currentRole === "submitter" ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
                               {detailLoading ? <div className="flex items-center gap-2 text-sm text-gray-500"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>Loading...</div> : (
                                 <div className="space-y-4">
                                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1196,7 +1270,7 @@ export function FreelancerBoard({
                       );
                     })}
                   </tbody>
-                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{currentRole === "admin" && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(g.additional) : c.key === "amount" ? fmtCurrency(g.amount) : ""}</td>)}</tr></tfoot>
+                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{(currentRole === "admin" || currentRole === "submitter") && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(g.additional) : c.key === "amount" ? fmtCurrency(g.amount) : ""}</td>)}</tr></tfoot>
                 </table>
                 {hasMore && (
                   <div className="flex items-center justify-center gap-2 border-t border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
@@ -1232,7 +1306,7 @@ export function FreelancerBoard({
 
       {/* Rejection Modal */}
       {rejectModalId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setRejectModalId(null); setRejectReason(""); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Reject invoice" onClick={() => { setRejectModalId(null); setRejectReason(""); }}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Reject Invoice</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">The submitter will be notified and can make corrections then resubmit.</p>
@@ -1263,7 +1337,7 @@ export function FreelancerBoard({
                     Download
                   </button>
                 )}
-                <button onClick={closePreview} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors">✕</button>
+                <button onClick={closePreview} aria-label="Close preview" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors">✕</button>
               </div>
             </div>
             <div className="flex-1 overflow-hidden flex items-center justify-center">
@@ -1289,7 +1363,7 @@ export function FreelancerBoard({
                 <svg className="h-5 w-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
                 Invoice Comparison
               </h3>
-              <button onClick={() => setCompareIds([])} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors">✕</button>
+              <button onClick={() => setCompareIds([])} aria-label="Close comparison" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors">✕</button>
             </div>
             <CompareTable rows={rows} ids={compareIds} />
           </div>

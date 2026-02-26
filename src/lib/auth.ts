@@ -90,6 +90,7 @@ export async function requireAdminOrOperations() {
 export async function requirePageAccess(pageKey: PageKey) {
   const { session, profile } = await requireAuth();
   if (profile.role === "admin") return { session, profile };
+  if (profile.role === "viewer" && ["guest_invoices", "freelancer_invoices", "reports"].includes(pageKey)) return { session, profile };
   const pages = profile.allowed_pages;
   if (!pages || pages.length === 0) return { session, profile };
   if (pages.includes(pageKey)) return { session, profile };

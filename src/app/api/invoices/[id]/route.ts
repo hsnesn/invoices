@@ -358,7 +358,7 @@ export async function PATCH(
   }
 }
 
-const PENDING_STATUSES_FOR_SUBMITTER_DELETE = ["submitted", "pending_manager"];
+const PENDING_STATUSES_FOR_SUBMITTER_DELETE = ["submitted", "pending_manager", "rejected"];
 
 export async function DELETE(
   _request: Request,

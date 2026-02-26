@@ -12,12 +12,16 @@ export async function GET() {
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    const withEmails = await Promise.all(
-      (data ?? []).map(async (p) => {
-        const { data: authUser } = await supabase.auth.admin.getUserById(p.id);
-        return { ...p, email: authUser?.user?.email ?? null };
-      })
-    );
+    const profiles = data ?? [];
+    const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    const emailMap = new Map<string, string>();
+    for (const u of authData?.users ?? []) {
+      if (u.email) emailMap.set(u.id, u.email);
+    }
+    const withEmails = profiles.map((p) => ({
+      ...p,
+      email: emailMap.get(p.id) ?? null,
+    }));
     return NextResponse.json(withEmails);
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

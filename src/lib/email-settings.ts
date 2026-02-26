@@ -76,18 +76,29 @@ export async function filterRecipientsByPreference(
     .map((p) => p.id);
 }
 
+/** Batch fetch emails for multiple user IDs using listUsers. */
+async function batchGetUserEmails(userIds: string[]): Promise<Map<string, string>> {
+  if (!userIds.length) return new Map();
+  const supabase = createAdminClient();
+  const result = new Map<string, string>();
+  const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  const idSet = new Set(userIds);
+  for (const u of data?.users ?? []) {
+    if (idSet.has(u.id) && u.email) result.set(u.id, u.email);
+  }
+  return result;
+}
+
 /** Get emails for user IDs, filtering out those who opted out. */
 export async function getFilteredEmailsForUserIds(userIds: string[]): Promise<string[]> {
   const allowed = await filterRecipientsByPreference(userIds);
   if (!allowed.length) return [];
-  const supabase = createAdminClient();
-  const emails: string[] = [];
-  for (const id of allowed) {
-    const { data } = await supabase.auth.admin.getUserById(id);
-    if (data?.user?.email) emails.push(data.user.email);
-  }
-  return emails;
+  const emailMap = await batchGetUserEmails(allowed);
+  return allowed.map((id) => emailMap.get(id)).filter((e): e is string => !!e);
 }
+
+/** Batch fetch user emails by IDs (no preference filtering). */
+export { batchGetUserEmails };
 
 /** Alias for filterRecipientsByPreference. */
 export const filterUserIdsByEmailPreference = filterRecipientsByPreference;

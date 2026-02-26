@@ -121,26 +121,22 @@ export async function POST(request: NextRequest) {
 
         if (uploadError) continue;
 
+        const bulkRows: Record<string, unknown>[] = [];
+        const employeeUpdates: { id: string; updates: Record<string, unknown> }[] = [];
         for (const row of excelRows) {
-        const matched = matchEmployee(row.employee_name ?? "", allEmployees ?? []);
-        const empId = matched?.id ?? null;
-        const bankAccount = row.bank_account_number ?? matched?.bank_account_number ?? null;
-        const sortCode = row.sort_code
-          ? (normalizeSortCode(row.sort_code) ?? row.sort_code)
-          : matched?.sort_code ?? null;
-
-        const employerTotalCost =
-          row.employer_total_cost ??
-          computeEmployerTotalCost(row.total_gross_pay, row.employer_pension, row.employer_ni);
-        const reference = generateSalaryReference(row.process_date);
-        const needsReview =
-          !row.net_pay || row.net_pay <= 0 || !row.employee_name?.trim();
-
-        const salaryId = crypto.randomUUID();
-        const { data: inserted, error: insertErr } = await supabase
-          .from("salaries")
-          .insert({
-            id: salaryId,
+          const matched = matchEmployee(row.employee_name ?? "", allEmployees ?? []);
+          const empId = matched?.id ?? null;
+          const bankAccount = row.bank_account_number ?? matched?.bank_account_number ?? null;
+          const sortCode = row.sort_code
+            ? (normalizeSortCode(row.sort_code) ?? row.sort_code)
+            : matched?.sort_code ?? null;
+          const employerTotalCost =
+            row.employer_total_cost ??
+            computeEmployerTotalCost(row.total_gross_pay, row.employer_pension, row.employer_ni);
+          const reference = generateSalaryReference(row.process_date);
+          const needsReview = !row.net_pay || row.net_pay <= 0 || !row.employee_name?.trim();
+          bulkRows.push({
+            id: crypto.randomUUID(),
             employee_id: empId,
             employee_name: row.employee_name ?? "Unknown",
             ni_number: matched?.ni_number ?? null,
@@ -155,24 +151,27 @@ export async function POST(request: NextRequest) {
             reference: reference,
             payslip_storage_path: storagePath,
             status: needsReview ? "needs_review" : "pending",
-          })
-          .select("*, employees(full_name, email_address, bank_account_number, sort_code)")
-          .single();
-
-        if (insertErr) {
-          console.error("Bulk insert error:", insertErr);
-          continue;
-        }
-        allCreated.push(inserted);
-
-        if (matched && (bankAccount || sortCode)) {
-          const updates: Record<string, unknown> = {};
-          if (bankAccount && !matched.bank_account_number) updates.bank_account_number = bankAccount;
-          if (sortCode && !matched.sort_code) updates.sort_code = sortCode;
-          if (Object.keys(updates).length > 0) {
-            await supabase.from("employees").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", matched.id);
+          });
+          if (matched && (bankAccount || sortCode)) {
+            const upd: Record<string, unknown> = {};
+            if (bankAccount && !matched.bank_account_number) upd.bank_account_number = bankAccount;
+            if (sortCode && !matched.sort_code) upd.sort_code = sortCode;
+            if (Object.keys(upd).length > 0) employeeUpdates.push({ id: matched.id, updates: upd });
           }
         }
+        if (bulkRows.length > 0) {
+          const { data: inserted, error: insertErr } = await supabase
+            .from("salaries")
+            .insert(bulkRows)
+            .select("*, employees(full_name, email_address, bank_account_number, sort_code)");
+          if (insertErr) {
+            console.error("Bulk insert error:", insertErr);
+          } else {
+            allCreated.push(...(inserted ?? []));
+          }
+        }
+        for (const eu of employeeUpdates) {
+          await supabase.from("employees").update({ ...eu.updates, updated_at: new Date().toISOString() }).eq("id", eu.id);
         }
         continue;
       }

@@ -150,7 +150,7 @@ export function InvoiceMobileCards({
           const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
           const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
           const canEdit = (currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status))) && onStartEdit;
-          const canDeletePending = isSubmitter && (r.status === "submitted" || r.status === "pending_manager") && onDeleteInvoice;
+          const canDeletePending = isSubmitter && (r.status === "submitted" || r.status === "pending_manager" || r.status === "rejected") && onDeleteInvoice;
           const canAddFile = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status) && onAddFile;
           const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
           return (

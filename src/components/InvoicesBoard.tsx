@@ -563,7 +563,8 @@ function InvoiceTable({
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const canBulkSelect = currentRole === "admin" || currentRole === "manager" || currentRole === "operations";
+  const canBulkSelect = currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter";
+  const canRowBulkSelect = (r: DisplayRow) => canBulkSelect && (currentRole !== "submitter" || (r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)));
   const colCount = visibleColumns.filter((k) => k !== "checkbox" || canBulkSelect).length;
 
   const isCol = (key: string) => visibleColumns.includes(key);
@@ -589,8 +590,11 @@ function InvoiceTable({
             <th className="px-2 py-3 text-center w-10">
               <input
                 type="checkbox"
-                checked={paginatedRows.length > 0 && paginatedRows.every((r) => selectedIds.has(r.id))}
-                onChange={(e) => onToggleAll(paginatedRows.map((r) => r.id), e.target.checked)}
+                checked={(() => {
+                  const selectable = paginatedRows.filter(canRowBulkSelect);
+                  return selectable.length > 0 && selectable.every((r) => selectedIds.has(r.id));
+                })()}
+                onChange={(e) => onToggleAll(paginatedRows.filter(canRowBulkSelect).map((r) => r.id), e.target.checked)}
                 className="h-4 w-4 rounded border-2 border-gray-300 text-blue-600 accent-blue-600 focus:ring-blue-500 focus:ring-offset-0"
               />
             </th>
@@ -625,12 +629,14 @@ function InvoiceTable({
               <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={startEditOnDblClick}>
               {isCol("checkbox") && canBulkSelect && (
               <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(r.id)}
-                  onChange={() => onToggleSelect(r.id)}
-                  className="h-4 w-4 rounded border-2 border-gray-300 text-blue-600 accent-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                />
+                {canRowBulkSelect(r) ? (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(r.id)}
+                    onChange={() => onToggleSelect(r.id)}
+                    className="h-4 w-4 rounded border-2 border-gray-300 text-blue-600 accent-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+                  />
+                ) : null}
               </td>
               )}
               {isCol("status") && (
@@ -879,6 +885,9 @@ function InvoiceTable({
                         <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
                         <button onClick={() => void onResubmit(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 shadow-sm">
                           {actionLoadingId === r.id ? "Resubmitting..." : "Resubmit"}
+                        </button>
+                        <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
+                          {actionLoadingId === r.id ? "Deleting..." : "Delete"}
                         </button>
                         <span className="text-xs font-medium text-red-600" title={r.rejectionReason}>
                           {r.rejectionReason || "Rejected"}
@@ -1164,6 +1173,23 @@ export function InvoicesBoard({
       return defaults;
     }
   );
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (previewUrl || previewHtml || previewLoading) { setPreviewUrl(null); setPreviewHtml(null); setPreviewLoading(false); return; }
+      if (editModalRow) { setEditModalRow(null); return; }
+      if (rejectModalId) { setRejectModalId(null); return; }
+      if (showCompareModal) { setShowCompareModal(false); return; }
+      if (compareIds.length) { setCompareIds([]); return; }
+      if (showAssignManagerModal) { setShowAssignManagerModal(false); return; }
+      if (showMoveModal) { setShowMoveModal(false); return; }
+      if (showImportModal && !importing) { setShowImportModal(false); return; }
+      if (showCustomReport) { setShowCustomReport(false); return; }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [previewUrl, previewHtml, previewLoading, editModalRow, rejectModalId, showCompareModal, compareIds, showAssignManagerModal, showMoveModal, showImportModal, importing, showCustomReport]);
 
   const departmentMap = useMemo(() => new Map(departmentPairs), [departmentPairs]);
   const programMap = useMemo(() => new Map(programPairs), [programPairs]);
@@ -1850,11 +1876,22 @@ export function InvoicesBoard({
   const bulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Delete ${selectedIds.size} invoice(s)? This cannot be undone.`)) return;
-    for (const id of Array.from(selectedIds)) {
+    const idsToDelete = currentRole === "submitter"
+      ? Array.from(selectedIds).filter(id => {
+          const r = rows.find(x => x.id === id);
+          return r && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status);
+        })
+      : Array.from(selectedIds);
+    if (idsToDelete.length === 0) {
+      toast.error("No invoices selected that you can delete.");
+      return;
+    }
+    for (const id of idsToDelete) {
       await fetch(`/api/invoices/${id}`, { method: "DELETE" });
     }
+    setSelectedIds(new Set());
     window.location.reload();
-  }, [selectedIds]);
+  }, [selectedIds, currentRole, currentUserId, rows]);
 
   const bulkAssignManager = useCallback(async (managerId: string | null) => {
     const ids = Array.from(selectedIds);
@@ -2200,15 +2237,15 @@ export function InvoicesBoard({
       )}
 
       {/* Click-outside overlay: clears selection when clicking empty space */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter") && (
         <div
           className="fixed inset-0 z-30 cursor-default"
           onClick={() => setSelectedIds(new Set())}
           aria-hidden
         />
       )}
-      {/* Bulk Actions Bar - Fixed at bottom, Admin only */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
+      {/* Bulk Actions Bar - Admin/Manager/Operations: full actions; Submitter: Delete only */}
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter") && (
         <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
@@ -2218,6 +2255,8 @@ export function InvoicesBoard({
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             Delete
           </button>
+          {(currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
+            <>
           <button onClick={() => void exportToExcel(rows.filter((r) => selectedIds.has(r.id)))} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
             Excel Export
@@ -2235,6 +2274,8 @@ export function InvoicesBoard({
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
               Compare
             </button>
+          )}
+            </>
           )}
           <button onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
             ✕ Close
@@ -2730,7 +2771,7 @@ export function InvoicesBoard({
               onDownloadFile={onDownloadFile}
               onStartEdit={onStartEdit}
               actionLoadingId={actionLoadingId}
-              visibleColumns={(currentRole === "admin" || currentRole === "manager" || currentRole === "operations") ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
+              visibleColumns={(currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter") ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
               expandedRowId={expandedRowId}
               onToggleExpand={(id) => void toggleExpandRow(id)}
               timelineData={timelineData}
@@ -3014,7 +3055,7 @@ export function InvoicesBoard({
       )}
 
       {rejectModalId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Reject invoice">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800 dark:border dark:border-slate-700">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Reject Invoice</h3>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please enter the reason for rejection:</p>
@@ -3068,6 +3109,7 @@ export function InvoicesBoard({
                 )}
                 <button
                   onClick={closePreview}
+                  aria-label="Close preview"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors"
                 >
                   ✕

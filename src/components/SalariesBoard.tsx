@@ -138,47 +138,47 @@ function EditSalaryModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Edit salary" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-semibold">Edit Salary</h2>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Employee Name</label>
-            <input type="text" value={employee_name} onChange={(e) => setEmployeeName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            <label htmlFor="edit-employee-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Employee Name</label>
+            <input id="edit-employee-name" type="text" value={employee_name} onChange={(e) => setEmployeeName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Net Pay</label>
-              <input type="number" step="0.01" value={net_pay} onChange={(e) => setNetPay(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+              <label htmlFor="edit-net-pay" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Net Pay</label>
+              <input id="edit-net-pay" type="number" step="0.01" value={net_pay} onChange={(e) => setNetPay(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Gross Pay</label>
-              <input type="number" step="0.01" value={total_gross_pay} onChange={(e) => setTotalGrossPay(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Code</label>
-              <input type="text" value={sort_code} onChange={(e) => setSortCode(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Number</label>
-              <input type="text" value={bank_account_number} onChange={(e) => setBankAccount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+              <label htmlFor="edit-gross-pay" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Gross Pay</label>
+              <input id="edit-gross-pay" type="number" step="0.01" value={total_gross_pay} onChange={(e) => setTotalGrossPay(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Month</label>
-              <input type="text" value={payment_month} onChange={(e) => setPaymentMonth(e.target.value)} placeholder="e.g. January" className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+              <label htmlFor="edit-sort-code" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Code</label>
+              <input id="edit-sort-code" type="text" value={sort_code} onChange={(e) => setSortCode(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Process Date</label>
-              <input type="text" value={process_date} onChange={(e) => setProcessDate(e.target.value)} placeholder="YYYY-MM-DD" className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+              <label htmlFor="edit-account-number" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Number</label>
+              <input id="edit-account-number" type="text" value={bank_account_number} onChange={(e) => setBankAccount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="edit-payment-month" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Month</label>
+              <input id="edit-payment-month" type="text" value={payment_month} onChange={(e) => setPaymentMonth(e.target.value)} placeholder="e.g. January" className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label htmlFor="edit-process-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Process Date</label>
+              <input id="edit-process-date" type="text" value={process_date} onChange={(e) => setProcessDate(e.target.value)} placeholder="YYYY-MM-DD" className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Reference</label>
-            <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
+            <label htmlFor="edit-reference" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Reference</label>
+            <input id="edit-reference" type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-gray-700 dark:text-white" />
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">Cancel</button>
@@ -731,6 +731,21 @@ export function SalariesBoard({
 
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (previewSalary) { setPreviewSalary(null); return; }
+      if (showEditModal) { setShowEditModal(null); return; }
+      if (rejectModalId) { setRejectModalId(null); return; }
+      if (auditSalaryId) { setAuditSalaryId(null); return; }
+      if (showUploadModal) { setShowUploadModal(false); return; }
+      if (showAddModal) { setShowAddModal(false); return; }
+      if (showMoveModal) { setShowMoveModal(false); return; }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [previewSalary, showEditModal, rejectModalId, auditSalaryId, showUploadModal, showAddModal, showMoveModal]);
 
   const handleReject = useCallback(async (id: string, reason: string) => {
     if (!reason?.trim()) {
@@ -1390,7 +1405,7 @@ export function SalariesBoard({
       )}
 
       {rejectModalId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRejectModalId(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Reject payment" onClick={() => setRejectModalId(null)}>
           <div
             className="mx-4 w-full max-w-md rounded-xl border-2 border-gray-300 bg-white p-6 shadow-xl dark:border-gray-600 dark:bg-gray-900"
             onClick={(e) => e.stopPropagation()}

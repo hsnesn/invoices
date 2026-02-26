@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 export type MoveGroup = { key: string; label: string; color?: string; bgHex?: string };
 
@@ -15,6 +15,14 @@ export function BulkMoveModal({
 }) {
   const [search, setSearch] = useState("");
 
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return groups;
@@ -22,7 +30,7 @@ export function BulkMoveModal({
   }, [groups, search]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Choose group" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-2xl border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-slate-800"
         onClick={(e) => e.stopPropagation()}

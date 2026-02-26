@@ -521,7 +521,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       </div>
       {/* Page Permissions Modal */}
       {editingPermissions && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Page permissions">
           <div className="mx-4 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -529,6 +529,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
               </h3>
               <button
                 onClick={() => setEditingPermissions(null)}
+                aria-label="Close permissions"
                 className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>

@@ -43,6 +43,30 @@ export async function GET(
 
     const canAccess = isAdmin || isOperations || isFinance || isAssignedManager || isOpsRoomMember;
     if (!canAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    // Serve stored booking form if it exists (created once after first approval)
+    const { data: storedFile } = await supabase
+      .from("invoice_files")
+      .select("storage_path, file_name")
+      .eq("invoice_id", invoiceId)
+      .like("storage_path", "booking-forms/%")
+      .limit(1)
+      .maybeSingle();
+    if (storedFile?.storage_path) {
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from("invoices")
+        .download(storedFile.storage_path);
+      if (!downloadError && fileData) {
+        const buf = await fileData.arrayBuffer();
+        return new NextResponse(Buffer.from(buf), {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `inline; filename="${storedFile.file_name}"`,
+          },
+        });
+      }
+    }
+
     let approverName = "—";
     if (managerUserId) {
       const { data: mp } = await supabase.from("profiles").select("full_name").eq("id", managerUserId).single();

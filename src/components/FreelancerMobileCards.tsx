@@ -59,6 +59,8 @@ export function FreelancerMobileCards({
   downloadBookingForm,
   sendBookingFormEmails,
   actionLoadingId,
+  onStartEdit,
+  onDeleteInvoice,
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -74,6 +76,8 @@ export function FreelancerMobileCards({
   downloadBookingForm: (id: string, contractor: string, month: string) => void;
   sendBookingFormEmails: (id: string) => void;
   actionLoadingId: string | null;
+  onStartEdit?: (row: DisplayRow) => void;
+  onDeleteInvoice?: (id: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -112,6 +116,7 @@ export function FreelancerMobileCards({
         {rows.map((r) => {
         const isSubmitter = r.submitterId === currentUserId;
         const canApp = canApprove(r);
+        const canSubmitterEditDelete = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status);
         const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
         const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
         const canOpsRoomApprove = isOperationsRoomMember && (r.status === "approved_by_manager" || r.status === "pending_admin");
@@ -231,6 +236,23 @@ export function FreelancerMobileCards({
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     {actionLoadingId === r.id ? "…" : "✓"} Approve
+                  </button>
+                )}
+                {canSubmitterEditDelete && onStartEdit && (
+                  <button
+                    onClick={() => onStartEdit(r)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                  >
+                    Edit
+                  </button>
+                )}
+                {canSubmitterEditDelete && onDeleteInvoice && (
+                  <button
+                    onClick={() => void onDeleteInvoice(r.id)}
+                    disabled={actionLoadingId === r.id}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
+                  >
+                    {actionLoadingId === r.id ? "…" : "Delete"}
                   </button>
                 )}
                 {canResubmit && (
