@@ -505,6 +505,21 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     }
   }
 
+  // Prefer regex invoice_number when it found "Invoice No X" and AI result looks wrong (e.g. "202" from VAT% or filename)
+  const regexInv = regexParsed.invoice_number?.trim();
+  const aiInv = parsed.invoice_number?.trim();
+  if (regexInv) {
+    const regexLooksValid = regexInv.length >= 4 && /^[A-Z0-9\-\/]+$/i.test(regexInv);
+    const aiLooksSuspicious =
+      !aiInv ||
+      aiInv.length <= 3 ||
+      /^\d{2,3}$/.test(aiInv) || // e.g. "202" from VAT 20%
+      /^[a-z]+-[a-z]+-\d+-/.test(aiInv.toLowerCase()); // filename-like: adam-boulton-202-2026
+    if (regexLooksValid && aiLooksSuspicious) {
+      parsed.invoice_number = regexInv;
+    }
+  }
+
   if (parsed.beneficiary_name) {
     parsed.beneficiary_name = stripInternalRefs(parsed.beneficiary_name) ?? undefined;
     if (parsed.beneficiary_name) parsed.beneficiary_name = stripAddressFromName(parsed.beneficiary_name) ?? undefined;
