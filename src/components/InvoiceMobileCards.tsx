@@ -67,6 +67,10 @@ export function InvoiceMobileCards({
   rows,
   currentRole,
   currentUserId,
+  selectedIds,
+  onToggleSelect,
+  onToggleAll,
+  canBulkSelect,
   onManagerApprove,
   onRejectInvoice,
   onResubmit,
@@ -95,6 +99,10 @@ export function InvoiceMobileCards({
   currentRole: string;
   currentUserId: string;
   onManagerApprove: (id: string) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: (ids: string[], checked: boolean) => void;
+  canBulkSelect?: boolean;
   onRejectInvoice: (id: string) => void;
   onResubmit: (id: string) => void;
   onMarkPaid: (id: string) => void;
@@ -164,9 +172,20 @@ export function InvoiceMobileCards({
           >
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 dark:text-white truncate">{r.guest}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{r.invNumber}</p>
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  {canBulkSelect && onToggleSelect && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") && (currentRole !== "submitter" || (r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status))) && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds?.has(r.id) ?? false}
+                      onChange={() => onToggleSelect(r.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-2 border-gray-300 text-blue-600 accent-blue-600"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">{r.guest}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{r.invNumber}</p>
+                  </div>
                 </div>
                 <span className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={statusBadgeStyle(r.status)}>
                   {statusLabel(r.status)}

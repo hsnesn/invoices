@@ -49,6 +49,10 @@ export function FreelancerMobileCards({
   currentRole,
   currentUserId,
   isOperationsRoomMember,
+  selectedIds,
+  onToggleSelect,
+  onToggleAll,
+  canBulkSelect,
   onManagerApprove,
   onAdminApprove,
   onResubmit,
@@ -66,6 +70,10 @@ export function FreelancerMobileCards({
   currentRole: string;
   currentUserId: string;
   isOperationsRoomMember: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: (ids: string[], checked: boolean) => void;
+  canBulkSelect?: boolean;
   onManagerApprove: (id: string) => void;
   onAdminApprove: (id: string) => void;
   onResubmit: (id: string) => void;
@@ -134,9 +142,20 @@ export function FreelancerMobileCards({
           >
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 dark:text-white truncate">{r.contractor}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{r.invNumber}</p>
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  {canBulkSelect && onToggleSelect && (currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") && (currentRole !== "submitter" || (r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status))) && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds?.has(r.id) ?? false}
+                      onChange={() => onToggleSelect(r.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-2 border-gray-300 text-blue-600 accent-blue-600"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">{r.contractor}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{r.invNumber}</p>
+                  </div>
                 </div>
                 <span className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={statusBadgeStyle(r.status)}>
                   {statusLabel(r.status)}
@@ -187,7 +206,7 @@ export function FreelancerMobileCards({
                   </svg>
                   View File
                 </button>
-                {["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status) && (currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember) && (
+                {["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status) && (currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember) && (
                   <>
                     <button
                       onClick={() => void viewBookingForm(r.id, r.contractor, r.month)}

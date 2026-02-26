@@ -320,12 +320,11 @@ export function FreelancerBoard({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [singleDownloading, setSingleDownloading] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showMoveModal, setShowMoveModal] = useState(false);
 
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewShowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -514,43 +513,6 @@ export function FreelancerBoard({
     finally { setPreviewLoading(false); }
   }, [rows]);
 
-  const showPreviewOnHover = useCallback((id: string) => {
-    if (previewHideRef.current) {
-      clearTimeout(previewHideRef.current);
-      previewHideRef.current = null;
-    }
-    if (previewShowRef.current) clearTimeout(previewShowRef.current);
-    previewShowRef.current = setTimeout(() => {
-      void openFile(id);
-      previewShowRef.current = null;
-    }, 400);
-  }, [openFile]);
-
-  const showFilePreviewOnHover = useCallback((id: string, path: string, fileName: string) => {
-    if (previewHideRef.current) {
-      clearTimeout(previewHideRef.current);
-      previewHideRef.current = null;
-    }
-    if (previewShowRef.current) clearTimeout(previewShowRef.current);
-    previewShowRef.current = setTimeout(() => {
-      void openFile(id, path, fileName);
-      previewShowRef.current = null;
-    }, 400);
-  }, [openFile]);
-
-  const hidePreviewOnHover = useCallback(() => {
-    if (previewShowRef.current) {
-      clearTimeout(previewShowRef.current);
-      previewShowRef.current = null;
-    }
-    if (previewHideRef.current) clearTimeout(previewHideRef.current);
-    previewHideRef.current = setTimeout(() => {
-      closePreview();
-      previewHideRef.current = null;
-    }, 200);
-  }, [closePreview]);
-
-
   const openPdfInNewTab = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/invoices/${id}/pdf`);
@@ -653,6 +615,15 @@ export function FreelancerBoard({
       const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `freelancer-invoices-${new Date().toISOString().split("T")[0]}.zip`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } finally { setBulkDownloading(false); }
   }, [selectedIds]);
+
+  const onDownloadAllFiles = useCallback(async (id: string) => {
+    setSingleDownloading(true);
+    try {
+      const res = await fetch(`/api/invoices/${id}/download-files`);
+      if (!res.ok) { const data = await res.json().catch(() => null); toast.error(data?.error ?? "Download failed"); return; }
+      const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `invoice-${id}-files.zip`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    } finally { setSingleDownloading(false); }
+  }, []);
 
   const bulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -900,8 +871,6 @@ export function FreelancerBoard({
           invoiceId={r.id}
           canEdit={!!(isSubmitter || currentRole === "admin" || currentRole === "manager")}
           openFile={openFile}
-          showFilePreviewOnHover={showFilePreviewOnHover}
-          hidePreviewOnHover={hidePreviewOnHover}
           onReplaceFile={onReplaceFile}
           onAddFile={onAddFile}
           actionLoadingId={actionLoadingId}
@@ -927,7 +896,7 @@ export function FreelancerBoard({
       case "deptManager": return r.deptManager;
       case "bookingForm": {
         const hasBookingForm = ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
-        const canSeeBookingForm = currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember;
+        const canSeeBookingForm = currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember;
         if (!hasBookingForm || !canSeeBookingForm) return <span className="text-gray-400">—</span>;
         return (
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -1049,28 +1018,40 @@ export function FreelancerBoard({
             </span>
           )}
           {hasFilter && <button onClick={clearFilters} className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">Clear Filters</button>}
+          {selectedIds.size > 0 && (
+            <button onClick={() => void bulkDownload()} disabled={bulkDownloading} className="inline-flex items-center gap-1 rounded-xl bg-[#5034FF] px-4 py-2 text-sm font-medium text-white hover:bg-[#4030dd] disabled:opacity-50 transition-colors shadow-sm">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+              {bulkDownloading ? "Downloading..." : `Download Files (${selectedIds.size})`}
+            </button>
+          )}
           <span className="ml-auto text-xs text-gray-400">{filteredRows.length} of {rows.length}</span>
         </div>
       </div>
 
       {/* Click-outside overlay: clears selection when clicking empty space */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "submitter") && (
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") && (
         <div
           className="fixed inset-0 z-30 cursor-default"
           onClick={() => setSelectedIds(new Set())}
           aria-hidden
         />
       )}
-      {/* Bulk action bar - Admin: full actions; Submitter: Delete only */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "submitter") && (
+      {/* Bulk action bar - Admin: full actions; Submitter: Delete only; Others: Download only */}
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") && (
         <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
             Contractor selected
           </span>
+          {(currentRole === "admin" || currentRole === "submitter") && (
           <button onClick={() => void bulkDelete()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             Delete
+          </button>
+          )}
+          <button onClick={() => void bulkDownload()} disabled={bulkDownloading} className="inline-flex items-center gap-1.5 rounded-lg bg-[#5034FF] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#4030dd] disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+            {bulkDownloading ? "Downloading..." : `Download Files (${selectedIds.size})`}
           </button>
           {currentRole === "admin" && (
             <>
@@ -1136,6 +1117,10 @@ export function FreelancerBoard({
                     currentRole={currentRole}
                     currentUserId={currentUserId}
                     isOperationsRoomMember={isOperationsRoomMember}
+                    selectedIds={selectedIds}
+                    onToggleSelect={onToggleSelect}
+                    onToggleAll={onToggleAll}
+                    canBulkSelect={currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer"}
                     onManagerApprove={onManagerApprove}
                     onAdminApprove={onAdminApprove}
                     onResubmit={onResubmit}
@@ -1153,7 +1138,7 @@ export function FreelancerBoard({
                 <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-[2600px] w-full divide-y divide-slate-200 dark:divide-slate-600">
                   <thead className="bg-slate-50 dark:bg-slate-700/50"><tr>
-                    {(currentRole === "admin" || currentRole === "submitter") && (
+                    {(currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") && (
                       <th className="px-2 py-2 w-8">
                         <input
                           type="checkbox"
@@ -1162,7 +1147,7 @@ export function FreelancerBoard({
                             return selectable.length > 0 && selectable.every(r => selectedIds.has(r.id));
                           })()}
                           onChange={e => {
-                            const selectable = currentRole === "submitter" ? visibleRows.filter(r => r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)) : visibleRows;
+                            const selectable = (currentRole === "submitter") ? visibleRows.filter(r => r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)) : visibleRows;
                             onToggleAll(selectable.map(r => r.id), e.target.checked);
                           }}
                           className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600"
@@ -1172,7 +1157,7 @@ export function FreelancerBoard({
                     {COLUMNS.map(c => <th key={c.key} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.label}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {visibleRows.length === 0 && <tr><td colSpan={COLUMNS.length + (currentRole === "admin" || currentRole === "submitter" ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
+                    {visibleRows.length === 0 && <tr><td colSpan={COLUMNS.length + ((currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") ? 1 : 0)} className="px-4 py-6 text-center text-sm text-gray-400">No invoices</td></tr>}
                     {visibleRows.map(r => {
                       const editable = canEditRow(r);
                       const editTdCls = editable ? " cursor-text hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : "";
@@ -1180,7 +1165,7 @@ export function FreelancerBoard({
                       return (
                         <React.Fragment key={r.id}>
                           <tr data-row-id={r.id} className={`${isDuplicate ? "bg-yellow-50 dark:bg-yellow-900/10 " : ""}${r.status === "rejected" ? "bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"} transition-colors cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={editable ? () => { handleRowDblClick(); onStartEdit(r); } : handleRowDblClick}>
-                            {((currentRole === "admin") || (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status))) && (
+                            {((currentRole === "admin") || (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)) || (currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer")) && (
                               <td className="px-2 py-2 w-8" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center gap-1">
                                   <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} className="h-3.5 w-3.5 rounded border-2 border-gray-300 text-blue-600 accent-blue-600" />
@@ -1198,7 +1183,7 @@ export function FreelancerBoard({
                             })}
                           </tr>
                           {expandedRowId === r.id && (
-                            <tr><td colSpan={COLUMNS.length + (currentRole === "admin" || currentRole === "submitter" ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
+                            <tr><td colSpan={COLUMNS.length + ((currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
                               {detailLoading ? <div className="flex items-center gap-2 text-sm text-gray-500"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>Loading...</div> : (
                                 <div className="space-y-4">
                                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1253,6 +1238,12 @@ export function FreelancerBoard({
                                               <span className="inline-flex items-center gap-1"><svg className="h-3.5 w-3.5 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>{f.file_name}</span>
                                             </button>
                                           ))}
+                                          {expandedRowId && filesData.length > 0 && (
+                                            <button onClick={() => void onDownloadAllFiles(expandedRowId)} disabled={singleDownloading} className="mt-1 inline-flex items-center gap-1 rounded border border-sky-300 bg-sky-50 px-2 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-600 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50 disabled:opacity-50">
+                                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                                              {singleDownloading ? "Downloading..." : "Download all"}
+                                            </button>
+                                          )}
                                         </div>
                                       )}
                                     </div>
@@ -1270,7 +1261,7 @@ export function FreelancerBoard({
                       );
                     })}
                   </tbody>
-                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{(currentRole === "admin" || currentRole === "submitter") && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(g.additional) : c.key === "amount" ? fmtCurrency(g.amount) : ""}</td>)}</tr></tfoot>
+                  <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50">{(currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") && <td className="px-2 py-2"></td>}{COLUMNS.map(c => <td key={c.key} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300">{c.key === "additionalCost" ? fmtCurrency(g.additional) : c.key === "amount" ? fmtCurrency(g.amount) : ""}</td>)}</tr></tfoot>
                 </table>
                 {hasMore && (
                   <div className="flex items-center justify-center gap-2 border-t border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
@@ -1595,8 +1586,6 @@ function FreelancerFilesCell({
   invoiceId,
   canEdit,
   openFile,
-  showFilePreviewOnHover,
-  hidePreviewOnHover,
   onReplaceFile,
   onAddFile,
   actionLoadingId,
@@ -1605,8 +1594,6 @@ function FreelancerFilesCell({
   invoiceId: string;
   canEdit: boolean;
   openFile: (id: string, path?: string, fileName?: string) => void;
-  showFilePreviewOnHover: (id: string, path: string, fileName: string) => void;
-  hidePreviewOnHover: () => void;
   onReplaceFile: (id: string, file: File, onSuccess?: () => void) => void;
   onAddFile: (id: string, file: File, onSuccess?: () => void) => void;
   actionLoadingId: string | null;
@@ -1642,10 +1629,8 @@ function FreelancerFilesCell({
             <button
               key={f.storage_path || `${i}-${f.file_name}`}
               onClick={() => void openFile(invoiceId, f.storage_path, f.file_name)}
-              onMouseEnter={() => showFilePreviewOnHover(invoiceId, f.storage_path, f.file_name)}
-              onMouseLeave={hidePreviewOnHover}
               className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-400 dark:hover:bg-sky-800/60 transition-colors"
-              title={f.file_name}
+              title={`${f.file_name} — Click to preview`}
             >
               <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
             </button>

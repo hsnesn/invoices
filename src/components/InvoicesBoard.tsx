@@ -493,10 +493,10 @@ function InvoiceTable({
   onReplaceFile,
   onAddFile,
   openPdf,
-  showPreviewOnHover,
-  hidePreviewOnHover,
   openPdfInNewTab,
   onDownloadFile,
+  onDownloadAllFiles,
+  onDownloadAllFilesLoading,
   onStartEdit,
   actionLoadingId,
   visibleColumns,
@@ -535,10 +535,10 @@ function InvoiceTable({
   onReplaceFile: (id: string, file: File) => Promise<void>;
   onAddFile?: (id: string, file: File) => Promise<void>;
   openPdf: (id: string, storagePath?: string) => Promise<void>;
-  showPreviewOnHover: (id: string, storagePath?: string) => void;
-  hidePreviewOnHover: () => void;
   openPdfInNewTab: (id: string, storagePath?: string) => void;
   onDownloadFile?: (id: string, storagePath: string, fileName: string) => void;
+  onDownloadAllFiles?: (id: string) => Promise<void>;
+  onDownloadAllFilesLoading?: boolean;
   onStartEdit: (row: DisplayRow) => void;
   actionLoadingId: string | null;
   visibleColumns: string[];
@@ -563,8 +563,8 @@ function InvoiceTable({
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const canBulkSelect = currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter";
-  const canRowBulkSelect = (r: DisplayRow) => canBulkSelect && (currentRole !== "submitter" || (r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)));
+  const canBulkSelect = currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer";
+  const canRowBulkSelect = (r: DisplayRow) => canBulkSelect && (currentRole === "viewer" || currentRole === "manager" || currentRole === "operations" || currentRole === "admin" || (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)));
   const colCount = visibleColumns.filter((k) => k !== "checkbox" || canBulkSelect).length;
 
   const isCol = (key: string) => visibleColumns.includes(key);
@@ -731,10 +731,9 @@ function InvoiceTable({
                 <div>
                   <span
                     className="cursor-pointer"
-                    onMouseEnter={() => showPreviewOnHover(r.id)}
-                    onMouseLeave={hidePreviewOnHover}
+                    onClick={(e) => { e.stopPropagation(); void openPdf(r.id); }}
                     onDoubleClick={(e) => { e.stopPropagation(); void openPdfInNewTab(r.id); }}
-                    title="Hover to preview, double-click to open in new tab"
+                    title="Click to preview, double-click to open in new tab"
                   >
                     {r.guest}
                   </span>
@@ -989,6 +988,16 @@ function InvoiceTable({
                                     <span className="truncate">{f.file_name}</span>
                                   </button>
                                 ))}
+                                {onDownloadAllFiles && expandedRowId && filesData.length > 0 && (
+                                  <button
+                                    onClick={() => void onDownloadAllFiles(expandedRowId)}
+                                    disabled={onDownloadAllFilesLoading}
+                                    className="inline-flex items-center gap-1 rounded border border-sky-300 bg-sky-50 px-2 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-600 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50 disabled:opacity-50"
+                                  >
+                                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                                    {onDownloadAllFilesLoading ? "Downloading..." : "Download all"}
+                                  </button>
+                                )}
                               </div>
                             )}
                             {onAddFile && expandedRowId && (
@@ -1109,10 +1118,9 @@ export function InvoicesBoard({
   const [previewName, setPreviewName] = useState<string>("");
   const [previewDownloadUrl, setPreviewDownloadUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const previewShowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [singleDownloading, setSingleDownloading] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([...DEFAULT_VISIBLE_COLUMNS]);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
@@ -1508,31 +1516,6 @@ export function InvoicesBoard({
     }
   }, [rows]);
 
-  const showPreviewOnHover = useCallback((id: string, storagePath?: string) => {
-    if (previewHideRef.current) {
-      clearTimeout(previewHideRef.current);
-      previewHideRef.current = null;
-    }
-    if (previewShowRef.current) clearTimeout(previewShowRef.current);
-    previewShowRef.current = setTimeout(() => {
-      void openPdf(id, storagePath);
-      previewShowRef.current = null;
-    }, 400);
-  }, [openPdf]);
-
-  const hidePreviewOnHover = useCallback(() => {
-    if (previewShowRef.current) {
-      clearTimeout(previewShowRef.current);
-      previewShowRef.current = null;
-    }
-    if (previewHideRef.current) clearTimeout(previewHideRef.current);
-    previewHideRef.current = setTimeout(() => {
-      closePreview();
-      previewHideRef.current = null;
-    }, 200);
-  }, [closePreview]);
-
-
   const openPdfInNewTab = useCallback(async (id: string, storagePath?: string) => {
     try {
       const url = storagePath
@@ -1734,6 +1717,29 @@ export function InvoicesBoard({
       setBulkDownloading(false);
     }
   }, [selectedIds]);
+
+  const onDownloadAllFiles = useCallback(async (id: string) => {
+    setSingleDownloading(true);
+    try {
+      const res = await fetch(`/api/invoices/${id}/download-files`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? "Download failed");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${id}-files.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setSingleDownloading(false);
+    }
+  }, []);
 
   // Column visibility (order follows DEFAULT_VISIBLE_COLUMNS = ready_for_payment layout)
   const toggleColumn = useCallback((key: string) => {
@@ -2237,24 +2243,26 @@ export function InvoicesBoard({
       )}
 
       {/* Click-outside overlay: clears selection when clicking empty space */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter") && (
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") && (
         <div
           className="fixed inset-0 z-30 cursor-default"
           onClick={() => setSelectedIds(new Set())}
           aria-hidden
         />
       )}
-      {/* Bulk Actions Bar - Admin/Manager/Operations: full actions; Submitter: Delete only */}
-      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter") && (
+      {/* Bulk Actions Bar - Admin/Manager/Operations: full actions; Submitter: Delete only; Viewer: Download only */}
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") && (
         <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
             Guest selected
           </span>
+          {(currentRole !== "viewer") && (
           <button onClick={() => void bulkDelete()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             Delete
           </button>
+          )}
           {(currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
             <>
           <button onClick={() => void exportToExcel(rows.filter((r) => selectedIds.has(r.id)))} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
@@ -2277,6 +2285,10 @@ export function InvoicesBoard({
           )}
             </>
           )}
+          <button onClick={() => void onBulkDownload()} disabled={bulkDownloading} className="inline-flex items-center gap-1.5 rounded-lg bg-[#5034FF] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#4030dd] disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+            {bulkDownloading ? "Downloading..." : `Download Files (${selectedIds.size})`}
+          </button>
           <button onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
             ✕ Close
           </button>
@@ -2722,6 +2734,10 @@ export function InvoicesBoard({
                 rows={data}
                 currentRole={currentRole}
                 currentUserId={currentUserId}
+                selectedIds={selectedIds}
+                onToggleSelect={onToggleSelect}
+                onToggleAll={onToggleAll}
+                canBulkSelect={currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer"}
                 onManagerApprove={onManagerApprove}
                 onRejectInvoice={onRejectInvoice}
                 onResubmit={onResubmit}
@@ -2765,13 +2781,13 @@ export function InvoicesBoard({
               onReplaceFile={onReplaceFile}
               onAddFile={onAddFile}
               openPdf={openPdf}
-              showPreviewOnHover={showPreviewOnHover}
-              hidePreviewOnHover={hidePreviewOnHover}
               openPdfInNewTab={openPdfInNewTab}
               onDownloadFile={onDownloadFile}
+              onDownloadAllFiles={onDownloadAllFiles}
+              onDownloadAllFilesLoading={singleDownloading}
               onStartEdit={onStartEdit}
               actionLoadingId={actionLoadingId}
-              visibleColumns={(currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter") ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
+              visibleColumns={(currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
               expandedRowId={expandedRowId}
               onToggleExpand={(id) => void toggleExpandRow(id)}
               timelineData={timelineData}
@@ -2889,6 +2905,14 @@ export function InvoicesBoard({
                           <span className="truncate max-w-[180px]">{f.file_name}</span>
                         </button>
                       ))}
+                      <button
+                        onClick={() => void onDownloadAllFiles(expandedRowId)}
+                        disabled={singleDownloading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-600 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50 disabled:opacity-50"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                        {singleDownloading ? "Downloading..." : "Download all"}
+                      </button>
                     </div>
                   )}
                   {onAddFile && (
