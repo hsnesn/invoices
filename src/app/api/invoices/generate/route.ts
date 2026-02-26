@@ -150,6 +150,13 @@ export async function POST(request: NextRequest) {
       managerUserId = pickManager((managerProfiles ?? []) as ManagerProfile[], safeDepartmentId, safeProgramId);
     }
 
+    const { data: dept } = await supabaseAdmin.from("departments").select("name").eq("id", safeDepartmentId).single();
+    const { data: prog } = safeProgramId
+      ? await supabaseAdmin.from("programs").select("name").eq("id", safeProgramId).single()
+      : { data: null };
+    const deptName = dept?.name ?? "";
+    const progName = prog?.name ?? "";
+
     const invoiceId = crypto.randomUUID();
     const pdfData = {
       invNo: data.invNo.trim(),
@@ -159,6 +166,8 @@ export async function POST(request: NextRequest) {
       guestAddress: data.guestAddress?.trim(),
       guestEmail: data.guestEmail?.trim(),
       guestPhone: data.guestPhone?.trim(),
+      departmentName: progName || deptName || undefined,
+      programmeName: progName || undefined,
       appearances,
       expenses,
       totalAmount,
@@ -217,12 +226,6 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .join("\n");
 
-    const { data: dept } = await supabaseAdmin.from("departments").select("name").eq("id", safeDepartmentId).single();
-    const { data: prog } = safeProgramId
-      ? await supabaseAdmin.from("programs").select("name").eq("id", safeProgramId).single()
-      : { data: null };
-    const deptName = dept?.name ?? "";
-    const progName = prog?.name ?? "";
     const serviceDescWithDept = service_description
       .replace("Department Name: ", `Department Name: ${deptName}`)
       .replace("Programme Name: ", `Programme Name: ${progName}`);

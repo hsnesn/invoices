@@ -27,6 +27,8 @@ export type GuestInvoicePdfData = {
   guestAddress?: string;
   guestEmail?: string;
   guestPhone?: string;
+  departmentName?: string;
+  programmeName?: string;
   appearances: GuestInvoiceAppearance[];
   expenses: GuestInvoiceExpense[];
   totalAmount: number;
@@ -111,7 +113,18 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
 
   y = Math.max(fromBottom, toY + 4) + 10;
 
-  // Table: Programme Name | Topic | Date | Amount — colored header
+  // Department/Programme label when TRT World News or programme selected
+  const deptProgDisplay = data.programmeName || data.departmentName;
+  if (deptProgDisplay) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 64, 120);
+    doc.text(`Department: ${deptProgDisplay}`, mx, y);
+    doc.setTextColor(40, 40, 40);
+    y += 8;
+  }
+
+  // Table: Programme Name | Topic | Date | Amount — Amount right-aligned
   const colWidths = [45, 50, 35, 40];
   const headers = ["Programme Name", "Topic", "Date", "Amount"];
   doc.setFontSize(10);
@@ -121,12 +134,14 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   doc.setTextColor(255, 255, 255);
   let x = mx;
   headers.forEach((h, i) => {
-    doc.text(h, x + 2, y + 6.5);
+    if (i === 3) doc.text(h, mx + cw - 2, y + 6.5, { align: "right" });
+    else doc.text(h, x + 2, y + 6.5);
     x += colWidths[i];
   });
   doc.setTextColor(40, 40, 40);
   y += 10;
 
+  const rowHeight = 10;
   doc.setFont("helvetica", "normal");
   for (const row of data.appearances) {
     if (y > 250) {
@@ -134,32 +149,33 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
       y = 20;
     }
     doc.setFillColor(255, 255, 255);
-    doc.rect(mx, y, cw, 7, "F");
+    doc.rect(mx, y, cw, rowHeight, "F");
     x = mx;
-    doc.text((row.programmeName || "").slice(0, 25), x + 2, y + 4.5);
+    doc.text((row.programmeName || "").slice(0, 25), x + 2, y + 6);
     x += colWidths[0];
-    doc.text((row.topic || "").slice(0, 28), x + 2, y + 4.5);
+    doc.text((row.topic || "").slice(0, 28), x + 2, y + 6);
     x += colWidths[1];
-    doc.text(row.date || "", x + 2, y + 4.5);
+    doc.text(row.date || "", x + 2, y + 6);
     x += colWidths[2];
-    doc.text(fmtAmount(row.amount, data.currency), x + 2, y + 4.5);
-    y += 7;
+    doc.text(fmtAmount(row.amount, data.currency), mx + cw - 2, y + 6, { align: "right" });
+    y += rowHeight;
   }
 
-  // Expenses — accent header
+  // Expenses (train, parking, etc.) — listed on invoice
   if (data.expenses.length > 0) {
-    y += 4;
+    y += 6;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(30, 64, 120);
-    doc.text("Expenses", mx, y);
+    doc.text("Additional expenses", mx, y);
     doc.setTextColor(40, 40, 40);
     y += 7;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     for (const exp of data.expenses) {
-      doc.text(`${exp.label}: ${fmtAmount(exp.amount, data.currency)}`, mx + 5, y);
-      y += 5;
+      doc.text(`${exp.label}:`, mx + 5, y);
+      doc.text(fmtAmount(exp.amount, data.currency), mx + cw - 2, y, { align: "right" });
+      y += 6;
     }
   }
 
