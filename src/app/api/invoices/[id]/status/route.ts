@@ -9,13 +9,12 @@ import {
   sendReadyForPaymentEmail,
   sendPaidEmail,
   sendResubmittedEmail,
-  sendAdminApprovedEmail,
 } from "@/lib/email";
 import { parseGuestNameFromServiceDesc, parseProducerFromServiceDesc } from "@/lib/guest-utils";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { triggerBookingFormWorkflow } from "@/lib/booking-form/approval-trigger";
 import { sendBookingFormEmailsForInvoice } from "@/lib/booking-form/process-pending-emails";
-import { isEmailStageEnabled, getFilteredEmailsForUserIds, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
+import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
 import type { InvoiceStatus } from "@/lib/types";
 import { notifyWebhooks } from "@/lib/webhook";
 
@@ -171,11 +170,15 @@ export async function POST(
         if (!isFreelancer) {
           const enabled = await isEmailStageEnabled("ready_for_payment");
           if (enabled) {
-            const financeIds = (await supabase.from("profiles").select("id").eq("role", "finance").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-            const financeEmails = await getFilteredEmailsForUserIds(financeIds);
-            const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
-            const submitterEmail = submitterEmails[0];
-            if (submitterEmail) {
+            const [sendSubmitter, sendFinance] = await Promise.all([
+              isRecipientEnabled("ready_for_payment", "submitter"),
+              isRecipientEnabled("ready_for_payment", "finance"),
+            ]);
+            const financeIds = sendFinance ? (await supabase.from("profiles").select("id").eq("role", "finance").eq("is_active", true)).data?.map((p) => p.id) ?? [] : [];
+            const financeEmails = sendFinance ? await getFilteredEmailsForUserIds(financeIds) : [];
+            const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([inv.submitter_user_id]) : [];
+            const submitterEmail = submitterEmails[0] ?? "";
+            if (submitterEmail || financeEmails.length > 0) {
               await sendReadyForPaymentEmail({
                 submitterEmail,
                 financeEmails,
@@ -195,13 +198,18 @@ export async function POST(
 
           const managerApprovedEnabled = await isEmailStageEnabled("manager_approved");
           if (managerApprovedEnabled) {
-            const adminIds = (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-            const orUserIds = (await supabase.from("operations_room_members").select("user_id")).data?.map((m) => m.user_id) ?? [];
-            const adminEmails = await getFilteredEmailsForUserIds(adminIds);
-            const operationsRoomEmails = await getFilteredEmailsForUserIds(orUserIds);
-            const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
-            const submitterEmail = submitterEmails[0];
-            if (submitterEmail) {
+            const [sendSubmitter, sendAdmin, sendOps] = await Promise.all([
+              isRecipientEnabled("manager_approved", "submitter"),
+              isRecipientEnabled("manager_approved", "admin"),
+              isRecipientEnabled("manager_approved", "operations"),
+            ]);
+            const adminIds = sendAdmin ? (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [] : [];
+            const orUserIds = sendOps ? (await supabase.from("operations_room_members").select("user_id")).data?.map((m) => m.user_id) ?? [] : [];
+            const adminEmails = sendAdmin ? await getFilteredEmailsForUserIds(adminIds) : [];
+            const operationsRoomEmails = sendOps ? await getFilteredEmailsForUserIds(orUserIds) : [];
+            const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([inv.submitter_user_id]) : [];
+            const submitterEmail = submitterEmails[0] ?? "";
+            if (submitterEmail || adminEmails.length > 0 || operationsRoomEmails.length > 0) {
               const emailResult = await sendManagerApprovedEmail({
                 submitterEmail,
                 adminEmails,
@@ -253,18 +261,21 @@ export async function POST(
 
         const enabled = await isEmailStageEnabled("manager_rejected");
         if (enabled) {
-          const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
-          const submitterEmail = submitterEmails[0];
-          if (submitterEmail) {
-            await sendManagerRejectedEmail({
-              submitterEmail,
-              invoiceId,
-              reason: rejection_reason,
-              invoiceNumber: extracted?.invoice_number ?? undefined,
-              guestName,
-              guestDetails,
-              freelancerDetails,
-            });
+          const sendSubmitter = await isRecipientEnabled("manager_rejected", "submitter");
+          if (sendSubmitter) {
+            const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
+            const submitterEmail = submitterEmails[0];
+            if (submitterEmail) {
+              await sendManagerRejectedEmail({
+                submitterEmail,
+                invoiceId,
+                reason: rejection_reason,
+                invoiceNumber: extracted?.invoice_number ?? undefined,
+                guestName,
+                guestDetails,
+                freelancerDetails,
+              });
+            }
           }
         }
       } else {
@@ -283,11 +294,15 @@ export async function POST(
 
         const enabled = await isEmailStageEnabled("ready_for_payment");
         if (enabled) {
-          const financeIds = (await supabase.from("profiles").select("id").eq("role", "finance").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-          const financeEmails = await getFilteredEmailsForUserIds(financeIds);
-          const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
-          const submitterEmail = submitterEmails[0];
-          if (submitterEmail) {
+          const [sendSubmitter, sendFinance] = await Promise.all([
+            isRecipientEnabled("ready_for_payment", "submitter"),
+            isRecipientEnabled("ready_for_payment", "finance"),
+          ]);
+          const financeIds = sendFinance ? (await supabase.from("profiles").select("id").eq("role", "finance").eq("is_active", true)).data?.map((p) => p.id) ?? [] : [];
+          const financeEmails = sendFinance ? await getFilteredEmailsForUserIds(financeIds) : [];
+          const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([inv.submitter_user_id]) : [];
+          const submitterEmail = submitterEmails[0] ?? "";
+          if (submitterEmail || financeEmails.length > 0) {
             await sendReadyForPaymentEmail({
               submitterEmail,
               financeEmails,
@@ -314,17 +329,20 @@ export async function POST(
           .eq("invoice_id", invoiceId);
 
         if (await isEmailStageEnabled("manager_rejected")) {
-          const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
-          const submitterEmail = submitterEmails[0];
-          if (submitterEmail) {
-            await sendManagerRejectedEmail({
-              submitterEmail,
-              invoiceId,
-              reason: rejection_reason,
-              invoiceNumber: extracted?.invoice_number ?? undefined,
-              guestDetails,
-              freelancerDetails,
-            });
+          const sendSubmitter = await isRecipientEnabled("manager_rejected", "submitter");
+          if (sendSubmitter) {
+            const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
+            const submitterEmail = submitterEmails[0];
+            if (submitterEmail) {
+              await sendManagerRejectedEmail({
+                submitterEmail,
+                invoiceId,
+                reason: rejection_reason,
+                invoiceNumber: extracted?.invoice_number ?? undefined,
+                guestDetails,
+                freelancerDetails,
+              });
+            }
           }
         }
       } else {
@@ -354,13 +372,18 @@ export async function POST(
 
           const managerApprovedEnabled = await isEmailStageEnabled("manager_approved");
           if (managerApprovedEnabled) {
-            const adminIds = (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-            const orUserIds = (await supabase.from("operations_room_members").select("user_id")).data?.map((m) => m.user_id) ?? [];
-            const adminEmails = await getFilteredEmailsForUserIds(adminIds);
-            const operationsRoomEmails = await getFilteredEmailsForUserIds(orUserIds);
-            const submitterEmails = await getFilteredEmailsForUserIds([inv.submitter_user_id]);
-            const submitterEmail = submitterEmails[0];
-            if (submitterEmail) {
+            const [sendSubmitter, sendAdmin, sendOps] = await Promise.all([
+              isRecipientEnabled("manager_approved", "submitter"),
+              isRecipientEnabled("manager_approved", "admin"),
+              isRecipientEnabled("manager_approved", "operations"),
+            ]);
+            const adminIds = sendAdmin ? (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [] : [];
+            const orUserIds = sendOps ? (await supabase.from("operations_room_members").select("user_id")).data?.map((m) => m.user_id) ?? [] : [];
+            const adminEmails = sendAdmin ? await getFilteredEmailsForUserIds(adminIds) : [];
+            const operationsRoomEmails = sendOps ? await getFilteredEmailsForUserIds(orUserIds) : [];
+            const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([inv.submitter_user_id]) : [];
+            const submitterEmail = submitterEmails[0] ?? "";
+            if (submitterEmail || adminEmails.length > 0 || operationsRoomEmails.length > 0) {
               const emailResult = await sendManagerApprovedEmail({
                 submitterEmail,
                 adminEmails,
@@ -405,15 +428,19 @@ export async function POST(
           .eq("invoice_id", invoiceId);
 
         if (await isEmailStageEnabled("ready_for_payment")) {
-          const financeIds = (await supabase.from("profiles").select("id").eq("role", "finance").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-          const filteredFinanceIds = await filterUserIdsByEmailPreference(financeIds);
+          const [sendSubmitter, sendFinance] = await Promise.all([
+            isRecipientEnabled("ready_for_payment", "submitter"),
+            isRecipientEnabled("ready_for_payment", "finance"),
+          ]);
+          const financeIds = sendFinance ? (await supabase.from("profiles").select("id").eq("role", "finance").eq("is_active", true)).data?.map((p) => p.id) ?? [] : [];
+          const filteredFinanceIds = sendFinance ? await filterUserIdsByEmailPreference(financeIds) : [];
           const financeEmails: string[] = [];
           for (const id of filteredFinanceIds) {
             const u = (await supabase.auth.admin.getUserById(id)).data?.user;
             if (u?.email) financeEmails.push(u.email);
           }
-          const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
-          const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
+          const submitterUser = sendSubmitter ? (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user : null;
+          const submitterWants = sendSubmitter && submitterUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
           if (submitterWants || financeEmails.length > 0) {
             await sendReadyForPaymentEmail({
               submitterEmail: submitterWants ? submitterUser!.email! : "",
@@ -462,19 +489,22 @@ export async function POST(
           .eq("invoice_id", invoiceId);
 
         if (await isEmailStageEnabled("manager_rejected")) {
-          const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
-          const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
-          if (submitterWants) {
-            await sendManagerRejectedEmail({
-              submitterEmail: submitterUser!.email!,
-              invoiceId,
-              reason: rejection_reason!,
-              invoiceNumber: extracted?.invoice_number ?? undefined,
-              managerName: profile.full_name ?? undefined,
-              guestName,
-              guestDetails,
-              freelancerDetails,
-            });
+          const sendSubmitter = await isRecipientEnabled("manager_rejected", "submitter");
+          if (sendSubmitter) {
+            const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
+            const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
+            if (submitterWants) {
+              await sendManagerRejectedEmail({
+                submitterEmail: submitterUser!.email!,
+                invoiceId,
+                reason: rejection_reason!,
+                invoiceNumber: extracted?.invoice_number ?? undefined,
+                managerName: profile.full_name ?? undefined,
+                guestName,
+                guestDetails,
+                freelancerDetails,
+              });
+            }
           }
         }
       } else if (to_status === "paid") {
@@ -496,30 +526,41 @@ export async function POST(
 
         if (await isEmailStageEnabled("paid")) {
           const invIsGuest = (inv as { invoice_type?: string }).invoice_type !== "freelancer";
+          const [sendSubmitter, sendAdmin, sendProducers] = await Promise.all([
+            isRecipientEnabled("paid", "submitter"),
+            isRecipientEnabled("paid", "admin"),
+            isRecipientEnabled("paid", "producers"),
+          ]);
           let paidSubmitterEmail = "";
           let paidAdminEmails: string[] = [];
           if (invIsGuest) {
-            const producerName = parseProducerFromServiceDesc((inv as { service_description?: string | null }).service_description);
-            if (producerName) {
-              const { data: producerProfiles } = await supabase
-                .from("profiles")
-                .select("id")
-                .ilike("full_name", producerName.trim())
-                .eq("is_active", true);
-              const producerIds = producerProfiles?.map((p) => p.id) ?? [];
-              const filteredIds = await filterUserIdsByEmailPreference(producerIds);
-              for (const id of filteredIds) {
-                const u = (await supabase.auth.admin.getUserById(id)).data?.user;
-                if (u?.email && (await userWantsUpdateEmails(id))) paidAdminEmails.push(u.email);
+            if (sendProducers) {
+              const producerName = parseProducerFromServiceDesc((inv as { service_description?: string | null }).service_description);
+              if (producerName) {
+                const { data: producerProfiles } = await supabase
+                  .from("profiles")
+                  .select("id")
+                  .ilike("full_name", producerName.trim())
+                  .eq("is_active", true);
+                const producerIds = producerProfiles?.map((p) => p.id) ?? [];
+                const filteredIds = await filterUserIdsByEmailPreference(producerIds);
+                for (const id of filteredIds) {
+                  const u = (await supabase.auth.admin.getUserById(id)).data?.user;
+                  if (u?.email && (await userWantsUpdateEmails(id))) paidAdminEmails.push(u.email);
+                }
               }
             }
           } else {
-            const paidSubUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
-            const submitterWants = paidSubUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
-            const paidAdminIds = (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-            const filteredAdminIds = await filterUserIdsByEmailPreference(paidAdminIds);
-            for (const id of filteredAdminIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) paidAdminEmails.push(u.email); }
-            paidSubmitterEmail = submitterWants ? paidSubUser!.email! : "";
+            if (sendSubmitter) {
+              const paidSubUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
+              const submitterWants = paidSubUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
+              paidSubmitterEmail = submitterWants ? paidSubUser!.email! : "";
+            }
+            if (sendAdmin) {
+              const paidAdminIds = (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [];
+              const filteredAdminIds = await filterUserIdsByEmailPreference(paidAdminIds);
+              for (const id of filteredAdminIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) paidAdminEmails.push(u.email); }
+            }
           }
           if (paidSubmitterEmail || paidAdminEmails.length > 0) {
             await sendPaidEmail({ submitterEmail: paidSubmitterEmail, adminEmails: paidAdminEmails, invoiceId, paymentReference: payment_reference, invoiceNumber: extracted?.invoice_number ?? undefined, guestName, guestDetails, freelancerDetails });
@@ -570,14 +611,17 @@ export async function POST(
 
         if (fromStatus === "rejected") {
           if (await isEmailStageEnabled("resubmitted")) {
-            const deptEpId = wf.manager_user_id;
-            const managerEmails: string[] = [];
-            if (deptEpId) {
-              const filteredIds = await filterUserIdsByEmailPreference([deptEpId]);
-              for (const id of filteredIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) managerEmails.push(u.email); }
-            }
-            if (managerEmails.length > 0) {
-              await sendResubmittedEmail({ managerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, guestDetails, freelancerDetails });
+            const sendDeptEp = await isRecipientEnabled("resubmitted", "dept_ep");
+            if (sendDeptEp) {
+              const deptEpId = wf.manager_user_id;
+              const managerEmails: string[] = [];
+              if (deptEpId) {
+                const filteredIds = await filterUserIdsByEmailPreference([deptEpId]);
+                for (const id of filteredIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) managerEmails.push(u.email); }
+              }
+              if (managerEmails.length > 0) {
+                await sendResubmittedEmail({ managerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, guestDetails, freelancerDetails });
+              }
             }
           }
         }
@@ -603,33 +647,44 @@ export async function POST(
 
         const isGuestInvoice = (inv as { invoice_type?: string }).invoice_type !== "freelancer";
         if (await isEmailStageEnabled("paid")) {
+          const [sendSubmitter, sendAdmin, sendProducers] = await Promise.all([
+            isRecipientEnabled("paid", "submitter"),
+            isRecipientEnabled("paid", "admin"),
+            isRecipientEnabled("paid", "producers"),
+          ]);
           let submitterEmail = "";
           let adminEmails: string[] = [];
           if (isGuestInvoice) {
-            const producerName = parseProducerFromServiceDesc((inv as { service_description?: string | null }).service_description);
-            if (producerName) {
-              const { data: producerProfiles } = await supabase
-                .from("profiles")
-                .select("id")
-                .ilike("full_name", producerName.trim())
-                .eq("is_active", true);
-              const producerIds = producerProfiles?.map((p) => p.id) ?? [];
-              const filteredIds = await filterUserIdsByEmailPreference(producerIds);
-              for (const id of filteredIds) {
-                const u = (await supabase.auth.admin.getUserById(id)).data?.user;
-                if (u?.email && (await userWantsUpdateEmails(id))) adminEmails.push(u.email);
+            if (sendProducers) {
+              const producerName = parseProducerFromServiceDesc((inv as { service_description?: string | null }).service_description);
+              if (producerName) {
+                const { data: producerProfiles } = await supabase
+                  .from("profiles")
+                  .select("id")
+                  .ilike("full_name", producerName.trim())
+                  .eq("is_active", true);
+                const producerIds = producerProfiles?.map((p) => p.id) ?? [];
+                const filteredIds = await filterUserIdsByEmailPreference(producerIds);
+                for (const id of filteredIds) {
+                  const u = (await supabase.auth.admin.getUserById(id)).data?.user;
+                  if (u?.email && (await userWantsUpdateEmails(id))) adminEmails.push(u.email);
+                }
               }
             }
           } else {
-            const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
-            const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
-            const adminIds = (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [];
-            const filteredAdminIds = await filterUserIdsByEmailPreference(adminIds);
-            for (const id of filteredAdminIds) {
-              const u = (await supabase.auth.admin.getUserById(id)).data?.user;
-              if (u?.email) adminEmails.push(u.email);
+            if (sendSubmitter) {
+              const submitterUser = (await supabase.auth.admin.getUserById(inv.submitter_user_id)).data?.user;
+              const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(inv.submitter_user_id));
+              submitterEmail = submitterWants ? submitterUser!.email! : "";
             }
-            submitterEmail = submitterWants ? submitterUser!.email! : "";
+            if (sendAdmin) {
+              const adminIds = (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data?.map((p) => p.id) ?? [];
+              const filteredAdminIds = await filterUserIdsByEmailPreference(adminIds);
+              for (const id of filteredAdminIds) {
+                const u = (await supabase.auth.admin.getUserById(id)).data?.user;
+                if (u?.email) adminEmails.push(u.email);
+              }
+            }
           }
           if (submitterEmail || adminEmails.length > 0) {
             await sendPaidEmail({
@@ -669,14 +724,17 @@ export async function POST(
           .eq("invoice_id", invoiceId);
 
         if (await isEmailStageEnabled("resubmitted")) {
-          const deptEpId = wf.manager_user_id;
-          const resubManagerEmails: string[] = [];
-          if (deptEpId) {
-            const filteredIds = await filterUserIdsByEmailPreference([deptEpId]);
-            for (const id of filteredIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) resubManagerEmails.push(u.email); }
-          }
-          if (resubManagerEmails.length > 0) {
-            await sendResubmittedEmail({ managerEmails: resubManagerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, guestDetails, freelancerDetails });
+          const sendDeptEp = await isRecipientEnabled("resubmitted", "dept_ep");
+          if (sendDeptEp) {
+            const deptEpId = wf.manager_user_id;
+            const resubManagerEmails: string[] = [];
+            if (deptEpId) {
+              const filteredIds = await filterUserIdsByEmailPreference([deptEpId]);
+              for (const id of filteredIds) { const u = (await supabase.auth.admin.getUserById(id)).data?.user; if (u?.email) resubManagerEmails.push(u.email); }
+            }
+            if (resubManagerEmails.length > 0) {
+              await sendResubmittedEmail({ managerEmails: resubManagerEmails, invoiceId, invoiceNumber: extracted?.invoice_number ?? undefined, submitterName: profile.full_name ?? undefined, guestName, guestDetails, freelancerDetails });
+            }
           }
         }
       } else {

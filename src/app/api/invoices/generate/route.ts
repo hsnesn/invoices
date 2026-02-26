@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendSubmissionEmail } from "@/lib/email";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
-import { isEmailStageEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
+import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance, type GuestInvoiceExpense } from "@/lib/guest-invoice-pdf";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
@@ -305,8 +305,12 @@ export async function POST(request: NextRequest) {
 
     const enabled = await isEmailStageEnabled("submission");
     if (enabled && managerUserId) {
-      const managerEmails = await getFilteredEmailsForUserIds([managerUserId]);
-      const submitterEmails = await getFilteredEmailsForUserIds([session.user.id]);
+      const [sendSubmitter, sendDeptEp] = await Promise.all([
+        isRecipientEnabled("submission", "submitter"),
+        isRecipientEnabled("submission", "dept_ep"),
+      ]);
+      const managerEmails = sendDeptEp ? await getFilteredEmailsForUserIds([managerUserId]) : [];
+      const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([session.user.id]) : [];
       const submitterEmail = submitterEmails[0];
       if (submitterEmail || managerEmails.length > 0) {
         const guestDetails = buildGuestEmailDetails(serviceDescWithDept, deptName, progName, {

@@ -6,7 +6,7 @@ import { sendManagerAssignedEmail } from "@/lib/email";
 import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
-import { isEmailStageEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
+import { isEmailStageEnabled, isRecipientEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
 
@@ -295,7 +295,7 @@ export async function PATCH(
           { status: 500 }
         );
       }
-      if (newManagerId && newManagerId !== prevManagerId && (await isEmailStageEnabled("manager_assigned")) && (await userWantsUpdateEmails(newManagerId))) {
+      if (newManagerId && newManagerId !== prevManagerId && (await isEmailStageEnabled("manager_assigned")) && (await isRecipientEnabled("manager_assigned", "dept_ep")) && (await userWantsUpdateEmails(newManagerId))) {
         const { data: mUser } = await supabase.auth.admin.getUserById(newManagerId);
         const { data: extracted } = await supabase
           .from("invoice_extracted_fields")

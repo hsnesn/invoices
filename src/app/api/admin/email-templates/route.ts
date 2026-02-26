@@ -14,6 +14,8 @@ const TEMPLATE_KEYS = [
   "admin_approved",
 ] as const;
 
+const RECIPIENT_TYPES = ["submitter", "dept_ep", "admin", "finance", "operations", "producers"] as const;
+
 export async function GET() {
   try {
     await requireAdminOrOperations();
@@ -25,6 +27,13 @@ export async function GET() {
       .from("email_stage_settings")
       .select("stage_key, enabled")
       .in("stage_key", EMAIL_STAGE_KEYS);
+    let recipients: { stage_key: string; recipient_type: string; enabled: boolean }[] | null = null;
+    try {
+      const res = await supabase.from("email_recipient_settings").select("stage_key, recipient_type, enabled");
+      recipients = res.data;
+    } catch {
+      /* Table may not exist yet */
+    }
 
     const templateMap = Object.fromEntries(
       (templates ?? []).map((t) => [t.template_key, t])
@@ -32,6 +41,10 @@ export async function GET() {
     const stageMap = Object.fromEntries(
       (stages ?? []).map((s) => [s.stage_key, s.enabled])
     );
+    const recipientMap = new Map<string, boolean>();
+    for (const r of recipients ?? []) {
+      recipientMap.set(`${r.stage_key}:${r.recipient_type}`, r.enabled);
+    }
 
     return NextResponse.json({
       templates: TEMPLATE_KEYS.map((key) => ({
@@ -44,6 +57,12 @@ export async function GET() {
         stage_key: key,
         enabled: stageMap[key] ?? true,
       })),
+      recipients: (recipients ?? []).map((r) => ({
+        stage_key: r.stage_key,
+        recipient_type: r.recipient_type,
+        enabled: r.enabled,
+      })),
+      recipientMap: Object.fromEntries(recipientMap),
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
@@ -57,6 +76,7 @@ export async function PATCH(request: NextRequest) {
     const body = (await request.json()) as {
       templates?: { template_key: string; subject_template?: string | null; body_template?: string | null }[];
       stages?: { stage_key: string; enabled: boolean }[];
+      recipients?: { stage_key: string; recipient_type: string; enabled: boolean }[];
     };
 
     const supabase = createAdminClient();
@@ -87,6 +107,26 @@ export async function PATCH(request: NextRequest) {
           },
           { onConflict: "stage_key" }
         );
+      }
+    }
+
+    if (body.recipients) {
+      try {
+        for (const r of body.recipients) {
+          if (!EMAIL_STAGE_KEYS.includes(r.stage_key as (typeof EMAIL_STAGE_KEYS)[number])) continue;
+          if (!RECIPIENT_TYPES.includes(r.recipient_type as (typeof RECIPIENT_TYPES)[number])) continue;
+          await supabase.from("email_recipient_settings").upsert(
+            {
+              stage_key: r.stage_key,
+              recipient_type: r.recipient_type,
+              enabled: r.enabled,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "stage_key,recipient_type" }
+          );
+        }
+      } catch {
+        /* Table may not exist */
       }
     }
 

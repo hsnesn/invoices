@@ -13,15 +13,24 @@ const STAGE_LABELS: Record<string, string> = {
   admin_approved: "Admin approved",
 };
 
-const EMAIL_RECIPIENTS: { stage: string; label: string; recipients: string }[] = [
-  { stage: "submission", label: "Invoice submitted", recipients: "Submitter, Dept EP (line manager)" },
-  { stage: "manager_approved", label: "Manager approved", recipients: "Submitter, Admins, Operations room" },
-  { stage: "manager_rejected", label: "Manager rejected", recipients: "Submitter only" },
-  { stage: "ready_for_payment", label: "Ready for payment", recipients: "Submitter, Finance" },
-  { stage: "paid", label: "Payment completed", recipients: "Guest: Producers only. Contractor: Submitter, Admins" },
-  { stage: "manager_assigned", label: "Manager assigned", recipients: "Assigned Dept EP only" },
-  { stage: "resubmitted", label: "Resubmitted", recipients: "Dept EP only (not all managers)" },
-  { stage: "admin_approved", label: "Admin approved", recipients: "Submitter, Finance" },
+const RECIPIENT_LABELS: Record<string, string> = {
+  submitter: "Submitter",
+  dept_ep: "Dept EP",
+  admin: "Admins",
+  finance: "Finance",
+  operations: "Operations room",
+  producers: "Producers (guest paid)",
+};
+
+const STAGE_RECIPIENTS: { stage: string; recipientTypes: string[] }[] = [
+  { stage: "submission", recipientTypes: ["submitter", "dept_ep"] },
+  { stage: "manager_approved", recipientTypes: ["submitter", "admin", "operations"] },
+  { stage: "manager_rejected", recipientTypes: ["submitter"] },
+  { stage: "ready_for_payment", recipientTypes: ["submitter", "finance"] },
+  { stage: "paid", recipientTypes: ["submitter", "admin", "producers"] },
+  { stage: "manager_assigned", recipientTypes: ["dept_ep"] },
+  { stage: "resubmitted", recipientTypes: ["dept_ep"] },
+  { stage: "admin_approved", recipientTypes: ["submitter", "finance"] },
 ];
 
 const TEMPLATE_LABELS: Record<string, string> = {
@@ -60,6 +69,7 @@ type StageRow = {
 export function EmailSetupSection() {
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [stages, setStages] = useState<StageRow[]>([]);
+  const [recipientMap, setRecipientMap] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
@@ -73,6 +83,7 @@ export function EmailSetupSection() {
       .then((d) => {
         setTemplates(d.templates ?? []);
         setStages(d.stages ?? []);
+        setRecipientMap(d.recipientMap ?? {});
         const subj: Record<string, string> = {};
         const bod: Record<string, string> = {};
         for (const t of d.templates ?? []) {
@@ -155,6 +166,34 @@ export function EmailSetupSection() {
     setEditBody((prev) => ({ ...prev, [templateKey]: "" }));
   };
 
+  const toggleRecipient = async (stageKey: string, recipientType: string, enabled: boolean) => {
+    const key = `${stageKey}:${recipientType}`;
+    setSaving(true);
+    setMessage(null);
+    setRecipientMap((prev) => ({ ...prev, [key]: enabled }));
+    try {
+      const res = await fetch("/api/admin/email-templates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipients: [{ stage_key: stageKey, recipient_type: recipientType, enabled }],
+        }),
+      });
+      if (res.ok) {
+        setMessage({ type: "success", text: "Recipient setting updated." });
+      } else {
+        const d = await res.json();
+        setMessage({ type: "error", text: d.error ?? "Failed." });
+        fetchData();
+      }
+    } catch {
+      setMessage({ type: "error", text: "Connection error." });
+      fetchData();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-gray-500">
@@ -168,28 +207,73 @@ export function EmailSetupSection() {
 
   return (
     <div className="space-y-6">
-      {/* Who receives each email type */}
+      {/* Recipient toggles: who receives each email type */}
       <div className="rounded-xl border border-gray-200 border-l-4 border-l-cyan-500 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
         <h2 className="mb-1 font-medium text-gray-900 dark:text-white flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-cyan-500" />
           Email recipients by type
         </h2>
         <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          Reference: which email goes to whom. Users must have &quot;Receive invoice emails&quot; enabled in their profile.
+          Reference: which email goes to whom. Tick to include, untick to exclude. Users must have &quot;Receive invoice emails&quot; enabled.
         </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="py-2 pr-4 text-left font-medium text-gray-700 dark:text-gray-300">Email type</th>
-                <th className="py-2 text-left font-medium text-gray-700 dark:text-gray-300">Recipients</th>
+        <div className="overflow-x-auto rounded-lg border-2 border-gray-300 dark:border-gray-600">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-cyan-50 dark:bg-cyan-900/20">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  Email type
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  Recipients — select with checkboxes
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {EMAIL_RECIPIENTS.map((r) => (
-                <tr key={r.stage} className="border-b border-gray-100 dark:border-gray-800">
-                  <td className="py-2.5 pr-4 text-gray-800 dark:text-gray-200">{r.label}</td>
-                  <td className="py-2.5 text-gray-600 dark:text-gray-400">{r.recipients}</td>
+            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900/80">
+              {STAGE_RECIPIENTS.map(({ stage, recipientTypes }) => (
+                <tr key={stage} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap align-top pt-4">
+                    {STAGE_LABELS[stage] ?? stage}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-x-6 gap-y-3">
+                      {recipientTypes.map((rt) => {
+                        const key = `${stage}:${rt}`;
+                        const enabled = recipientMap[key] !== false;
+                        return (
+                          <label
+                            key={key}
+                            className={`flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300 select-none ${
+                              saving ? "opacity-60 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={enabled}
+                              onChange={(e) => !saving && toggleRecipient(stage, rt, e.target.checked)}
+                              disabled={saving}
+                              className="sr-only"
+                              aria-label={`${RECIPIENT_LABELS[rt] ?? rt} - ${enabled ? "enabled" : "disabled"}`}
+                            />
+                            <span
+                              role="presentation"
+                              className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 ${
+                                enabled
+                                  ? "border-cyan-600 bg-cyan-600"
+                                  : "border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-800"
+                              }`}
+                            >
+                              {enabled && (
+                                <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </span>
+                            <span>{RECIPIENT_LABELS[rt] ?? rt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -220,21 +304,36 @@ export function EmailSetupSection() {
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {stages.map((s) => (
-            <label
+            <div
               key={s.stage_key}
-              className="flex cursor-pointer items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50"
+              role="button"
+              tabIndex={0}
+              onClick={() => !saving && toggleStage(s.stage_key, !s.enabled)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  if (!saving) toggleStage(s.stage_key, !s.enabled);
+                }
+              }}
+              className={`flex cursor-pointer items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50 ${saving ? "opacity-70" : "hover:bg-gray-100 dark:hover:bg-gray-800"}`}
             >
               <span className="text-sm text-gray-800 dark:text-gray-200">
                 {STAGE_LABELS[s.stage_key] ?? s.stage_key}
               </span>
-              <input
-                type="checkbox"
-                checked={s.enabled}
-                onChange={(e) => toggleStage(s.stage_key, e.target.checked)}
-                disabled={saving}
-                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-              />
-            </label>
+              <span
+                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                  s.enabled
+                    ? "border-amber-600 bg-amber-600 text-white"
+                    : "border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-800"
+                }`}
+              >
+                {s.enabled && (
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </span>
+            </div>
           ))}
         </div>
       </div>

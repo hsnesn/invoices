@@ -6,7 +6,7 @@ import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 import { sendSubmissionEmail } from "@/lib/email";
 import { buildFreelancerEmailDetails } from "@/lib/freelancer-email-details";
-import { isEmailStageEnabled, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
+import { isEmailStageEnabled, isRecipientEnabled, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
 const UUID_RE =
@@ -241,16 +241,20 @@ export async function POST(request: NextRequest) {
     });
 
     if (await isEmailStageEnabled("submission")) {
-      const submitterUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
+      const [sendSubmitter, sendDeptEp] = await Promise.all([
+        isRecipientEnabled("submission", "submitter"),
+        isRecipientEnabled("submission", "dept_ep"),
+      ]);
+      const submitterUser = sendSubmitter ? (await supabase.auth.admin.getUserById(session.user.id)).data?.user : null;
       const managerEmails: string[] = [];
-      if (managerUserId) {
+      if (sendDeptEp && managerUserId) {
         const filteredManagerIds = await filterUserIdsByEmailPreference([managerUserId]);
         for (const id of filteredManagerIds) {
           const u = (await supabase.auth.admin.getUserById(id)).data?.user;
           if (u?.email) managerEmails.push(u.email);
         }
       }
-      const submitterWants = submitterUser?.email && (await userWantsUpdateEmails(session.user.id));
+      const submitterWants = sendSubmitter && submitterUser?.email && (await userWantsUpdateEmails(session.user.id));
       if (submitterWants || managerEmails.length > 0) {
         const { data: fl } = await supabase.from("freelancer_invoice_fields").select("contractor_name, company_name, service_description, service_days_count, service_rate_per_day, service_month, additional_cost").eq("invoice_id", invoiceId).single();
         const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number, beneficiary_name, account_number, sort_code, gross_amount").eq("invoice_id", invoiceId).single();

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createAuditEvent } from "@/lib/audit";
 import { sendManagerAssignedEmail } from "@/lib/email";
 import { buildFreelancerEmailDetails } from "@/lib/freelancer-email-details";
-import { isEmailStageEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
+import { isEmailStageEnabled, isRecipientEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
 
 export async function PATCH(
   request: Request,
@@ -177,7 +177,7 @@ export async function PATCH(
       const newManagerId = (body.deptManagerId as string) || null;
       const prevManagerId = (wf as Record<string, unknown> | null)?.manager_user_id as string | null;
       await supabase.from("invoice_workflows").update({ manager_user_id: newManagerId, updated_at: new Date().toISOString() }).eq("invoice_id", invoiceId);
-      if (newManagerId && newManagerId !== prevManagerId && (await isEmailStageEnabled("manager_assigned")) && (await userWantsUpdateEmails(newManagerId))) {
+      if (newManagerId && newManagerId !== prevManagerId && (await isEmailStageEnabled("manager_assigned")) && (await isRecipientEnabled("manager_assigned", "dept_ep")) && (await userWantsUpdateEmails(newManagerId))) {
         const { data: mUser } = await supabase.auth.admin.getUserById(newManagerId);
         const { data: fl } = await supabase.from("freelancer_invoice_fields").select("contractor_name, company_name, service_description, service_days_count, service_rate_per_day, service_month, additional_cost").eq("invoice_id", invoiceId).single();
         const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number, beneficiary_name, account_number, sort_code, gross_amount").eq("invoice_id", invoiceId).single();

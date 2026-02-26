@@ -29,6 +29,25 @@ export type EmailStageRow = {
   enabled: boolean;
 };
 
+export type RecipientType = "submitter" | "dept_ep" | "admin" | "finance" | "operations" | "producers";
+
+/** Check if a recipient type is enabled for a stage. Default true if no row exists or table missing. */
+export async function isRecipientEnabled(stageKey: string, recipientType: RecipientType): Promise<boolean> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("email_recipient_settings")
+      .select("enabled")
+      .eq("stage_key", stageKey)
+      .eq("recipient_type", recipientType)
+      .maybeSingle();
+    if (error) return true;
+    return data?.enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 /** Check if emails for this stage should be sent. */
 export async function isEmailStageEnabled(stageKey: string): Promise<boolean> {
   const supabase = createAdminClient();
