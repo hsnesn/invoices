@@ -5,6 +5,7 @@ import { createAuditEvent } from "@/lib/audit";
 import { sendManagerAssignedEmail } from "@/lib/email";
 import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
+import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { isEmailStageEnabled, userWantsUpdateEmails } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
@@ -218,6 +219,19 @@ export async function PATCH(
           { error: "Invoice update failed: " + invUpdateError.message },
           { status: 500 }
         );
+      }
+
+      if (
+        (body.department_id !== undefined || body.program_id !== undefined) &&
+        (existing as { invoice_type?: string }).invoice_type !== "freelancer"
+      ) {
+        const newDeptId = body.department_id !== undefined ? (body.department_id as string) || null : existing.department_id;
+        const newProgId = body.program_id !== undefined ? (body.program_id as string) || null : existing.program_id;
+        const newManagerId = await pickManagerForGuestInvoice(supabase, newDeptId, newProgId);
+        await supabase
+          .from("invoice_workflows")
+          .update({ manager_user_id: newManagerId, updated_at: new Date().toISOString() })
+          .eq("invoice_id", invoiceId);
       }
     }
 

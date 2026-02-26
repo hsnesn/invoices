@@ -8,6 +8,7 @@ import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { isEmailStageEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
+import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 
 const BUCKET = "invoices";
 const UUID_RE =
@@ -21,29 +22,6 @@ function safeFileStem(name: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "invoice";
-}
-
-type ManagerProfile = {
-  id: string;
-  department_id: string | null;
-  program_ids: string[] | null;
-};
-
-function pickManager(
-  managers: ManagerProfile[],
-  departmentId: string | null,
-  programId: string | null
-): string | null {
-  if (!managers.length) return null;
-  if (programId) {
-    const byProgram = managers.find((m) => Array.isArray(m.program_ids) && m.program_ids.includes(programId));
-    if (byProgram) return byProgram.id;
-  }
-  if (departmentId) {
-    const byDepartment = managers.find((m) => m.department_id === departmentId);
-    if (byDepartment) return byDepartment.id;
-  }
-  return managers[0].id;
 }
 
 export async function POST(request: NextRequest) {
@@ -100,29 +78,11 @@ export async function POST(request: NextRequest) {
     }
 
     const supabaseAdmin = createAdminClient();
-    let managerUserId: string | null = null;
-    if (safeDepartmentId) {
-      const { data: dm } = await supabaseAdmin
-        .from("department_managers")
-        .select("manager_user_id")
-        .eq("department_id", safeDepartmentId)
-        .order("sort_order")
-        .limit(1)
-        .maybeSingle();
-      managerUserId = dm?.manager_user_id ?? null;
-    }
-    if (!managerUserId && safeProgramId) {
-      const { data: managerProfiles } = await supabaseAdmin
-        .from("profiles")
-        .select("id,department_id,program_ids")
-        .eq("role", "manager")
-        .eq("is_active", true);
-      managerUserId = pickManager(
-        (managerProfiles ?? []) as ManagerProfile[],
-        safeDepartmentId,
-        safeProgramId
-      );
-    }
+    const managerUserId = await pickManagerForGuestInvoice(
+      supabaseAdmin,
+      safeDepartmentId,
+      safeProgramId
+    );
 
     const invoiceId = crypto.randomUUID();
     const ext = file.name.split(".").pop() ?? "pdf";

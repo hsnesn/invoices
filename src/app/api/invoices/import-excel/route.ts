@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit";
+import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import * as XLSX from "xlsx";
 
 function buildServiceDescription(fields: {
@@ -221,6 +222,7 @@ export async function POST(request: NextRequest) {
       const paidDate = paymentType === "paid_guest" ? parseDate(paidDateRaw) : null;
 
       const invoiceId = crypto.randomUUID();
+      const managerUserId = await pickManagerForGuestInvoice(supabase, departmentId, programId);
 
       const { error: invError } = await supabase.from("invoices").insert({
         id: invoiceId,
@@ -244,6 +246,7 @@ export async function POST(request: NextRequest) {
         invoice_id: invoiceId,
         status,
         paid_date: paidDate,
+        manager_user_id: managerUserId,
       });
 
       if (wfError) {
