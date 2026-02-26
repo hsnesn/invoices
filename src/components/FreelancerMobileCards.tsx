@@ -65,6 +65,10 @@ export function FreelancerMobileCards({
   actionLoadingId,
   onStartEdit,
   onDeleteInvoice,
+  expandedRowId = null,
+  onToggleExpand,
+  filesData = [],
+  detailLoading = false,
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -78,7 +82,7 @@ export function FreelancerMobileCards({
   onAdminApprove: (id: string) => void;
   onResubmit: (id: string) => void;
   onMarkPaid: (id: string) => void;
-  openFile: (id: string) => void;
+  openFile: (id: string, path?: string, fileName?: string) => void;
   openRejectModal: (id: string) => void;
   viewBookingForm: (id: string, contractor: string, month: string) => void;
   downloadBookingForm: (id: string, contractor: string, month: string) => void;
@@ -86,6 +90,10 @@ export function FreelancerMobileCards({
   actionLoadingId: string | null;
   onStartEdit?: (row: DisplayRow) => void;
   onDeleteInvoice?: (id: string) => void;
+  expandedRowId?: string | null;
+  onToggleExpand?: (id: string) => void;
+  filesData?: { storage_path: string; file_name: string }[];
+  detailLoading?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -120,8 +128,8 @@ export function FreelancerMobileCards({
   }
 
   return (
-    <div className="md:hidden">
-      <div ref={scrollRef} className="mobile-card-carousel flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory gap-4 pb-4 -mx-1 px-1 max-h-[calc(100vh-260px)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="md:hidden w-full min-w-0 overflow-hidden">
+      <div ref={scrollRef} className="mobile-card-carousel flex overflow-x-auto overflow-y-visible snap-x snap-mandatory gap-4 pb-4 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {rows.map((r) => {
         const isSubmitter = r.submitterId === currentUserId;
         const canApp = canApprove(r);
@@ -137,11 +145,13 @@ export function FreelancerMobileCards({
           if ((e.target as HTMLElement).closest("button, a, input, label, [role='button']")) return;
           onToggleSelect(r.id);
         } : undefined;
+        const files = expandedRowId === r.id ? filesData : [];
+        const showFilesSection = expandedRowId === r.id;
         return (
           <div
             key={r.id}
             onClick={handleCardClick}
-            className={`flex-shrink-0 w-[calc(100%-2rem)] min-w-[calc(100%-2rem)] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
+            className={`flex-shrink-0 w-[85vw] max-w-[min(400px,calc(100vw-2rem))] min-w-[280px] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
               r.status === "rejected"
                 ? "border-rose-300 dark:border-rose-700"
                 : "border-slate-200 dark:border-slate-600"
@@ -168,6 +178,66 @@ export function FreelancerMobileCards({
                 </span>
               </div>
 
+              {/* Action buttons - prominent at top for mobile (like guest invoices) */}
+              {((r.status === "pending_manager" || r.status === "submitted") && canApp) || canResubmit || canMarkPaid || (canOpsRoomApprove || canAdminApprove) || (canReject && r.status !== "pending_manager" && r.status !== "submitted") ? (
+                <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-200 dark:border-gray-600">
+                  {(r.status === "pending_manager" || r.status === "submitted") && canApp && (
+                    <>
+                      <button
+                        onClick={() => void onManagerApprove(r.id)}
+                        disabled={actionLoadingId === r.id}
+                        className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        {actionLoadingId === r.id ? "…" : "✓ Approve"}
+                      </button>
+                      <button
+                        onClick={() => openRejectModal(r.id)}
+                        disabled={actionLoadingId === r.id}
+                        className="flex-1 min-w-[100px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                      >
+                        ✗ Reject
+                      </button>
+                    </>
+                  )}
+                  {(canOpsRoomApprove || canAdminApprove) && (
+                    <button
+                      onClick={() => void onAdminApprove(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      {actionLoadingId === r.id ? "…" : "✓ Approve"}
+                    </button>
+                  )}
+                  {canResubmit && (
+                    <button
+                      onClick={() => void onResubmit(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      {actionLoadingId === r.id ? "…" : "↻ Resubmit"}
+                    </button>
+                  )}
+                  {canMarkPaid && (
+                    <button
+                      onClick={() => void onMarkPaid(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      {actionLoadingId === r.id ? "…" : "£ Mark Paid"}
+                    </button>
+                  )}
+                  {canReject && r.status !== "pending_manager" && r.status !== "submitted" && (
+                    <button
+                      onClick={() => openRejectModal(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      className="flex-1 min-w-[100px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                    >
+                      ✗ Reject
+                    </button>
+                  )}
+                </div>
+              ) : null}
+
               <div className="space-y-2 text-sm">
                 {[
                   { label: "Company", value: r.companyName },
@@ -191,7 +261,7 @@ export function FreelancerMobileCards({
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between gap-2 border-b border-gray-100 py-1.5 last:border-0 dark:border-gray-700">
                     <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{label}</span>
-                    <span className="text-right text-gray-900 dark:text-white break-words min-w-0 max-w-[60%]">{value || "—"}</span>
+                    <span className="text-right text-gray-900 dark:text-white break-words min-w-0">{value || "—"}</span>
                   </div>
                 ))}
               </div>
@@ -202,16 +272,57 @@ export function FreelancerMobileCards({
                 </div>
               )}
 
+              {/* Files - tap to preview (like guest invoices) */}
+              {showFilesSection && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400">Files</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {detailLoading ? (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Loading...</span>
+                    ) : files.length === 0 ? (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">No files.</span>
+                    ) : (
+                      files.map((f, i) => (
+                        <button
+                          key={i}
+                          onClick={() => void openFile(r.id, f.storage_path, f.file_name)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                        >
+                          <svg className="h-3.5 w-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z"/></svg>
+                          <span className="truncate max-w-[120px]">{f.file_name}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                <button
-                  onClick={() => void openFile(r.id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-sky-100 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
-                >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z" />
-                  </svg>
-                  View File
-                </button>
+                {onToggleExpand && (
+                  <button
+                    onClick={() => onToggleExpand(r.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                  >
+                    {expandedRowId === r.id ? "Hide details" : "View details"}
+                  </button>
+                )}
+                {canSubmitterEditDelete && onStartEdit && (
+                  <button
+                    onClick={() => onStartEdit(r)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                  >
+                    Edit
+                  </button>
+                )}
+                {canSubmitterEditDelete && onDeleteInvoice && (
+                  <button
+                    onClick={() => void onDeleteInvoice(r.id)}
+                    disabled={actionLoadingId === r.id}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
+                  >
+                    {actionLoadingId === r.id ? "…" : "Delete"}
+                  </button>
+                )}
                 {["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status) && (currentRole === "admin" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer" || (currentRole === "manager" && r.deptManagerId === currentUserId) || isOperationsRoomMember) && (
                   <>
                     <button
@@ -237,75 +348,15 @@ export function FreelancerMobileCards({
                     )}
                   </>
                 )}
-                {(r.status === "pending_manager" || r.status === "submitted") && canApp && (
-                  <>
-                    <button
-                      onClick={() => void onManagerApprove(r.id)}
-                      disabled={actionLoadingId === r.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                    >
-                      {actionLoadingId === r.id ? "…" : "✓"} Approve
-                    </button>
-                    <button
-                      onClick={() => openRejectModal(r.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500"
-                    >
-                      ✗ Reject
-                    </button>
-                  </>
-                )}
-                {(canOpsRoomApprove || canAdminApprove) && (
-                  <button
-                    onClick={() => void onAdminApprove(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {actionLoadingId === r.id ? "…" : "✓"} Approve
-                  </button>
-                )}
-                {canSubmitterEditDelete && onStartEdit && (
-                  <button
-                    onClick={() => onStartEdit(r)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
-                  >
-                    Edit
-                  </button>
-                )}
-                {canSubmitterEditDelete && onDeleteInvoice && (
-                  <button
-                    onClick={() => void onDeleteInvoice(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
-                  >
-                    {actionLoadingId === r.id ? "…" : "Delete"}
-                  </button>
-                )}
-                {canResubmit && (
-                  <button
-                    onClick={() => void onResubmit(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {actionLoadingId === r.id ? "…" : "↻"} Resubmit
-                  </button>
-                )}
-                {canMarkPaid && (
-                  <button
-                    onClick={() => void onMarkPaid(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {actionLoadingId === r.id ? "…" : "£"} Mark Paid
-                  </button>
-                )}
-                {canReject && r.status !== "pending_manager" && r.status !== "submitted" && (
-                  <button
-                    onClick={() => openRejectModal(r.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500"
-                  >
-                    ✗ Reject
-                  </button>
-                )}
+                <button
+                  onClick={() => void openFile(r.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-sky-100 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                >
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 18h12a2 2 0 002-2V6l-4-4H4a2 2 0 00-2 2v12a2 2 0 002 2zm8-14l4 4h-4V4z" />
+                  </svg>
+                  View File
+                </button>
               </div>
             </div>
           </div>
@@ -317,7 +368,7 @@ export function FreelancerMobileCards({
           {rows.map((_, i) => (
             <div
               key={i}
-              className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i === activeIndex ? "w-4 bg-teal-500 dark:bg-teal-400" : "bg-gray-300 dark:bg-gray-600"}`}
+              className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i === activeIndex ? "w-4 bg-blue-500 dark:bg-blue-400" : "bg-gray-300 dark:bg-gray-600"}`}
               aria-hidden
             />
           ))}

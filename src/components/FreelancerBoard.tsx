@@ -1140,7 +1140,7 @@ export function FreelancerBoard({
                     onAdminApprove={onAdminApprove}
                     onResubmit={onResubmit}
                     onMarkPaid={onMarkPaid}
-                    openFile={(id) => void openFile(id)}
+                    openFile={openFile}
                     openRejectModal={(id) => { setRejectModalId(id); setRejectReason(""); }}
                     viewBookingForm={viewBookingForm}
                     downloadBookingForm={downloadBookingForm}
@@ -1148,6 +1148,10 @@ export function FreelancerBoard({
                     actionLoadingId={actionLoadingId}
                     onStartEdit={(row) => onStartEdit(row as Parameters<typeof onStartEdit>[0])}
                     onDeleteInvoice={onDeleteInvoice}
+                    expandedRowId={expandedRowId}
+                    onToggleExpand={toggleExpandRow}
+                    filesData={filesData}
+                    detailLoading={detailLoading}
                   />
                 </div>
                 <div className="hidden md:block overflow-x-auto">
