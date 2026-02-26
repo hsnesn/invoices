@@ -1094,6 +1094,7 @@ export function FreelancerBoard({
       )}
 
       {/* Groups */}
+      <div className={selectedIds.size > 0 ? "relative z-40" : ""}>
       {filteredRows.length === 0 ? (
         <EmptyState
           icon={
@@ -1293,6 +1294,7 @@ export function FreelancerBoard({
           </div>
         );
       })}
+      </div>
 
       {/* Edit Contractor Invoice Modal */}
       {editModalRow && (

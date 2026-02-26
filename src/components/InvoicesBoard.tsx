@@ -2698,6 +2698,7 @@ export function InvoicesBoard({
         )}
       </div>
 
+      <div className={selectedIds.size > 0 ? "relative z-40" : ""}>
       {filtered.length === 0 ? (
         <EmptyState
           icon={
@@ -2818,6 +2819,7 @@ export function InvoicesBoard({
           </section>
         );
       })}
+      </div>
 
       {/* Mobile detail sheet - Timeline, Files, Notes */}
       {expandedRowId && (
