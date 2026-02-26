@@ -6,15 +6,53 @@ import JSZip from "jszip";
 
 const BUCKET = "invoices";
 
-function uniqueFileName(base: string, used: Set<string>): string {
-  let fileName = base;
-  while (used.has(fileName)) {
-    const ext = fileName.includes(".") ? "." + fileName.split(".").pop() : "";
-    const stem = fileName.replace(/\.[^.]+$/, "");
-    fileName = `${stem}-${Math.random().toString(36).slice(2, 6)}${ext}`;
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "invoice";
+}
+
+function monthSlug(monthStr: string | null, dateStr: string | null | undefined): string {
+  if (monthStr && /\d{4}/.test(monthStr)) {
+    const m = monthStr.replace(/\s+\d{4}$/, "").trim();
+    const y = monthStr.match(/\d{4}/)?.[0] ?? "";
+    const months: Record<string, string> = { january: "jan", february: "feb", march: "mar", april: "apr", may: "may", june: "jun", july: "jul", august: "aug", september: "sep", october: "oct", november: "nov", december: "dec" };
+    const short = months[m.toLowerCase()] ?? m.slice(0, 3).toLowerCase();
+    return `${short}-${y}`;
   }
-  used.add(fileName);
-  return fileName;
+  if (dateStr) {
+    try {
+      const d = new Date(dateStr);
+      const m = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"][d.getMonth()];
+      return `${m}-${d.getFullYear()}`;
+    } catch { /* */ }
+  }
+  return "unknown";
+}
+
+function parseServiceDescription(desc: string | null): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!desc) return result;
+  for (const line of desc.split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx > 0) {
+      const key = line.slice(0, idx).trim().toLowerCase();
+      result[key] = line.slice(idx + 1).trim();
+    }
+  }
+  return result;
+}
+
+function fromMeta(meta: Record<string, string>, aliases: string[], fallback = ""): string {
+  for (const a of aliases) {
+    const v = meta[a];
+    if (v && v !== "—") return v;
+  }
+  return fallback;
 }
 
 export async function POST(request: NextRequest) {
@@ -34,7 +72,12 @@ export async function POST(request: NextRequest) {
 
     const { data: invoices } = await supabase
       .from("invoices")
-      .select("id, storage_path, submitter_user_id")
+      .select(`
+        id, storage_path, submitter_user_id, invoice_type,
+        service_description, service_date_from, service_date_to, created_at,
+        invoice_extracted_fields(beneficiary_name),
+        freelancer_invoice_fields(contractor_name, company_name, service_month)
+      `)
       .in("id", invoice_ids);
 
     if (!invoices || invoices.length === 0) {
@@ -56,6 +99,48 @@ export async function POST(request: NextRequest) {
 
     const zip = new JSZip();
     const usedNames = new Set<string>();
+    const seqByKey = new Map<string, number>();
+
+    const getPersonAndMonth = (inv: (typeof invoices)[0]) => {
+      const invTyp = (inv as { invoice_type?: string }).invoice_type;
+      const extRaw = (inv as Record<string, unknown>).invoice_extracted_fields;
+      const ext = Array.isArray(extRaw) ? extRaw[0] : extRaw;
+      const flRaw = (inv as Record<string, unknown>).freelancer_invoice_fields;
+      const fl = Array.isArray(flRaw) ? flRaw[0] : flRaw;
+      const meta = parseServiceDescription((inv as { service_description?: string }).service_description ?? null);
+
+      let person = "";
+      let month = "";
+
+      if (invTyp === "freelancer" && fl) {
+        const flObj = fl as Record<string, unknown>;
+        const contractor = (flObj.contractor_name as string) ?? "";
+        const company = (flObj.company_name as string) ?? "";
+        person = company && !/trt/i.test(company) ? `${company} ${contractor}`.trim() : contractor;
+        month = monthSlug((flObj.service_month as string) ?? null, null);
+      } else {
+        person = (fromMeta(meta, ["guest name", "guest", "guest_name"]) || (ext as Record<string, string>)?.beneficiary_name) ?? "";
+        month = monthSlug(fromMeta(meta, ["invoice date", "date"]) || null, ((inv as { service_date_to?: string }).service_date_to ?? (inv as { created_at?: string }).created_at) ?? null);
+      }
+
+      const personSlug = slugify(person || "unknown");
+      const mon = month || monthSlug(null, (inv as { created_at?: string }).created_at ?? null);
+      return { personSlug, monthKey: mon };
+    };
+
+    const nextFileName = (inv: (typeof invoices)[0], ext: string): string => {
+      const { personSlug, monthKey } = getPersonAndMonth(inv);
+      const key = `${personSlug}-${monthKey}`;
+      const seq = (seqByKey.get(key) ?? 0) + 1;
+      seqByKey.set(key, seq);
+      let name = `${personSlug}-${monthKey}-${seq}`;
+      if (ext) name += `.${ext}`;
+      while (usedNames.has(name)) {
+        name = `${personSlug}-${monthKey}-${seq}-${Math.random().toString(36).slice(2, 6)}${ext ? `.${ext}` : ""}`;
+      }
+      usedNames.add(name);
+      return name;
+    };
 
     for (const inv of invoices) {
       const allowed = await canAccessInvoice(supabase, inv.id, session.user.id, {
@@ -72,8 +157,8 @@ export async function POST(request: NextRequest) {
       if (inv.storage_path && !hasMainInFiles) {
         const { data: fileData } = await supabase.storage.from(BUCKET).download(inv.storage_path);
         if (fileData) {
-          const baseName = inv.storage_path.split("/").pop() ?? `invoice-${inv.id}.pdf`;
-          const fileName = uniqueFileName(baseName, usedNames);
+          const ext = inv.storage_path.split(".").pop()?.toLowerCase() || "pdf";
+          const fileName = nextFileName(inv, ext);
           zip.file(fileName, await fileData.arrayBuffer());
         }
       }
@@ -81,8 +166,8 @@ export async function POST(request: NextRequest) {
       for (const f of invoiceFiles) {
         const { data: fileData } = await supabase.storage.from(BUCKET).download(f.storage_path);
         if (!fileData) continue;
-        const baseName = f.file_name || f.storage_path.split("/").pop() || `file-${inv.id}`;
-        const fileName = uniqueFileName(baseName, usedNames);
+        const ext = (f.file_name || f.storage_path).split(".").pop()?.toLowerCase() || "pdf";
+        const fileName = nextFileName(inv, ext);
         zip.file(fileName, await fileData.arrayBuffer());
       }
     }

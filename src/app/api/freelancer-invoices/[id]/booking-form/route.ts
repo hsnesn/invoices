@@ -37,11 +37,12 @@ export async function GET(
     const isAdmin = profile.role === "admin";
     const isOperations = profile.role === "operations";
     const isFinance = profile.role === "finance";
+    const isViewer = profile.role === "viewer";
     const isAssignedManager = profile.role === "manager" && managerUserId === session.user.id;
     const { data: orMember } = await supabase.from("operations_room_members").select("id").eq("user_id", session.user.id).maybeSingle();
     const isOpsRoomMember = !!orMember;
 
-    const canAccess = isAdmin || isOperations || isFinance || isAssignedManager || isOpsRoomMember;
+    const canAccess = isAdmin || isOperations || isFinance || isViewer || isAssignedManager || isOpsRoomMember;
     if (!canAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     // Serve stored booking form if it exists (created once after first approval)
@@ -64,6 +65,13 @@ export async function GET(
             "Content-Disposition": `inline; filename="${storedFile.file_name}"`,
           },
         });
+      }
+      if (downloadError) {
+        console.error("[BookingForm] Storage download failed:", downloadError);
+        return NextResponse.json(
+          { error: "Stored booking form could not be retrieved. Please contact support." },
+          { status: 503 }
+        );
       }
     }
 

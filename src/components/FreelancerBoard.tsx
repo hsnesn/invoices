@@ -549,7 +549,11 @@ export function FreelancerBoard({
   const viewBookingForm = useCallback(async (id: string, contractor: string, month: string) => {
     try {
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
-      if (!r.ok) { toast.error("Booking form could not be generated"); return; }
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error ?? "Booking form could not be loaded");
+        return;
+      }
       const blob = await r.blob();
       const blobUrl = URL.createObjectURL(blob);
       setPreviewUrl(blobUrl);
@@ -562,7 +566,11 @@ export function FreelancerBoard({
   const downloadBookingForm = useCallback(async (id: string, contractor: string, month: string) => {
     try {
       const r = await fetch(`/api/freelancer-invoices/${id}/booking-form`);
-      if (!r.ok) { toast.error("Booking form could not be generated"); return; }
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error ?? "Booking form could not be loaded");
+        return;
+      }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -992,7 +1000,7 @@ export function FreelancerBoard({
       )}
 
       {/* Filters */}
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+      <div className={`rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800 ${selectedIds.size > 0 ? "relative z-40" : ""}`}>
         <div className="flex flex-wrap items-center gap-2">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search contractor, company, beneficiary..." className="w-56 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
           <select value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Departments</option>{departmentPairs.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
