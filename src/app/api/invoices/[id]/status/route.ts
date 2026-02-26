@@ -14,6 +14,7 @@ import {
 import { parseGuestNameFromServiceDesc } from "@/lib/guest-utils";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { triggerBookingFormWorkflow } from "@/lib/booking-form/approval-trigger";
+import { sendBookingFormEmailsForInvoice } from "@/lib/booking-form/process-pending-emails";
 import { isEmailStageEnabled, getFilteredEmailsForUserIds, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
 import type { InvoiceStatus } from "@/lib/types";
 import { notifyWebhooks } from "@/lib/webhook";
@@ -214,7 +215,7 @@ export async function POST(
             }
           }
 
-          // Form created first, then booking form emails (A + B) sent by workflow (await so serverless doesn't terminate before send)
+          // Form created first, then send booking form emails immediately (to approver + London Operations)
           const bfResult = await triggerBookingFormWorkflow(supabase, {
             invoiceId,
             approverUserId: session.user.id,
@@ -223,6 +224,10 @@ export async function POST(
             approvedAt,
           });
           if (!bfResult.ok && !bfResult.skipped) console.error("[BookingForm] Workflow failed:", bfResult.error);
+          if (bfResult.ok && !bfResult.skipped) {
+            const sendResult = await sendBookingFormEmailsForInvoice(supabase, invoiceId);
+            if (!sendResult.ok) console.error("[BookingForm] Email send failed:", sendResult.error);
+          }
         }
       } else if (to_status === "rejected") {
         if (!rejection_reason?.trim()) {
@@ -377,6 +382,10 @@ export async function POST(
             approvedAt,
           });
           if (!bfResult.ok && !bfResult.skipped) console.error("[BookingForm] Workflow failed:", bfResult.error);
+          if (bfResult.ok && !bfResult.skipped) {
+            const sendResult = await sendBookingFormEmailsForInvoice(supabase, invoiceId);
+            if (!sendResult.ok) console.error("[BookingForm] Email send failed:", sendResult.error);
+          }
         }
       } else if (to_status === "ready_for_payment") {
         const validFrom = ["pending_manager", "approved_by_manager", "pending_admin"];
@@ -431,6 +440,10 @@ export async function POST(
             approvedAt,
           });
           if (!bfResult.ok && !bfResult.skipped) console.error("[BookingForm] Workflow failed:", bfResult.error);
+          if (bfResult.ok && !bfResult.skipped) {
+            const sendResult = await sendBookingFormEmailsForInvoice(supabase, invoiceId);
+            if (!sendResult.ok) console.error("[BookingForm] Email send failed:", sendResult.error);
+          }
         }
       } else if (to_status === "rejected") {
         if (!rejection_reason?.trim()) {
