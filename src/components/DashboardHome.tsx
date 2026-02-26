@@ -216,6 +216,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             </Link>
           </div>
         </div>
+        </div>
       )}
 
       {/* Mini Chart */}
