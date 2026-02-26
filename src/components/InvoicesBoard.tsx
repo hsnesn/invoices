@@ -563,7 +563,8 @@ function InvoiceTable({
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const colCount = visibleColumns.filter((k) => k !== "checkbox" || currentRole === "admin").length;
+  const canBulkSelect = currentRole === "admin" || currentRole === "manager" || currentRole === "operations";
+  const colCount = visibleColumns.filter((k) => k !== "checkbox" || canBulkSelect).length;
 
   const isCol = (key: string) => visibleColumns.includes(key);
 
@@ -584,7 +585,7 @@ function InvoiceTable({
       <table className="min-w-[2800px] divide-y divide-slate-200 dark:divide-slate-600">
         <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-700 shadow-sm">
           <tr>
-            {isCol("checkbox") && currentRole === "admin" && (
+            {isCol("checkbox") && canBulkSelect && (
             <th className="px-2 py-3 text-center w-10">
               <input
                 type="checkbox"
@@ -622,7 +623,7 @@ function InvoiceTable({
               return (
               <React.Fragment key={r.id}>
               <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => handleRowClick(r.id)} onDoubleClick={startEditOnDblClick}>
-              {isCol("checkbox") && currentRole === "admin" && (
+              {isCol("checkbox") && canBulkSelect && (
               <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
@@ -1504,12 +1505,6 @@ export function InvoicesBoard({
     }, 200);
   }, [closePreview]);
 
-  const cancelHidePreview = useCallback(() => {
-    if (previewHideRef.current) {
-      clearTimeout(previewHideRef.current);
-      previewHideRef.current = null;
-    }
-  }, []);
 
   const openPdfInNewTab = useCallback(async (id: string, storagePath?: string) => {
     try {
@@ -2204,7 +2199,7 @@ export function InvoicesBoard({
       )}
 
       {/* Click-outside overlay: clears selection when clicking empty space */}
-      {selectedIds.size > 0 && currentRole === "admin" && (
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
         <div
           className="fixed inset-0 z-30 cursor-default"
           onClick={() => setSelectedIds(new Set())}
@@ -2212,7 +2207,7 @@ export function InvoicesBoard({
         />
       )}
       {/* Bulk Actions Bar - Fixed at bottom, Admin only */}
-      {selectedIds.size > 0 && currentRole === "admin" && (
+      {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
         <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
@@ -2733,7 +2728,7 @@ export function InvoicesBoard({
               onDownloadFile={onDownloadFile}
               onStartEdit={onStartEdit}
               actionLoadingId={actionLoadingId}
-              visibleColumns={currentRole === "admin" ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
+              visibleColumns={(currentRole === "admin" || currentRole === "manager" || currentRole === "operations") ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
               expandedRowId={expandedRowId}
               onToggleExpand={(id) => void toggleExpandRow(id)}
               timelineData={timelineData}
@@ -3052,13 +3047,10 @@ export function InvoicesBoard({
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
           onClick={closePreview}
-          onMouseEnter={cancelHidePreview}
         >
           <div
             className="relative flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
             onClick={(e) => e.stopPropagation()}
-            onMouseEnter={cancelHidePreview}
-            onMouseLeave={hidePreviewOnHover}
           >
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-800 truncate dark:text-white">{previewName || (previewLoading ? "Loading..." : "")}</h3>
