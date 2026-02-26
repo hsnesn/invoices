@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit";
+import { canAccessInvoice } from "@/lib/invoice-access";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 
 const BUCKET = "invoices";
@@ -34,8 +35,13 @@ export async function POST(
 
     if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-    const isOwner = invoice.submitter_user_id === session.user.id;
-    if (!isOwner && profile.role !== "admin" && profile.role !== "manager" && profile.role !== "operations") {
+    const allowed = await canAccessInvoice(supabase, invoiceId, session.user.id, {
+      role: profile.role,
+      department_id: profile.department_id,
+      program_ids: profile.program_ids,
+      full_name: profile.full_name ?? null,
+    });
+    if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

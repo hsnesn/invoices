@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { canAccessInvoice } from "@/lib/invoice-access";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const { session, profile } = await requireAuth();
     const { id: invoiceId } = await params;
     const supabase = createAdminClient();
+
+    const allowed = await canAccessInvoice(supabase, invoiceId, session.user.id, {
+      role: profile.role,
+      department_id: profile.department_id,
+      program_ids: profile.program_ids,
+      full_name: profile.full_name ?? null,
+    });
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { data: events } = await supabase
       .from("audit_events")

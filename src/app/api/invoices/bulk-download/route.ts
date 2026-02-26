@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { canAccessInvoice } from "@/lib/invoice-access";
 import JSZip from "jszip";
 
 const BUCKET = "invoices";
@@ -35,18 +36,13 @@ export async function POST(request: NextRequest) {
     for (const inv of invoices) {
       if (!inv.storage_path) continue;
 
-      if (profile.role !== "admin") {
-        if (inv.submitter_user_id !== session.user.id) {
-          const { data: wf } = await supabase
-            .from("invoice_workflows")
-            .select("manager_user_id")
-            .eq("invoice_id", inv.id)
-            .single();
-          if (wf?.manager_user_id !== session.user.id && profile.role !== "finance") {
-            continue;
-          }
-        }
-      }
+      const allowed = await canAccessInvoice(supabase, inv.id, session.user.id, {
+        role: profile.role,
+        department_id: profile.department_id,
+        program_ids: profile.program_ids,
+        full_name: profile.full_name ?? null,
+      });
+      if (!allowed) continue;
 
       const { data: fileData } = await supabase.storage
         .from(BUCKET)

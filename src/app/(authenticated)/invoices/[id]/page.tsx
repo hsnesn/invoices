@@ -40,8 +40,20 @@ export default async function InvoicePage({
   const isFinance =
     profile.role === "finance" &&
     ["ready_for_payment", "paid", "archived"].includes(wfCheck?.status ?? "");
+  const isProducer = (() => {
+    const desc = (invoice as { service_description?: string | null }).service_description;
+    if (!desc || !profile.full_name) return false;
+    for (const line of desc.split("\n")) {
+      const l = line.trim();
+      if (l.toLowerCase().startsWith("producer:")) {
+        const val = l.slice(l.indexOf(":") + 1).trim();
+        return val.trim().toLowerCase() === profile.full_name.trim().toLowerCase();
+      }
+    }
+    return false;
+  })();
 
-  if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance) {
+  if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !isProducer) {
     notFound();
   }
 
