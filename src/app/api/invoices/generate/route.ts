@@ -123,6 +123,8 @@ export async function POST(request: NextRequest) {
     };
 
     const pdfBuffer = generateGuestInvoicePdf(pdfData);
+    const safeGuestName = data.guestName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-").slice(0, 40) || "invoice";
+    const invoiceFileName = `${safeGuestName}_${data.invoiceDate}_INV-${data.invNo.trim()}.pdf`;
     const pdfPath = `${session.user.id}/${invoiceId}-generated-invoice.pdf`;
 
     const { error: uploadErr } = await supabaseAdmin.storage.from(BUCKET).upload(pdfPath, Buffer.from(pdfBuffer), {
@@ -211,11 +213,11 @@ export async function POST(request: NextRequest) {
       { onConflict: "invoice_id" }
     );
 
-    // Add PDF as first file
+    // Add PDF as first file (display name: GuestName_Date_INV-No.pdf)
     await supabaseAdmin.from("invoice_files").insert({
       invoice_id: invoiceId,
       storage_path: pdfPath,
-      file_name: `invoice-${data.invNo}.pdf`,
+      file_name: invoiceFileName,
       sort_order: 0,
     });
 

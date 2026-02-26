@@ -4,7 +4,6 @@ const TO_ADDRESS = [
   "TRT WORLD UK",
   "200 Grays Inn Road",
   "Holborn, London",
-  "London",
   "WC1X 8XZ",
 ];
 
@@ -59,24 +58,27 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
 
   let y = 20;
 
-  // Top: INV NO (left) | DATE (right) - large caps
-  doc.setFontSize(12);
+  // Top: INV NO (left) | DATE (right) — larger, accent color
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 30, 30);
+  doc.setTextColor(30, 64, 120);
   doc.text(`INV NO: ${(data.invNo || "").toUpperCase()}`, mx, y);
   doc.text(`DATE: ${(data.invoiceDate || "").toUpperCase()}`, pw - mx, y, { align: "right" });
-  y += 14;
+  y += 16;
 
-  // FROM | TO side by side
-  const colW = (cw - 10) / 2;
-  doc.setFontSize(10);
+  // FROM | TO side by side — TO right-aligned, larger fonts, color
+  const toX = pw - mx; // right edge for TO block
+
+  // FROM header — subtle blue
+  doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 64, 120);
   doc.text("FROM", mx, y);
-  doc.text("TO", mx + colW + 10, y);
   y += 6;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(10);
+  doc.setTextColor(40, 40, 40);
   const fromLines = [
     data.guestName,
     data.guestAddress || "",
@@ -85,33 +87,45 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   ].filter(Boolean);
   fromLines.forEach((line) => {
     doc.text(line, mx, y);
-    y += 5;
+    y += 5.5;
   });
 
   const fromBottom = y;
-  y = fromBottom - fromLines.length * 5 - 6;
+  y = fromBottom - fromLines.length * 5.5 - 6;
 
-  doc.text(TO_ADDRESS[0], mx + colW + 10, y + 6);
-  doc.text(TO_ADDRESS[1], mx + colW + 10, y + 11);
-  doc.text(TO_ADDRESS[2], mx + colW + 10, y + 16);
-  doc.text(TO_ADDRESS[3], mx + colW + 10, y + 21);
-  doc.text(TO_ADDRESS[4], mx + colW + 10, y + 26);
+  // TO header — right-aligned, accent color
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 64, 120);
+  doc.text("TO", toX, y + 6, { align: "right" });
 
-  y = Math.max(fromBottom, y + 30) + 10;
+  // TO address — right-aligned, larger font
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(40, 40, 40);
+  let toY = y + 12;
+  TO_ADDRESS.forEach((line) => {
+    doc.text(line, toX, toY, { align: "right" });
+    toY += 5.5;
+  });
 
-  // Table: Programme Name | Topic | Date | Amount
+  y = Math.max(fromBottom, toY + 4) + 10;
+
+  // Table: Programme Name | Topic | Date | Amount — colored header
   const colWidths = [45, 50, 35, 40];
   const headers = ["Programme Name", "Topic", "Date", "Amount"];
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.setFillColor(245, 247, 250);
-  doc.rect(mx, y, cw, 8, "F");
+  doc.setFillColor(30, 64, 120);
+  doc.rect(mx, y, cw, 10, "F");
+  doc.setTextColor(255, 255, 255);
   let x = mx;
   headers.forEach((h, i) => {
-    doc.text(h, x + 2, y + 5.5);
+    doc.text(h, x + 2, y + 6.5);
     x += colWidths[i];
   });
-  y += 8;
+  doc.setTextColor(40, 40, 40);
+  y += 10;
 
   doc.setFont("helvetica", "normal");
   for (const row of data.appearances) {
@@ -132,42 +146,54 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
     y += 7;
   }
 
-  // Expenses
+  // Expenses — accent header
   if (data.expenses.length > 0) {
     y += 4;
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(30, 64, 120);
     doc.text("Expenses", mx, y);
-    y += 6;
+    doc.setTextColor(40, 40, 40);
+    y += 7;
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
     for (const exp of data.expenses) {
       doc.text(`${exp.label}: ${fmtAmount(exp.amount, data.currency)}`, mx + 5, y);
       y += 5;
     }
   }
 
-  y += 6;
+  y += 8;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(12);
+  doc.setTextColor(30, 64, 120);
   doc.text(`TOTAL: ${fmtAmount(data.totalAmount, data.currency)}`, mx, y);
-  y += 14;
+  doc.setTextColor(40, 40, 40);
+  y += 16;
 
-  // Payment section
+  // Payment section — PayPal (if any) then bank details at bottom
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(11);
+  doc.setTextColor(30, 64, 120);
   doc.text("PAYMENT", mx, y);
-  y += 7;
+  doc.setTextColor(40, 40, 40);
+  y += 8;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text("We prefer PayPal if you have one.", mx, y);
-  y += 6;
 
   if (data.paypal?.trim()) {
-    doc.text(`PayPal: ${data.paypal.trim()}`, mx, y);
-    y += 6;
+    doc.setFont("helvetica", "bold");
+    doc.text("PayPal:", mx, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(data.paypal.trim(), mx + 22, y);
+    y += 8;
   }
 
-  doc.text("Payment by bank transfer:", mx, y);
+  // Bank transfer details at bottom
+  doc.setFont("helvetica", "bold");
+  doc.text("Bank transfer:", mx, y);
+  doc.setFont("helvetica", "normal");
   y += 5;
   doc.text(`Account Name:     ${data.accountName || ""}`, mx, y);
   y += 5;
