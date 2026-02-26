@@ -18,11 +18,11 @@ export function Nav({ profile }: { profile: Profile }) {
   };
 
   return (
-    <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200/80 bg-white/95 px-6 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-gray-800 dark:bg-gray-900 dark:bg-gray-900/95 supports-[backdrop-filter]:dark:bg-gray-900/80">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <img src="/trt-logo.png" alt="TRT" className="h-8 object-contain" />
-          <span className="text-base font-semibold text-gray-800 dark:text-white">
+    <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200/80 bg-white/95 px-4 sm:px-6 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-gray-800 dark:bg-gray-900 dark:bg-gray-900/95 supports-[backdrop-filter]:dark:bg-gray-900/80 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+        <Link href="/dashboard" className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+          <img src="/trt-logo.png" alt="TRT" className="h-7 sm:h-8 object-contain shrink-0" />
+          <span className="text-sm sm:text-base font-semibold text-gray-800 dark:text-white truncate">
             Invoice Approval
           </span>
         </Link>

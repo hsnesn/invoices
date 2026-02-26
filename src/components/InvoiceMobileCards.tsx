@@ -67,6 +67,7 @@ export function InvoiceMobileCards({
   rows,
   currentRole,
   currentUserId,
+  isOperationsRoomMember = false,
   selectedIds,
   onToggleSelect,
   onToggleAll,
@@ -98,6 +99,7 @@ export function InvoiceMobileCards({
   rows: DisplayRow[];
   currentRole: string;
   currentUserId: string;
+  isOperationsRoomMember?: boolean;
   onManagerApprove: (id: string) => void;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -150,11 +152,14 @@ export function InvoiceMobileCards({
   }
 
   return (
-    <div className="md:hidden">
-      <div ref={scrollRef} className="mobile-card-carousel flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory gap-4 pb-4 -mx-1 px-1 max-h-[calc(100vh-260px)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="md:hidden w-full min-w-0 overflow-hidden">
+      <div ref={scrollRef} className="mobile-card-carousel flex overflow-x-auto overflow-y-visible snap-x snap-mandatory gap-4 pb-4 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {rows.map((r) => {
           const isSubmitter = r.submitterId === currentUserId;
-          const canApprove = currentRole === "admin" || (!isSubmitter && currentRole === "manager");
+          const canApprove =
+            currentRole === "admin" ||
+            (!isSubmitter && currentRole === "manager") ||
+            (isOperationsRoomMember && (r.status === "approved_by_manager" || r.status === "pending_admin"));
           const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
           const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
           const canEdit = (currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status))) && onStartEdit;
@@ -169,7 +174,7 @@ export function InvoiceMobileCards({
             tabIndex={canSelectRow ? 0 : undefined}
             onClick={canSelectRow ? () => onToggleSelect!(r.id) : undefined}
             onKeyDown={canSelectRow ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleSelect!(r.id); } } : undefined}
-            className={`flex-shrink-0 w-[calc(100%-2rem)] min-w-[calc(100%-2rem)] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
+            className={`flex-shrink-0 w-[85vw] max-w-[min(400px,calc(100vw-2rem))] min-w-[280px] rounded-xl border-2 bg-white p-4 shadow-md dark:bg-slate-800 snap-center transition-transform duration-300 ${canSelectRow ? "cursor-pointer" : ""} ${
               r.status === "rejected"
                 ? "border-rose-300 dark:border-rose-700"
                 : "border-slate-200 dark:border-slate-600"
@@ -196,6 +201,57 @@ export function InvoiceMobileCards({
                   {statusLabel(r.status)}
                 </span>
               </div>
+
+              {/* Action buttons - prominent at top for mobile */}
+              {((r.status === "pending_manager" || r.status === "submitted") && canApprove) || canResubmit || canMarkPaid || (canReject && r.status !== "pending_manager" && r.status !== "submitted") ? (
+                <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-200 dark:border-gray-600" onClick={(e) => e.stopPropagation()}>
+                  {(r.status === "pending_manager" || r.status === "submitted") && canApprove && (
+                    <>
+                      <button
+                        onClick={() => void onManagerApprove(r.id)}
+                        disabled={actionLoadingId === r.id}
+                        className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        {actionLoadingId === r.id ? "…" : "✓ Approve"}
+                      </button>
+                      <button
+                        onClick={() => void onRejectInvoice(r.id)}
+                        disabled={actionLoadingId === r.id}
+                        className="flex-1 min-w-[100px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                      >
+                        ✗ Reject
+                      </button>
+                    </>
+                  )}
+                  {canResubmit && (
+                    <button
+                      onClick={() => void onResubmit(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      {actionLoadingId === r.id ? "…" : "↻ Resubmit"}
+                    </button>
+                  )}
+                  {canMarkPaid && (
+                    <button
+                      onClick={() => void onMarkPaid(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      className="flex-1 min-w-[100px] rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      {actionLoadingId === r.id ? "…" : "£ Mark Paid"}
+                    </button>
+                  )}
+                  {canReject && r.status !== "pending_manager" && r.status !== "submitted" && (
+                    <button
+                      onClick={() => void onRejectInvoice(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      className="flex-1 min-w-[100px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                    >
+                      ✗ Reject
+                    </button>
+                  )}
+                </div>
+              ) : null}
 
               <div className="space-y-2 text-sm">
                 {[
@@ -301,51 +357,6 @@ export function InvoiceMobileCards({
                   </svg>
                   View File
                 </button>
-                {(r.status === "pending_manager" || r.status === "submitted") && canApprove && (
-                  <>
-                    <button
-                      onClick={() => void onManagerApprove(r.id)}
-                      disabled={actionLoadingId === r.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                    >
-                      {actionLoadingId === r.id ? "…" : "✓"} Approve
-                    </button>
-                    <button
-                      onClick={() => void onRejectInvoice(r.id)}
-                      disabled={actionLoadingId === r.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
-                    >
-                      ✗ Reject
-                    </button>
-                  </>
-                )}
-                {canResubmit && (
-                  <button
-                    onClick={() => void onResubmit(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {actionLoadingId === r.id ? "…" : "↻"} Resubmit
-                  </button>
-                )}
-                {canMarkPaid && (
-                  <button
-                    onClick={() => void onMarkPaid(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {actionLoadingId === r.id ? "…" : "£"} Mark Paid
-                  </button>
-                )}
-                {canReject && r.status !== "pending_manager" && r.status !== "submitted" && (
-                  <button
-                    onClick={() => void onRejectInvoice(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
-                  >
-                    ✗ Reject
-                  </button>
-                )}
               </div>
             </div>
           </div>

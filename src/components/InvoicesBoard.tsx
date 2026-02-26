@@ -1086,6 +1086,7 @@ export function InvoicesBoard({
   producerColorsMap = {},
   currentRole,
   currentUserId,
+  isOperationsRoomMember = false,
 }: {
   invoices: InvoiceRow[];
   departmentPairs: [string, string][];
@@ -1095,6 +1096,7 @@ export function InvoicesBoard({
   producerColorsMap?: Record<string, string>;
   currentRole: string;
   currentUserId: string;
+  isOperationsRoomMember?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
@@ -2166,14 +2168,14 @@ export function InvoicesBoard({
   }, []);
 
   return (
-    <div className="space-y-6 text-slate-800 dark:text-slate-100">
+    <div className="space-y-6 text-slate-800 dark:text-slate-100 max-w-full min-w-0 overflow-x-hidden">
       {actionLoadingId && (
         <div className="fixed top-0 left-0 right-0 z-50 h-1 overflow-hidden bg-slate-200 dark:bg-slate-700">
           <div className="h-full w-1/3 bg-blue-500 animate-loading-bar" />
         </div>
       )}
       {/* Top Action Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Guest Invoice Submission</h1>
         <div className="flex items-center gap-2">
           {currentRole !== "viewer" && (
@@ -2488,8 +2490,8 @@ export function InvoicesBoard({
         </div>
       )}
 
-      <div className={`rounded-2xl border-2 border-slate-300 bg-slate-100 shadow-lg dark:border-slate-600 dark:bg-slate-800 ${selectedIds.size > 0 ? "relative z-40" : ""}`}>
-        <div className="flex flex-wrap items-center gap-2 p-4">
+      <div className={`rounded-2xl border-2 border-slate-300 bg-slate-100 shadow-lg dark:border-slate-600 dark:bg-slate-800 overflow-hidden ${selectedIds.size > 0 ? "relative z-40" : ""}`}>
+        <div className="flex flex-wrap items-center gap-2 p-4 overflow-x-auto md:overflow-visible min-w-0">
           <div className="relative flex-1 min-w-[180px]">
             <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             <input
@@ -2738,6 +2740,7 @@ export function InvoicesBoard({
                 rows={data}
                 currentRole={currentRole}
                 currentUserId={currentUserId}
+                isOperationsRoomMember={isOperationsRoomMember}
                 selectedIds={selectedIds}
                 onToggleSelect={onToggleSelect}
                 onToggleAll={onToggleAll}

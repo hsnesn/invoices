@@ -97,11 +97,12 @@ export default async function InvoicesPage() {
     )
   );
 
-  const [{ data: departments }, { data: programs }, { data: profiles }, { data: producerColors }] = await Promise.all([
+  const [{ data: departments }, { data: programs }, { data: profiles }, { data: producerColors }, { data: orMembers }] = await Promise.all([
     supabase.from("departments").select("id,name"),
     supabase.from("programs").select("id,name"),
     supabase.from("profiles").select("id,full_name,role"),
     supabase.from("producer_colors").select("producer_name,color_hex"),
+    supabase.from("operations_room_members").select("user_id").eq("user_id", session.user.id).maybeSingle(),
   ]);
 
   const allProfiles = (profiles ?? []) as { id: string; full_name: string | null; role?: string }[];
@@ -115,6 +116,8 @@ export default async function InvoicesPage() {
     producerColorsMap[r.producer_name] = r.color_hex;
   });
 
+  const isOperationsRoomMember = !!orMembers || profile.role === "operations";
+
   return (
     <InvoicesBoard
       invoices={visibleInvoices as never[]}
@@ -125,6 +128,7 @@ export default async function InvoicesPage() {
       producerColorsMap={producerColorsMap}
       currentRole={profile.role}
       currentUserId={session.user.id}
+      isOperationsRoomMember={isOperationsRoomMember}
     />
   );
 }
