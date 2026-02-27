@@ -143,14 +143,18 @@ function regexExtractFromText(text: string) {
 
   const invoiceNumber =
     lineValue([
-      /(?:invoice\s*(?:number|no|#)\s*[:\-.]?\s*)([A-Z0-9\-\/]+)/i,
-      /(?:inv(?:oice)?\s*#\s*[:\-.]?\s*)([A-Z0-9\-\/]+)/i,
-      /(?:reference|ref)\s*[:\-.]?\s*([A-Z0-9\-\/]{4,})/i,
+      /(?:invoice\s*(?:number|no|#)\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
+      /(?:inv(?:oice)?\s*#?\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
+      /(?:invoice\s*ref(?:erence)?)\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
+      /(?:reference|ref)\s*[:\-.]?\s*([A-Za-z0-9\-\/]{4,})/i,
+      /(?:bill\s*to|invoice)\s*[:\-.]?\s*([A-Za-z0-9\-\/]{4,})/i,
     ]) ?? null;
   const sortCodeRaw =
     lineValue([
-      /(?:sort\s*\/\s*branch\s*code|sort\s*code)\s*[:\-]?\s*(\d{6})/i,
-      /(?:sort\s*code)\s*[:\-.]?\s*(\d{2}[- ]?\d{2}[- ]?\d{2})/i,
+      /(?:sort\s*\/\s*branch\s*code|sort\s*code|branch\s*sort\s*code)\s*[:\-.]?\s*(\d{6})/i,
+      /(?:sort\s*code|sort\s*\/\s*branch)\s*[:\-.]?\s*(\d{2}[\s\-.]?\d{2}[\s\-.]?\d{2})/i,
+      /(?:sort\s*code)\s*[:\-.]?\s*([0-9\s\-]{6,12})/i,
+      /(\d{2}[\s\-]\d{2}[\s\-]\d{2})\s*(?:sort|branch)/i,
     ]) ?? null;
   const accountNumber =
     lineValue([
@@ -193,8 +197,20 @@ function regexExtractFromText(text: string) {
   const vatRaw =
     lineValue([/(?:vat|tax)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i]) ?? null;
   const date =
-    full.match(/\b(20\d{2}[-\/.]\d{1,2}[-\/.]\d{1,2})\b/)?.[1]?.replace(/[/.]/g, "-") ??
-    null;
+    lineValue([
+      /(?:invoice\s*date|date\s*of\s*invoice|invoice\s*date\s*issued)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4})/i,
+      /(?:date|issued)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4})/i,
+      /\b(20\d{2}[-\/.]\d{1,2}[-\/.]\d{1,2})\b/,
+      /\b(\d{1,2}[-\/.]\d{1,2}[-\/.]20\d{2})\b/,
+    ]) ?? null;
+  const dateNorm = date ? (() => {
+    const d = date.replace(/[/.]/g, "-");
+    const m = d.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    const m2 = d.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m2) return `${m2[1]}-${m2[2].padStart(2, "0")}-${m2[3].padStart(2, "0")}`;
+    return d;
+  })() : null;
   const dueDate =
     lineValue([
       /(?:due\s*date|payment\s*due|date\s*due)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4}|\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2})/i,
@@ -245,7 +261,7 @@ function regexExtractFromText(text: string) {
     account_number: accountNumber,
     sort_code: sortCodeRaw ? normalizeSortCode(sortCodeRaw) ?? sortCodeRaw : null,
     invoice_number: stripInternalRefs(invoiceNumber),
-    invoice_date: date,
+    invoice_date: dateNorm ?? date,
     due_date: dueDateNorm || dueDate,
     net_amount: parseNumberLike(netRaw),
     vat_amount: parseNumberLike(vatRaw),
@@ -413,7 +429,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     guest_email: `Extract ONLY the guest/contact email address from this invoice. Look for "Email", "E-mail", "Contact" - the email where the invoice sender can be reached. Format: name@domain.com. NEVER use TRT World or internal emails.` + CERTAIN_SUFFIX,
   };
 
-  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "due_date", "currency", "guest_phone", "guest_email"];
+  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "due_date", "currency", "sort_code", "guest_phone", "guest_email"];
 
   async function extractSingleField(
     fieldKey: string,
@@ -479,8 +495,9 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     const v = (regexParsed as Record<string, unknown>)[k];
     if (k === "gross_amount") return typeof v === "number" && v > 0;
     if (k === "invoice_number") return typeof v === "string" && v.trim().length >= 3;
-    if (k === "invoice_date") return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test((v as string).trim());
+    if (k === "invoice_date") return typeof v === "string" && (v as string).trim().length >= 8 && /^\d{4}-\d{2}-\d{2}$/.test((v as string).trim());
     if (k === "due_date") return typeof v === "string" && (v as string).trim().length >= 8;
+    if (k === "sort_code") return typeof v === "string" && (normalizeSortCode(v as string) ?? "").length === 6;
     if (k === "currency") return typeof v === "string" && ["GBP", "EUR", "USD", "TRY"].includes((v as string).toUpperCase());
     return v != null && String(v).trim() !== "";
   };
