@@ -169,7 +169,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({
+      apiKey,
+      timeout: 25_000,
+      maxRetries: 1,
+    });
 
     const appearancesText = appearances
       .map(
@@ -223,12 +227,16 @@ Provide a concise assessment following the format described.`;
       const isAuth = /api_key|invalid|authentication|401|unauthorized/i.test(msg);
       const isRateLimit = /rate_limit|429|too many/i.test(msg);
       const isTimeout = /timeout|timed out|ETIMEDOUT|ECONNRESET/i.test(msg);
+      const isConnection =
+        /connection|ECONNREFUSED|ENOTFOUND|fetch failed|network|socket hang|ETIMEDOUT/i.test(msg);
       if (isAuth) {
-        assessment = "AI assessment unavailable: OpenAI API key is invalid or missing. Check OPENAI_API_KEY in Vercel environment variables.";
+        assessment =
+          "AI assessment unavailable: OpenAI API key is invalid or missing. Add OPENAI_API_KEY in Vercel → Project Settings → Environment Variables.";
       } else if (isRateLimit) {
         assessment = "AI assessment temporarily unavailable: Too many requests. Please try again in a moment.";
-      } else if (isTimeout) {
-        assessment = "AI assessment timed out. The OpenAI API took too long to respond. Please try again.";
+      } else if (isTimeout || isConnection) {
+        assessment =
+          "AI assessment unavailable: Cannot reach OpenAI API from the server. Check: 1) OPENAI_API_KEY is set in Vercel env vars. 2) Your OpenAI account has credits. 3) Try redeploying or a different Vercel region.";
       } else {
         assessment = `AI assessment temporarily unavailable: ${msg}`;
       }
