@@ -134,13 +134,22 @@ export async function GET() {
       }
     }
 
-    const totalPending = guest.pending + freelancer.pending + other.pending;
+    let messagesUnread = 0;
+    const { count: msgCount } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", userId)
+      .is("read_at", null);
+    messagesUnread = msgCount ?? 0;
+
+    const totalPending = guest.pending + freelancer.pending + other.pending + messagesUnread;
 
     return NextResponse.json(
       {
         guest: { pending: guest.pending },
         freelancer: { pending: freelancer.pending },
         other: { pending: other.pending },
+        messagesUnread,
         totalPending,
       },
       { headers: { "Cache-Control": "no-store, max-age=0" } }
@@ -153,6 +162,7 @@ export async function GET() {
         guest: { pending: 0 },
         freelancer: { pending: 0 },
         other: { pending: 0 },
+        messagesUnread: 0,
         totalPending: 0,
       },
       { status: 200 }

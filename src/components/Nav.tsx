@@ -45,6 +45,12 @@ export function Nav({ profile }: { profile: Profile }) {
         )}
         <NotificationDropdown profile={profile} />
         <Link
+          href="/messages"
+          className="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
+        >
+          Messages
+        </Link>
+        <Link
           href="/help"
           className="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
         >

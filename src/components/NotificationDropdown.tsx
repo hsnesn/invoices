@@ -11,6 +11,7 @@ type MyTasks = {
   guest: { pending: number };
   freelancer: { pending: number };
   other?: { pending: number };
+  messagesUnread?: number;
   totalPending: number;
 };
 
@@ -97,6 +98,18 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
                     <span className="text-sm text-gray-700 dark:text-gray-300">Other invoices pending</span>
                     <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900/50 dark:text-orange-200">
                       {tasks.other?.pending ?? 0}
+                    </span>
+                  </Link>
+                )}
+                {(tasks.messagesUnread ?? 0) > 0 && (
+                  <Link
+                    href="/messages"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+                  >
+                    <span className="text-sm text-gray-700 dark:text-gray-300">New messages</span>
+                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200">
+                      {tasks.messagesUnread}
                     </span>
                   </Link>
                 )}

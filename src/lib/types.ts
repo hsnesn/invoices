@@ -19,6 +19,7 @@ export const ALL_PAGES = [
   { key: "setup", label: "Setup" },
   { key: "reports", label: "Reports" },
   { key: "guest_contacts", label: "Guest Contacts" },
+  { key: "messages", label: "Messages" },
   { key: "user_management", label: "User Management" },
 ] as const;
 
