@@ -1,7 +1,52 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import type { PageKey } from "@/lib/types";
+
+export async function POST(request: NextRequest) {
+  try {
+    const { profile } = await requireAuth();
+    if (profile.role !== "admin") {
+      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    }
+
+    const body = (await request.json()) as {
+      guest_name?: string;
+      phone?: string | null;
+      email?: string | null;
+      title?: string | null;
+    };
+
+    const guestName = body.guest_name?.trim();
+    if (!guestName || guestName.length < 2) {
+      return NextResponse.json({ error: "guest_name is required (min 2 chars)" }, { status: 400 });
+    }
+
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("guest_contacts")
+      .insert({
+        guest_name: guestName,
+        phone: body.phone?.trim() || null,
+        email: body.email?.trim() || null,
+        title: body.title?.trim() || null,
+        source: "manual",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json({ error: "A contact with this name already exists" }, { status: 409 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json(data);
+  } catch (e) {
+    if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
 
 function parseServiceDesc(desc: string | null | undefined): Record<string, string> {
   if (!desc?.trim()) return {};

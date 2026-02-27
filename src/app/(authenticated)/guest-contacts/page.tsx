@@ -15,7 +15,7 @@ export default async function GuestContactsPage() {
       .neq("invoice_type", "freelancer")
       .neq("invoice_type", "guest_contact_scan")
       .order("created_at", { ascending: false }),
-    supabase.from("guest_contacts").select("guest_name, phone, email, title, ai_contact_info, ai_searched_at, updated_at").order("guest_name"),
+    supabase.from("guest_contacts").select("id, guest_name, phone, email, title, ai_contact_info, ai_searched_at, updated_at").order("guest_name"),
   ]);
 
   function parseServiceDesc(desc: string | null | undefined): Record<string, string> {
@@ -42,7 +42,7 @@ export default async function GuestContactsPage() {
   }
 
   type AiContactInfo = { phone?: string | null; email?: string | null; social_media?: string[] } | null;
-  const rows: { guest_name: string; title: string | null; phone: string | null; email: string | null; invoice_id: string | null; created_at: string; ai_contact_info: AiContactInfo }[] = [];
+  const rows: { guest_name: string; title: string | null; phone: string | null; email: string | null; invoice_id: string | null; created_at: string; ai_contact_info: AiContactInfo; guest_contact_id?: string }[] = [];
 
   for (const inv of invoices ?? []) {
     const meta = parseServiceDesc(inv.service_description);
@@ -98,6 +98,7 @@ export default async function GuestContactsPage() {
   for (const gc of guestContactsRows ?? []) {
     const key = (gc.guest_name ?? "").toLowerCase().trim();
     if (!key) continue;
+    const gcId = (gc as { id?: string }).id ?? null;
     const existing = seen.get(key);
     const aiInfo = (gc as { ai_contact_info?: AiContactInfo }).ai_contact_info ?? null;
     const merged = {
@@ -108,15 +109,17 @@ export default async function GuestContactsPage() {
       invoice_id: (existing?.invoice_id as string) || null,
       created_at: existing?.created_at ?? gc.updated_at ?? "",
       ai_contact_info: aiInfo,
+      guest_contact_id: gcId ?? undefined,
     };
     if (!existing) {
-      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null });
-    } else if ((gc.phone && !existing.phone) || (gc.email && !existing.email) || aiInfo) {
+      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined });
+    } else if ((gc.phone && !existing.phone) || (gc.email && !existing.email) || aiInfo || gcId) {
       seen.set(key, {
         ...merged,
         phone: (merged.phone || gc.phone) ?? null,
         email: (merged.email || gc.email) ?? null,
         ai_contact_info: aiInfo ?? (existing as { ai_contact_info?: AiContactInfo }).ai_contact_info ?? null,
+        guest_contact_id: gcId ?? (existing as { guest_contact_id?: string }).guest_contact_id ?? undefined,
       });
     }
   }

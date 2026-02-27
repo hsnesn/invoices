@@ -14,6 +14,7 @@ type Contact = {
   invoice_id: string | null;
   created_at: string;
   ai_contact_info?: AiContactInfo;
+  guest_contact_id?: string;
 };
 
 type Appearance = {
@@ -33,11 +34,16 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [searchingGuest, setSearchingGuest] = useState<string | null>(null);
   const [bulkSearching, setBulkSearching] = useState(false);
+  const [selectedGuests, setSelectedGuests] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedGuest, setSelectedGuest] = useState<string | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessment, setAssessment] = useState<string | null>(null);
   const [appearances, setAppearances] = useState<Appearance[]>([]);
+  const [filterBy, setFilterBy] = useState<string>("all");
+  const [editContact, setEditContact] = useState<Contact | null>(null);
+  const [addModal, setAddModal] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const runExtraction = async () => {
     setExtracting(true);
@@ -105,9 +111,29 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
     }
   };
 
+  const toggleGuestSelection = (name: string) => {
+    setSelectedGuests((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const unique = Array.from(new Set(filtered.map((c) => c.guest_name)));
+    if (selectedGuests.size >= unique.length) {
+      setSelectedGuests(new Set());
+    } else {
+      setSelectedGuests(new Set(unique));
+    }
+  };
+
   const runBulkAiSearch = async () => {
-    const uniqueNames = Array.from(new Set(contacts.map((c) => c.guest_name)));
-    if (uniqueNames.length === 0) {
+    const namesToSearch = selectedGuests.size > 0
+      ? Array.from(selectedGuests)
+      : Array.from(new Set(filtered.map((c) => c.guest_name)));
+    if (namesToSearch.length === 0) {
       alert("No guests to search.");
       return;
     }
@@ -116,7 +142,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       const res = await fetch("/api/guest-contacts/bulk-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guest_names: uniqueNames }),
+        body: JSON.stringify({ guest_names: namesToSearch }),
         credentials: "same-origin",
       });
       const data = await res.json();
@@ -206,14 +232,98 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
 
   const filtered = contacts.filter((c) => {
     const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
+    const matchesSearch =
+      !q ||
       c.guest_name.toLowerCase().includes(q) ||
       (c.title?.toLowerCase().includes(q) ?? false) ||
       (c.phone?.includes(q) ?? false) ||
-      (c.email?.toLowerCase().includes(q) ?? false)
-    );
+      (c.email?.toLowerCase().includes(q) ?? false);
+    if (!matchesSearch) return false;
+    if (filterBy === "all") return true;
+    if (filterBy === "has_phone") return !!(c.phone || c.ai_contact_info?.phone);
+    if (filterBy === "has_email") return !!(c.email || c.ai_contact_info?.email);
+    if (filterBy === "has_ai") return !!c.ai_contact_info;
+    if (filterBy === "missing_phone") return !c.phone && !c.ai_contact_info?.phone;
+    if (filterBy === "missing_email") return !c.email && !c.ai_contact_info?.email;
+    return true;
   });
+
+  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => {
+    setSaving(true);
+    try {
+      if (editContact?.guest_contact_id) {
+        const res = await fetch(`/api/guest-contacts/${editContact.guest_contact_id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "same-origin",
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setEditContact(null);
+          window.location.reload();
+        } else {
+          alert(data.error ?? "Update failed");
+        }
+      } else {
+        const res = await fetch("/api/guest-contacts/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "same-origin",
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setEditContact(null);
+          window.location.reload();
+        } else {
+          alert(data.error ?? "Update failed");
+        }
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/guest-contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAddModal(false);
+        window.location.reload();
+      } else {
+        alert(data.error ?? "Create failed");
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteContact = async (id: string) => {
+    if (!confirm("Remove this contact from the list?")) return;
+    try {
+      const res = await fetch(`/api/guest-contacts/${id}`, { method: "DELETE", credentials: "same-origin" });
+      const data = await res.json();
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        alert(data.error ?? "Delete failed");
+      }
+    } catch {
+      alert("Request failed");
+    }
+  };
 
   return (
     <div>
@@ -241,6 +351,19 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           className="w-full max-w-md rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Search contacts"
         />
+        <select
+          value={filterBy}
+          onChange={(e) => setFilterBy(e.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          aria-label="Filter contacts"
+        >
+          <option value="all">All contacts</option>
+          <option value="has_phone">Has phone</option>
+          <option value="has_email">Has email</option>
+          <option value="has_ai">Has AI data</option>
+          <option value="missing_phone">Missing phone</option>
+          <option value="missing_email">Missing email</option>
+        </select>
         {isAdmin && (
           <>
             <button
@@ -282,7 +405,14 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
               disabled={bulkSearching || contacts.length === 0}
               className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
             >
-              {bulkSearching ? "Searching..." : "Bulk AI search for all guests"}
+              {bulkSearching ? "Searching..." : `Bulk AI search (${selectedGuests.size || "all"} selected)`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddModal(true)}
+              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            >
+              Add contact
             </button>
           </>
         )}
@@ -294,37 +424,53 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: "fixed" }}>
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              {isAdmin && (
+                <th className="w-10 px-2 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedGuests.size >= Array.from(new Set(filtered.map((c) => c.guest_name))).length}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all guests"
+                    className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                </th>
+              )}
+              <th className="w-[12%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Guest Name
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="w-[18%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Title
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="w-[10%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Phone
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="w-[12%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Email
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="w-[8%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Invoice
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="min-w-[280px] w-[25%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 AI Found
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="w-[10%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 AI Assessment
               </th>
+              {isAdmin && (
+                <th className="w-[8%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colSpan={isAdmin ? 9 : 7} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   {contacts.length === 0
                     ? "No guest data found yet. Data appears from invoices (guest name, title, phone, email when available)."
                     : "No matches for your search."}
@@ -333,10 +479,21 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             ) : (
               filtered.map((c) => (
                 <tr key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  {isAdmin && (
+                    <td className="px-2 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedGuests.has(c.guest_name)}
+                        onChange={() => toggleGuestSelection(c.guest_name)}
+                        aria-label={`Select ${c.guest_name}`}
+                        className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                     {c.guest_name}
                   </td>
-                  <td className="max-w-[280px] px-4 py-3 text-sm text-gray-600 dark:text-gray-300 break-words">
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
                     {c.title || "—"}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
@@ -369,35 +526,35 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
                     )}
                   </td>
-                  <td className="max-w-[320px] px-4 py-3 text-sm break-words">
+                  <td className="min-w-[280px] px-4 py-3 text-sm break-words" style={{ overflowWrap: "anywhere", wordBreak: "break-all" }}>
                     {c.ai_contact_info ? (
                       <div className="space-y-1">
                         {c.ai_contact_info.phone && (
                           <div className="flex items-center gap-1">
-                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                               AI
                             </span>
-                            <a href={`tel:${c.ai_contact_info.phone}`} className="text-sky-600 hover:underline dark:text-sky-400">
+                            <a href={`tel:${c.ai_contact_info.phone}`} className="text-sky-600 hover:underline dark:text-sky-400 break-all">
                               {c.ai_contact_info.phone}
                             </a>
                           </div>
                         )}
                         {c.ai_contact_info.email && (
                           <div className="flex items-center gap-1">
-                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                               AI
                             </span>
-                            <a href={`mailto:${c.ai_contact_info.email}`} className="text-sky-600 hover:underline dark:text-sky-400">
+                            <a href={`mailto:${c.ai_contact_info.email}`} className="text-sky-600 hover:underline dark:text-sky-400 break-all">
                               {c.ai_contact_info.email}
                             </a>
                           </div>
                         )}
                         {c.ai_contact_info.social_media?.map((url) => (
-                          <div key={url} className="flex items-start gap-1 break-all">
+                          <div key={url} className="flex items-start gap-1">
                             <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                               AI
                             </span>
-                            <a href={url} target="_blank" rel="noopener noreferrer" title={url} className="min-w-0 break-all text-sky-600 hover:underline dark:text-sky-400">
+                            <a href={url} target="_blank" rel="noopener noreferrer" title={url} className="min-w-0 text-sky-600 hover:underline dark:text-sky-400" style={{ overflowWrap: "anywhere", wordBreak: "break-all" }}>
                               {url}
                             </a>
                           </div>
@@ -434,6 +591,28 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       View AI Assessment
                     </button>
                   </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditContact(c)}
+                          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700"
+                        >
+                          Edit
+                        </button>
+                        {c.guest_contact_id && (
+                          <button
+                            type="button"
+                            onClick={() => deleteContact(c.guest_contact_id!)}
+                            className="rounded border border-red-200 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-gray-800 dark:hover:bg-red-900/20"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -504,6 +683,149 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           </div>
         </div>
       )}
+
+      {editContact && (
+        <ContactFormModal
+          modalTitle="Edit contact"
+          initial={{ guest_name: editContact.guest_name, phone: editContact.phone, email: editContact.email, title: editContact.title }}
+          onSave={(payload) => saveContact(payload)}
+          onClose={() => setEditContact(null)}
+          saving={saving}
+        />
+      )}
+
+      {addModal && (
+        <ContactFormModal
+          modalTitle="Add contact"
+          initial={{ guest_name: "", phone: "", email: "", title: "" }}
+          onSave={(payload) => createContact(payload)}
+          onClose={() => setAddModal(false)}
+          saving={saving}
+        />
+      )}
+    </div>
+  );
+}
+
+function ContactFormModal({
+  modalTitle,
+  initial,
+  onSave,
+  onClose,
+  saving,
+}: {
+  modalTitle: string;
+  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null };
+  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => void;
+  onClose: () => void;
+  saving: boolean;
+}) {
+  const [guestName, setGuestName] = useState(initial.guest_name);
+  const [phone, setPhone] = useState(initial.phone ?? "");
+  const [email, setEmail] = useState(initial.email ?? "");
+  const [title, setTitle] = useState(initial.title ?? "");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = guestName.trim();
+    if (!name || name.length < 2) {
+      alert("Guest name is required (min 2 chars)");
+      return;
+    }
+    onSave({
+      guest_name: name,
+      phone: phone.trim() || null,
+      email: email.trim() || null,
+      title: title.trim() || null,
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="contact-form-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 id="contact-form-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+            {modalTitle}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="guest_name" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Guest name *
+            </label>
+            <input
+              id="guest_name"
+              type="text"
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+              required
+              minLength={2}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="title" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Title
+            </label>
+            <input
+              id="title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="phone" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Phone
+            </label>
+            <input
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
