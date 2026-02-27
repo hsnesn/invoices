@@ -1,11 +1,29 @@
 import { requirePageAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { filterAndSortContacts } from "@/lib/guest-contacts-utils";
 import { GuestContactsClient } from "./GuestContactsClient";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function GuestContactsPage() {
+const PAGE_SIZE = 25;
+
+export default async function GuestContactsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string; filterBy?: string; dateFilter?: string; deptFilter?: string; progFilter?: string; favoriteFilter?: string; sortBy?: string }>;
+}) {
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp?.page ?? "1", 10) || 1);
+  const filterParams = {
+    search: sp?.search ?? "",
+    filterBy: sp?.filterBy ?? "all",
+    dateFilter: sp?.dateFilter ?? "all",
+    deptFilter: sp?.deptFilter ?? "all",
+    progFilter: sp?.progFilter ?? "all",
+    favoriteFilter: sp?.favoriteFilter === "true" ? true : sp?.favoriteFilter === "false" ? false : null,
+    sortBy: sp?.sortBy ?? "name",
+  };
   const { profile } = await requirePageAccess("guest_contacts");
   const supabase = createAdminClient();
   const [
@@ -207,13 +225,47 @@ export default async function GuestContactsPage() {
     }
   }
 
-  const contacts = Array.from(seen.values()).sort((a, b) =>
+  const allContacts = Array.from(seen.values()).sort((a, b) =>
     a.guest_name.localeCompare(b.guest_name)
   );
 
+  const filtered = filterAndSortContacts(allContacts, filterParams);
+  const totalCount = filtered.length;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
+  const currentPage = Math.min(page, totalPages);
+  const paginatedContacts = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const filteredContacts = filtered;
+
+  const departmentNames = Array.from(new Set(allContacts.map((c) => c.department_name).filter(Boolean))) as string[];
+  const programNames = Array.from(new Set(allContacts.map((c) => c.program_name).filter(Boolean))) as string[];
+  const similarNames = (() => {
+    const seen = new Map<string, string[]>();
+    for (const c of allContacts) {
+      const key = c.guest_name.toLowerCase().replace(/\s+/g, " ").trim();
+      const parts = key.split(/\s+/);
+      const short = parts.length >= 2 ? `${parts[0]} ${parts[parts.length - 1]}` : key;
+      if (!seen.has(short)) seen.set(short, []);
+      const arr = seen.get(short)!;
+      if (!arr.includes(c.guest_name)) arr.push(c.guest_name);
+    }
+    return Array.from(seen.values()).filter((arr) => arr.length > 1);
+  })();
+
   return (
     <div className="mx-auto max-w-7xl p-4 sm:p-6">
-      <GuestContactsClient contacts={contacts} isAdmin={profile.role === "admin"} />
+      <GuestContactsClient
+        contacts={paginatedContacts}
+        filteredContacts={filteredContacts}
+        totalCount={totalCount}
+        page={currentPage}
+        totalPages={totalPages}
+        pageSize={PAGE_SIZE}
+        filterParams={filterParams}
+        departments={departmentNames}
+        programs={programNames}
+        similarNames={similarNames}
+        isAdmin={profile.role === "admin"}
+      />
     </div>
   );
 }

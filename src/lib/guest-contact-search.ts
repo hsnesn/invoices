@@ -77,7 +77,7 @@ export async function runGuestContactSearch(guestName: string): Promise<void> {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/$/, "");
 
-  let extracted: { phone?: string; email?: string; social_media?: string[] } = {};
+  let extracted: { phone?: string; email?: string; social_media?: string[]; confidence?: number } = {};
   if (apiKey) {
     try {
       const controller = new AbortController();
@@ -91,8 +91,10 @@ export async function runGuestContactSearch(guestName: string): Promise<void> {
             {
               role: "user",
               content: `Extract contact info for "${name}" from these search results. Return JSON only:
-{"phone": "number or null", "email": "address or null", "social_media": ["url1", "url2"]}
-Only include URLs that look like Twitter/X, LinkedIn, Instagram, Facebook profiles. No other sites. If nothing found, use null for phone/email and [] for social_media.
+{"phone": "number or null", "email": "address or null", "social_media": ["url1", "url2"], "confidence": 0-100}
+- confidence: 0-100, how confident you are that this info belongs to this person (100=very sure, 0=guess)
+- Only include URLs that look like Twitter/X, LinkedIn, Instagram, Facebook profiles. No other sites.
+- If nothing found, use null for phone/email, [] for social_media, and low confidence.
 
 SEARCH RESULTS:
 ${text.slice(0, 8000)}`,
@@ -107,10 +109,12 @@ ${text.slice(0, 8000)}`,
       const raw = data.choices?.[0]?.message?.content?.trim();
       if (raw) {
         const parsed = JSON.parse(raw.replace(/```json?\s*|\s*```/g, "").trim()) as Record<string, unknown>;
+        const conf = typeof parsed.confidence === "number" ? Math.min(100, Math.max(0, parsed.confidence)) : undefined;
         extracted = {
           phone: typeof parsed.phone === "string" && parsed.phone !== "null" ? parsed.phone : undefined,
           email: typeof parsed.email === "string" && parsed.email !== "null" ? parsed.email : undefined,
           social_media: Array.isArray(parsed.social_media) ? parsed.social_media.filter((u): u is string => typeof u === "string") : undefined,
+          confidence: conf,
         };
       }
     } catch {
@@ -122,6 +126,7 @@ ${text.slice(0, 8000)}`,
     phone: extracted?.phone ?? null,
     email: extracted?.email ?? null,
     social_media: extracted?.social_media ?? [],
+    ...(typeof extracted?.confidence === "number" && { confidence: extracted.confidence }),
   };
 
   if (existing) {

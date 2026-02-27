@@ -1,10 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { toUserFriendlyError } from "@/lib/error-messages";
 
-type AiContactInfo = { phone?: string | null; email?: string | null; social_media?: string[] } | null;
+type FilterParams = {
+  search?: string;
+  filterBy?: string;
+  dateFilter?: string;
+  deptFilter?: string;
+  progFilter?: string;
+  favoriteFilter?: boolean | null;
+  sortBy?: string;
+};
+
+const COLUMNS_STORAGE_KEY = "guest-contacts-columns";
+
+type AiContactInfo = { phone?: string | null; email?: string | null; social_media?: string[]; confidence?: number } | null;
 
 type Contact = {
   guest_name: string;
@@ -47,8 +60,35 @@ const COLUMN_LABELS: Record<string, string> = {
   actions: "Actions",
 };
 
-export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]; isAdmin?: boolean }) {
-  const [search, setSearch] = useState("");
+export function GuestContactsClient({
+  contacts,
+  filteredContacts,
+  totalCount,
+  page,
+  totalPages,
+  pageSize,
+  filterParams,
+  departments,
+  programs,
+  similarNames: similarNamesProp,
+  isAdmin,
+}: {
+  contacts: Contact[];
+  filteredContacts: Contact[];
+  totalCount: number;
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  filterParams: FilterParams;
+  departments: string[];
+  programs: string[];
+  similarNames: string[][];
+  isAdmin?: boolean;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [searchInput, setSearchInput] = useState(filterParams.search ?? "");
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractMessage, setExtractMessage] = useState<string | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
@@ -60,21 +100,65 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [selectedGuest, setSelectedGuest] = useState<string | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessment, setAssessment] = useState<string | null>(null);
+  const [assessmentCached, setAssessmentCached] = useState(false);
   const [appearances, setAppearances] = useState<Appearance[]>([]);
-  const [filterBy, setFilterBy] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<string>("all");
-  const [deptFilter, setDeptFilter] = useState<string>("all");
-  const [progFilter, setProgFilter] = useState<string>("all");
-  const [favoriteFilter, setFavoriteFilter] = useState<boolean | null>(null);
-  const [sortBy, setSortBy] = useState<string>("name");
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
-  const [page, setPage] = useState(1);
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [bulkEmailModal, setBulkEmailModal] = useState(false);
   const [columnsModal, setColumnsModal] = useState(false);
+  const [mergeModal, setMergeModal] = useState<string[] | null>(null);
+  const [merging, setMerging] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(COLUMN_IDS));
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set(COLUMN_IDS);
+    try {
+      const stored = localStorage.getItem(COLUMNS_STORAGE_KEY);
+      if (stored) {
+        const arr = JSON.parse(stored) as string[];
+        const valid = arr.filter((id) => (COLUMN_IDS as readonly string[]).includes(id));
+        if (valid.length > 0) return new Set(valid);
+      }
+    } catch {
+      // ignore
+    }
+    return new Set(COLUMN_IDS);
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)));
+    } catch {
+      // ignore
+    }
+  }, [visibleColumns]);
+
+  const updateUrl = (updates: Partial<FilterParams> & { page?: number }) => {
+    const params = new URLSearchParams();
+    const search = updates.search ?? filterParams.search ?? "";
+    const filterBy = updates.filterBy ?? filterParams.filterBy ?? "all";
+    const dateFilter = updates.dateFilter ?? filterParams.dateFilter ?? "all";
+    const deptFilter = updates.deptFilter ?? filterParams.deptFilter ?? "all";
+    const progFilter = updates.progFilter ?? filterParams.progFilter ?? "all";
+    const favoriteFilter = updates.favoriteFilter ?? filterParams.favoriteFilter ?? null;
+    const sortBy = updates.sortBy ?? filterParams.sortBy ?? "name";
+    const pageNum = updates.page ?? page;
+    if (search) params.set("search", search);
+    if (filterBy !== "all") params.set("filterBy", filterBy);
+    if (dateFilter !== "all") params.set("dateFilter", dateFilter);
+    if (deptFilter !== "all") params.set("deptFilter", deptFilter);
+    if (progFilter !== "all") params.set("progFilter", progFilter);
+    if (favoriteFilter === true) params.set("favoriteFilter", "true");
+    if (favoriteFilter === false) params.set("favoriteFilter", "false");
+    if (sortBy !== "name") params.set("sortBy", sortBy);
+    if (pageNum > 1) params.set("page", String(pageNum));
+    router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`);
+  };
+
+  useEffect(() => {
+    setSearchInput(filterParams.search ?? "");
+  }, [filterParams.search]);
 
   const toggleColumn = (id: string) => {
     setVisibleColumns((prev) => {
@@ -84,8 +168,6 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       return next;
     });
   };
-
-  const PAGE_SIZE = 25;
 
   const runExtraction = async () => {
     setExtracting(true);
@@ -163,18 +245,26 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   };
 
   const toggleSelectAll = () => {
-    const unique = Array.from(new Set(filtered.map((c) => c.guest_name)));
-    if (selectedGuests.size >= unique.length) {
-      setSelectedGuests(new Set());
+    const unique = Array.from(new Set(contacts.map((c) => c.guest_name)));
+    if (selectedGuests.size >= unique.length && unique.every((n) => selectedGuests.has(n))) {
+      setSelectedGuests((prev) => {
+        const next = new Set(prev);
+        for (const n of unique) next.delete(n);
+        return next;
+      });
     } else {
-      setSelectedGuests(new Set(unique));
+      setSelectedGuests((prev) => {
+        const next = new Set(prev);
+        for (const n of unique) next.add(n);
+        return next;
+      });
     }
   };
 
   const runBulkAiSearch = async () => {
     const namesToSearch = selectedGuests.size > 0
       ? Array.from(selectedGuests)
-      : Array.from(new Set(filtered.map((c) => c.guest_name)));
+      : Array.from(new Set(filteredContacts.map((c) => c.guest_name)));
     if (namesToSearch.length === 0) {
       alert("No guests to search.");
       return;
@@ -226,6 +316,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const openGuestAssessment = async (guestName: string, _cachedAssessment?: string | null) => {
     setSelectedGuest(guestName);
     setAssessment(null);
+    setAssessmentCached(false);
     setAppearances([]);
     setAssessmentLoading(true);
     try {
@@ -240,7 +331,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       });
       clearTimeout(timeoutId);
       const text = await res.text();
-      let data: { assessment?: string; appearances?: Appearance[]; error?: string };
+      let data: { assessment?: string; appearances?: Appearance[]; error?: string; cached?: boolean };
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
@@ -250,6 +341,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       if (res.ok) {
         setAssessment(data.assessment ?? "No assessment available.");
         setAppearances(data.appearances ?? []);
+        setAssessmentCached(!!data.cached);
       } else {
         setAssessment(data.error ?? "Failed to load assessment.");
       }
@@ -269,75 +361,19 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const closeAssessment = () => {
     setSelectedGuest(null);
     setAssessment(null);
+    setAssessmentCached(false);
     setAppearances([]);
   };
 
-  const now = new Date();
-  const dateCutoff = (days: number) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - days);
-    return d.getTime();
-  };
-  const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+  const filterBy = filterParams.filterBy ?? "all";
+  const dateFilter = filterParams.dateFilter ?? "all";
+  const deptFilter = filterParams.deptFilter ?? "all";
+  const progFilter = filterParams.progFilter ?? "all";
+  const favoriteFilter = filterParams.favoriteFilter ?? null;
+  const sortBy = filterParams.sortBy ?? "name";
+  const search = filterParams.search ?? "";
 
-  const departments = Array.from(new Set(contacts.map((c) => c.department_name).filter(Boolean))) as string[];
-  const programs = Array.from(new Set(contacts.map((c) => c.program_name).filter(Boolean))) as string[];
-
-  const filtered = contacts
-    .filter((c) => {
-      const q = search.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        c.guest_name.toLowerCase().includes(q) ||
-        (c.title?.toLowerCase().includes(q) ?? false) ||
-        (c.phone?.includes(q) ?? false) ||
-        (c.email?.toLowerCase().includes(q) ?? false) ||
-        (c.tags?.some((t) => t.toLowerCase().includes(q)) ?? false);
-      if (!matchesSearch) return false;
-      if (filterBy === "has_phone") return !!(c.phone || c.ai_contact_info?.phone);
-      if (filterBy === "has_email") return !!(c.email || c.ai_contact_info?.email);
-      if (filterBy === "has_ai") return !!c.ai_contact_info;
-      if (filterBy === "missing_phone") return !c.phone && !c.ai_contact_info?.phone;
-      if (filterBy === "missing_email") return !c.email && !c.ai_contact_info?.email;
-      if (dateFilter !== "all") {
-        const d = c.last_appearance_date || c.created_at;
-        if (!d) return false;
-        const t = new Date(d).getTime();
-        if (dateFilter === "7" && t < dateCutoff(7)) return false;
-        if (dateFilter === "30" && t < dateCutoff(30)) return false;
-        if (dateFilter === "90" && t < dateCutoff(90)) return false;
-        if (dateFilter === "year" && t < startOfYear) return false;
-      }
-      if (deptFilter !== "all" && c.department_name !== deptFilter) return false;
-      if (progFilter !== "all" && c.program_name !== progFilter) return false;
-      if (favoriteFilter === true && !c.is_favorite) return false;
-      if (favoriteFilter === false && c.is_favorite) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === "date") {
-        const ta = (a.last_appearance_date || a.created_at) ? new Date(a.last_appearance_date || a.created_at).getTime() : 0;
-        const tb = (b.last_appearance_date || b.created_at) ? new Date(b.last_appearance_date || b.created_at).getTime() : 0;
-        return tb - ta;
-      }
-      return a.guest_name.localeCompare(b.guest_name);
-    });
-
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
-
-  const similarNames = (() => {
-    const seen = new Map<string, string[]>();
-    for (const c of contacts) {
-      const key = c.guest_name.toLowerCase().replace(/\s+/g, " ").trim();
-      const parts = key.split(/\s+/);
-      const short = parts.length >= 2 ? `${parts[0]} ${parts[parts.length - 1]}` : key;
-      if (!seen.has(short)) seen.set(short, []);
-      const arr = seen.get(short)!;
-      if (!arr.includes(c.guest_name)) arr.push(c.guest_name);
-    }
-    return Array.from(seen.values()).filter((arr) => arr.length > 1);
-  })();
+  const similarNames = similarNamesProp;
 
   const toggleFavorite = async (c: Contact) => {
     const next = !c.is_favorite;
@@ -454,13 +490,38 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       ai_assessment: (c) => c.ai_assessment ?? "",
     };
     const headers = colOrder.map((id) => COLUMN_LABELS[id] ?? id);
-    const rows = filtered.map((c) => colOrder.map((id) => headerMap[id]?.(c) ?? ""));
+    const rows = filteredContacts.map((c) => colOrder.map((id) => headerMap[id]?.(c) ?? ""));
     const XLSX = await import("xlsx");
     const data = [headers, ...rows];
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Guest Contacts");
-    XLSX.writeFile(wb, `guest-contacts-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const hasFilters = filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || favoriteFilter != null || !!(search?.trim());
+    const baseName = `guest-contacts-${new Date().toISOString().slice(0, 10)}`;
+    XLSX.writeFile(wb, hasFilters ? `${baseName}-filtered.xlsx` : `${baseName}.xlsx`);
+  };
+
+  const runMerge = async (primary: string, mergeFrom: string[]) => {
+    setMerging(true);
+    try {
+      const res = await fetch("/api/guest-contacts/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primary, merge_from: mergeFrom }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMergeModal(null);
+        window.location.reload();
+      } else {
+        alert(data.error ?? "Merge failed");
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setMerging(false);
+    }
   };
 
   const deleteContact = async (id: string) => {
@@ -498,15 +559,21 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
           type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearchInput(v);
+            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+            searchTimeoutRef.current = setTimeout(() => updateUrl({ search: v, page: 1 }), 400);
+          }}
+          onKeyDown={(e) => { if (e.key === "Enter") { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); updateUrl({ search: searchInput, page: 1 }); } }}
           placeholder="Search by name, title, phone or email..."
           className="w-full max-w-md rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Search contacts"
         />
         <select
           value={filterBy}
-          onChange={(e) => { setFilterBy(e.target.value); setPage(1); }}
+          onChange={(e) => updateUrl({ filterBy: e.target.value, page: 1 })}
           className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Filter contacts"
         >
@@ -519,7 +586,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         </select>
         <select
           value={dateFilter}
-          onChange={(e) => { setDateFilter(e.target.value); setPage(1); }}
+          onChange={(e) => updateUrl({ dateFilter: e.target.value, page: 1 })}
           className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Filter by invoice date"
         >
@@ -531,7 +598,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         </select>
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
+          onChange={(e) => updateUrl({ sortBy: e.target.value })}
           className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Sort by"
         >
@@ -541,7 +608,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         {departments.length > 0 && (
           <select
             value={deptFilter}
-            onChange={(e) => { setDeptFilter(e.target.value); setPage(1); }}
+            onChange={(e) => updateUrl({ deptFilter: e.target.value, page: 1 })}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             aria-label="Filter by department"
           >
@@ -554,7 +621,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         {programs.length > 0 && (
           <select
             value={progFilter}
-            onChange={(e) => { setProgFilter(e.target.value); setPage(1); }}
+            onChange={(e) => updateUrl({ progFilter: e.target.value, page: 1 })}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             aria-label="Filter by programme"
           >
@@ -566,7 +633,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         )}
         <button
           type="button"
-          onClick={() => setFavoriteFilter(favoriteFilter === true ? null : true)}
+          onClick={() => updateUrl({ favoriteFilter: favoriteFilter === true ? null : true, page: 1 })}
           className={`rounded-lg px-3 py-2 text-sm font-medium ${favoriteFilter === true ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"}`}
         >
           ★ Favorites
@@ -627,7 +694,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             <button
               type="button"
               onClick={runBulkAiSearch}
-              disabled={bulkSearching || contacts.length === 0}
+              disabled={bulkSearching || filteredContacts.length === 0}
               className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
             >
               {bulkSearching ? "Searching..." : `Bulk AI search (${selectedGuests.size || "all"} selected)`}
@@ -659,7 +726,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         <button
           type="button"
           onClick={exportExcel}
-          disabled={filtered.length === 0}
+          disabled={filteredContacts.length === 0}
           className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
         >
           Export Excel
@@ -674,14 +741,14 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} contacts
+          Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount} contacts
           {(filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || favoriteFilter) && " (filtered)"}
         </p>
         {totalPages > 1 && (
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => updateUrl({ page: Math.max(1, page - 1) })}
               disabled={page <= 1}
               className="rounded border border-gray-300 bg-white px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800"
             >
@@ -692,7 +759,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             </span>
             <button
               type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => updateUrl({ page: Math.min(totalPages, page + 1) })}
               disabled={page >= totalPages}
               className="rounded border border-gray-300 bg-white px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800"
             >
@@ -705,9 +772,34 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       {similarNames.length > 0 && (
         <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-900/20">
           <strong className="text-amber-800 dark:text-amber-200">Possible duplicates:</strong>{" "}
-          {similarNames.slice(0, 3).map((arr) => arr.join(" / ")).join(" • ")}
+          {similarNames.slice(0, 3).map((arr, i) => (
+            <span key={arr.join(",")}>
+              {i > 0 && " • "}
+              <span className="inline-flex items-center gap-1">
+                {arr.join(" / ")}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setMergeModal(arr)}
+                    className="rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-800/50"
+                  >
+                    Merge
+                  </button>
+                )}
+              </span>
+            </span>
+          ))}
           {similarNames.length > 3 && ` (+${similarNames.length - 3} more)`}
         </div>
+      )}
+
+      {mergeModal && (
+        <MergeModal
+          names={mergeModal}
+          onClose={() => setMergeModal(null)}
+          onMerge={runMerge}
+          merging={merging}
+        />
       )}
 
       {viewMode === "table" ? (
@@ -719,7 +811,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                 <th className="w-10 px-2 py-3 text-left">
                   <input
                     type="checkbox"
-                    checked={paginated.length > 0 && selectedGuests.size >= Array.from(new Set(paginated.map((c) => c.guest_name))).length}
+                    checked={contacts.length > 0 && selectedGuests.size >= Array.from(new Set(contacts.map((c) => c.guest_name))).length}
                     onChange={toggleSelectAll}
                     aria-label="Select all guests"
                     className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
@@ -762,7 +854,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {paginated.length === 0 ? (
+            {contacts.length === 0 ? (
               <tr>
                 <td colSpan={(isAdmin ? 1 : 0) + COLUMN_IDS.filter((id) => (id === "actions" ? isAdmin : true) && visibleColumns.has(id)).length} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   {contacts.length === 0
@@ -771,7 +863,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                 </td>
               </tr>
             ) : (
-              paginated.map((c) => (
+              contacts.map((c) => (
                 <tr key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   {isAdmin && (
                     <td className="px-2 py-2 align-top">
@@ -892,6 +984,11 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                         {!c.ai_contact_info.phone && !c.ai_contact_info.email && (!c.ai_contact_info.social_media?.length) && (
                           <span className="text-gray-400 text-xs">No AI results</span>
                         )}
+                        {typeof c.ai_contact_info.confidence === "number" && (
+                          <span className="shrink-0 text-[10px] text-gray-500 dark:text-gray-400" title="AI confidence">
+                            {c.ai_contact_info.confidence}%
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={() => runAiSearch(c.guest_name)}
@@ -954,7 +1051,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {paginated.map((c) => (
+          {contacts.map((c) => (
             <div
               key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`}
               className="rounded-xl border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800"
@@ -1030,6 +1127,9 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             <div className="mb-4 flex items-center justify-between">
               <h2 id="assessment-title" className="text-xl font-semibold text-gray-900 dark:text-white">
                 Guest: {selectedGuest}
+                {assessmentCached && (
+                  <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">(cached)</span>
+                )}
               </h2>
               <button
                 type="button"
@@ -1101,7 +1201,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
 
       {bulkEmailModal && (
         <BulkEmailModal
-          contacts={filtered.filter((c) => selectedGuests.has(c.guest_name))}
+          contacts={filteredContacts.filter((c) => selectedGuests.has(c.guest_name))}
           onClose={() => setBulkEmailModal(false)}
           onSent={() => { setBulkEmailModal(false); window.location.reload(); }}
         />
@@ -1135,6 +1235,65 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MergeModal({
+  names,
+  onClose,
+  onMerge,
+  merging,
+}: {
+  names: string[];
+  onClose: () => void;
+  onMerge: (primary: string, mergeFrom: string[]) => void;
+  merging: boolean;
+}) {
+  const [primary, setPrimary] = useState(names[0] ?? "");
+  const mergeFrom = names.filter((n) => n !== primary);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Merge duplicates</h2>
+        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+          Choose which name to keep. Other contacts will be merged into it.
+        </p>
+        <div className="mb-4 space-y-2">
+          {names.map((n) => (
+            <label key={n} className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="primary"
+                checked={primary === n}
+                onChange={() => setPrimary(n)}
+                className="h-4 w-4 text-sky-600"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">{n}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onMerge(primary, mergeFrom)}
+            disabled={merging || mergeFrom.length === 0}
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+          >
+            {merging ? "Merging..." : "Merge"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
