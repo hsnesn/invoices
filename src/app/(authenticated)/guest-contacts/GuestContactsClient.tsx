@@ -867,33 +867,31 @@ export function GuestContactsClient({
             >
               {duplicatesLoading ? "Searching..." : "Find duplicates"}
             </button>
-            <>
-              <input
-                ref={guestLogInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                aria-label="Select Guest Log Excel file"
-                onChange={(e) => setGuestLogFile(e.target.files?.[0] ?? null)}
-              />
-              <button
-                type="button"
-                onClick={() => guestLogInputRef.current?.click()}
-                className="rounded-lg border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-800 hover:bg-teal-100 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-200 dark:hover:bg-teal-900/50"
-              >
-                {guestLogFile ? guestLogFile.name : "Select Guest Log"}
-              </button>
-            </>
-            <button
-              type="button"
-              onClick={runGuestLogImport}
-              disabled={guestLogImporting || !guestLogFile}
-              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
-            >
-              {guestLogImporting ? "Importing..." : "Import Guest Log"}
-            </button>
           </>
         )}
+        <input
+          ref={guestLogInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          aria-label="Select Guest Log Excel file"
+          onChange={(e) => setGuestLogFile(e.target.files?.[0] ?? null)}
+        />
+        <button
+          type="button"
+          onClick={() => guestLogInputRef.current?.click()}
+          className="rounded-lg border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-800 hover:bg-teal-100 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-200 dark:hover:bg-teal-900/50"
+        >
+          {guestLogFile ? guestLogFile.name : "Select Guest Log"}
+        </button>
+        <button
+          type="button"
+          onClick={runGuestLogImport}
+          disabled={guestLogImporting || !guestLogFile}
+          className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+        >
+          {guestLogImporting ? "Importing..." : "Import Guest Log"}
+        </button>
         <button
           type="button"
           onClick={() => setColumnsModal(true)}
