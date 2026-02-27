@@ -1701,6 +1701,7 @@ export function GuestContactsClient({
       {bulkEmailModal && (
         <BulkEmailModal
           contacts={filteredContacts.filter((c) => selectedGuests.has(c.guest_name))}
+          programs={programs}
           onClose={() => setBulkEmailModal(false)}
           onSent={() => { setBulkEmailModal(false); window.location.reload(); }}
         />
@@ -1864,32 +1865,85 @@ function MergeModal({
   );
 }
 
-function BulkEmailModal({ contacts, onClose, onSent }: { contacts: Contact[]; onClose: () => void; onSent: () => void }) {
+type Producer = { id: string; full_name: string; email: string | null };
+type Program = { id: string; name: string };
+
+function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: { contacts: Contact[]; programs: string[]; onClose: () => void; onSent: () => void }) {
+  const [mode, setMode] = useState<"invite" | "custom">("invite");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [producers, setProducers] = useState<Producer[]>([]);
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [producerId, setProducerId] = useState("");
+  const [programName, setProgramName] = useState("");
+  const [topic, setTopic] = useState("");
+  const [recordDate, setRecordDate] = useState("");
+  const [recordTime, setRecordTime] = useState("");
   const [sending, setSending] = useState(false);
   const withEmail = contacts.filter((c) => c.email || c.ai_contact_info?.email);
 
+  useEffect(() => {
+    if (mode !== "invite") return;
+    const load = async () => {
+      try {
+        const [prodRes, progRes] = await Promise.all([
+          fetch("/api/guest-contacts/producers", { credentials: "same-origin" }),
+          fetch("/api/programs", { credentials: "same-origin" }),
+        ]);
+        if (prodRes.ok) {
+          const data = await prodRes.json();
+          setProducers(data ?? []);
+          setProducerId((prev) => (prev ? prev : data?.[0]?.id ?? ""));
+        }
+        if (progRes.ok) {
+          const data = await progRes.json();
+          setPrograms(data ?? []);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    load();
+  }, [mode]);
+
+  const selectedProducer = producers.find((p) => p.id === producerId);
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject.trim() || !message.trim()) {
-      toast.error("Subject and message are required");
-      return;
-    }
     if (withEmail.length === 0) {
       toast.error("No selected contacts have email addresses");
       return;
+    }
+    const payload = {
+      contacts: withEmail.map((c) => ({ guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email })),
+    };
+    if (mode === "invite") {
+      if (!selectedProducer?.email) {
+        toast.error("Please select a producer (reply-to address required)");
+        return;
+      }
+      Object.assign(payload, {
+        use_template: true,
+        producer_name: selectedProducer.full_name,
+        producer_email: selectedProducer.email,
+        program_name: programName.trim() || "our program",
+        topic: topic.trim() || "the scheduled topic",
+        record_date: recordDate.trim() || "TBD",
+        record_time: recordTime.trim() || "TBD",
+      });
+    } else {
+      if (!subject.trim() || !message.trim()) {
+        toast.error("Subject and message are required");
+        return;
+      }
+      Object.assign(payload, { subject: subject.trim(), message: message.trim() });
     }
     setSending(true);
     try {
       const res = await fetch("/api/guest-contacts/bulk-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contacts: withEmail.map((c) => ({ guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email })),
-          subject: subject.trim(),
-          message: message.trim(),
-        }),
+        body: JSON.stringify(payload),
         credentials: "same-origin",
       });
       const data = await res.json();
@@ -1906,34 +1960,89 @@ function BulkEmailModal({ contacts, onClose, onSent }: { contacts: Contact[]; on
     }
   };
 
+  const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Bulk email</h2>
         <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-          {withEmail.length} of {contacts.length} selected have email. Email will be sent to each recipient.
+          {withEmail.length} of {contacts.length} selected have email. {mode === "invite" ? "Invitation template will personalize each email." : "Email will be sent to each recipient."}
         </p>
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMode("invite")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${mode === "invite" ? "bg-sky-600 text-white" : "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300"}`}
+          >
+            Invite template
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("custom")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${mode === "custom" ? "bg-sky-600 text-white" : "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300"}`}
+          >
+            Custom message
+          </button>
+        </div>
         <form onSubmit={handleSend} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Subject *</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              required
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Message *</label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              required
-              rows={5}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
+          {mode === "invite" ? (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Producer (reply-to) *</label>
+                <select value={producerId} onChange={(e) => setProducerId(e.target.value)} required className={inputCls}>
+                  <option value="">Select producer</option>
+                  {producers.map((p) => (
+                    <option key={p.id} value={p.id}>{p.full_name} {p.email ? `(${p.email})` : ""}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Program name</label>
+                <input
+                  type="text"
+                  value={programName}
+                  onChange={(e) => setProgramName(e.target.value)}
+                  placeholder="e.g. News Hour"
+                  list="program-list"
+                  className={inputCls}
+                />
+                <datalist id="program-list">
+                  {Array.from(new Set([...programs.map((p) => p.name), ...programNames])).map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Topic</label>
+                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Foreign Policy" className={inputCls} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Recording date</label>
+                  <input type="date" value={recordDate} onChange={(e) => setRecordDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Recording time</label>
+                  <input type="time" value={recordTime} onChange={(e) => setRecordTime(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Each guest will receive a personalized email with polite greeting, program details, and a request to confirm participation. Replies go to the producer.
+              </p>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Subject *</label>
+                <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} required className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Message *</label>
+                <textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows={5} className={inputCls} />
+              </div>
+            </>
+          )}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Cancel</button>
             <button type="submit" disabled={sending || withEmail.length === 0} className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50">

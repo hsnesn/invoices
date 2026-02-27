@@ -163,7 +163,12 @@ function buildFreelancerDetailsHtml(d: FreelancerEmailDetails): string {
 /* Core send function                                                  */
 /* ------------------------------------------------------------------ */
 
-export async function sendEmail(params: { to: string | string[]; subject: string; html: string }) {
+export async function sendEmail(params: {
+  to: string | string[];
+  subject: string;
+  html: string;
+  replyTo?: string | string[];
+}) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY not set - skipping email");
     return { success: false, error: "Email not configured" };
@@ -171,7 +176,13 @@ export async function sendEmail(params: { to: string | string[]; subject: string
   const to = Array.isArray(params.to) ? params.to : [params.to];
   const resend = getResend();
   if (!resend) return { success: false, error: "Email not configured" };
-  const { data, error } = await resend.emails.send({ from: FROM_EMAIL, to, subject: params.subject, html: params.html });
+  const { data, error } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: params.subject,
+    html: params.html,
+    replyTo: params.replyTo,
+  });
   if (error) { console.error("Resend error:", error); return { success: false, error }; }
   return { success: true, data };
 }
