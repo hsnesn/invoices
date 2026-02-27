@@ -5,21 +5,21 @@ import Link from "next/link";
 import useSWR from "swr";
 import type { Profile } from "@/lib/types";
 
-const statsFetcher = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json());
+const tasksFetcher = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json());
 
-type Stats = {
-  guest: { pending: number; paid: number; rejected: number; total: number };
-  freelancer: { pending: number; paid: number; rejected: number; total: number };
-  other?: { pending: number; paid: number; rejected: number; total: number };
+type MyTasks = {
+  guest: { pending: number };
+  freelancer: { pending: number };
+  other?: { pending: number };
+  totalPending: number;
 };
 
 export function NotificationDropdown({ profile }: { profile: Profile }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const canSeeStats = profile.role !== "submitter";
-  const { data: stats } = useSWR<Stats>(
-    canSeeStats && open ? "/api/dashboard/stats" : null,
-    statsFetcher,
+  const { data: tasks } = useSWR<MyTasks>(
+    "/api/dashboard/my-tasks",
+    tasksFetcher,
     { revalidateOnFocus: true, dedupingInterval: 5000 }
   );
 
@@ -32,12 +32,10 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
   }, []);
 
   const canSeeOther = profile.role !== "viewer" || profile.allowed_pages?.includes("other_invoices");
-  const totalPending =
-    (stats?.guest?.pending ?? 0) +
-    (stats?.freelancer?.pending ?? 0) +
-    (canSeeOther ? (stats?.other?.pending ?? 0) : 0);
+  const totalPending = tasks?.totalPending ?? 0;
 
-  if (!canSeeStats) return null;
+  // Only show notification bell when user has pending tasks (hide when loading or empty)
+  if (tasks === undefined || totalPending === 0) return null;
 
   return (
     <div className="relative" ref={ref}>
@@ -61,12 +59,12 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
         <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border border-gray-200 bg-white py-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">
           <div className="border-b border-gray-100 px-4 py-2 dark:border-gray-800">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Pending items requiring attention</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Your pending tasks</p>
           </div>
           <div className="max-h-64 overflow-y-auto">
-            {stats ? (
+            {tasks !== undefined ? (
               <>
-                {stats.guest?.pending > 0 && (
+                {(tasks.guest?.pending ?? 0) > 0 && (
                   <Link
                     href="/invoices?group=pending"
                     onClick={() => setOpen(false)}
@@ -74,11 +72,11 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
                   >
                     <span className="text-sm text-gray-700 dark:text-gray-300">Guest invoices pending</span>
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-                      {stats.guest.pending}
+                      {tasks.guest.pending}
                     </span>
                   </Link>
                 )}
-                {stats.freelancer?.pending > 0 && (
+                {(tasks.freelancer?.pending ?? 0) > 0 && (
                   <Link
                     href="/freelancer-invoices"
                     onClick={() => setOpen(false)}
@@ -86,11 +84,11 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
                   >
                     <span className="text-sm text-gray-700 dark:text-gray-300">Contractor invoices pending</span>
                     <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-900/50 dark:text-teal-200">
-                      {stats.freelancer.pending}
+                      {tasks.freelancer.pending}
                     </span>
                   </Link>
                 )}
-                {canSeeOther && (stats.other?.pending ?? 0) > 0 && (
+                {canSeeOther && (tasks.other?.pending ?? 0) > 0 && (
                   <Link
                     href="/other-invoices"
                     onClick={() => setOpen(false)}
@@ -98,13 +96,13 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
                   >
                     <span className="text-sm text-gray-700 dark:text-gray-300">Other invoices pending</span>
                     <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900/50 dark:text-orange-200">
-                      {stats.other?.pending ?? 0}
+                      {tasks.other?.pending ?? 0}
                     </span>
                   </Link>
                 )}
                 {totalPending === 0 && (
                   <div className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                    No pending items
+                    No pending tasks for you
                   </div>
                 )}
               </>
