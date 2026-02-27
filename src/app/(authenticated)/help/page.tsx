@@ -19,7 +19,7 @@ export default async function HelpPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Help & Documentation</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Step-by-step guide to using the Invoice Approval system. Written in simple language.
+          Step-by-step guide to using the Invoice Approval system.
         </p>
       </div>
 
@@ -339,6 +339,7 @@ export default async function HelpPage() {
         >
           ← Back to Dashboard
         </Link>
+        <p className="mt-6 text-right text-sm text-gray-400 dark:text-gray-500">Hasan Esen</p>
       </div>
     </div>
   );
