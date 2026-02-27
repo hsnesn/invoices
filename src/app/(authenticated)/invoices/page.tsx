@@ -83,6 +83,7 @@ export default async function InvoicesPage({
       program_id,
       previous_invoice_id,
       submitter_user_id,
+      tags,
       invoice_workflows(status, rejection_reason, manager_user_id, paid_date),
       invoice_extracted_fields(invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency, raw_json, needs_review),
       invoice_files(storage_path, file_name, sort_order)

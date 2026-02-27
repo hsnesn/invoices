@@ -24,6 +24,7 @@ type InvoiceRow = {
   department_id: string | null;
   program_id: string | null;
   previous_invoice_id: string | null;
+  tags?: string[] | null;
   invoice_workflows: {
     status: string;
     rejection_reason: string | null;
@@ -74,6 +75,7 @@ type DisplayRow = {
   hasMissingInfo: boolean;
   missingFields: string[];
   files: { storage_path: string; file_name: string }[];
+  tags: string[];
 };
 
 type TimelineEvent = {
@@ -133,6 +135,7 @@ const ALL_COLUMNS = [
   { key: "accountNumber", label: "Account Number" },
   { key: "lineManager", label: "Dept EP" },
   { key: "paymentDate", label: "Payment Date" },
+  { key: "tags", label: "Tags" },
   { key: "actions", label: "Actions" },
 ];
 
@@ -519,6 +522,8 @@ function InvoiceTable({
   profilePairs,
   managerProfilePairs,
   producerColorsMap = {},
+  onSaveTag,
+  onRemoveTag,
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -561,6 +566,8 @@ function InvoiceTable({
   profilePairs: [string, string][];
   managerProfilePairs?: [string, string][];
   producerColorsMap?: Record<string, string>;
+  onSaveTag?: (invoiceId: string, newTag: string, currentTags: string[]) => Promise<void>;
+  onRemoveTag?: (invoiceId: string, tag: string, currentTags: string[]) => Promise<void>;
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -572,6 +579,8 @@ function InvoiceTable({
 
   const [fileDropTargetId, setFileDropTargetId] = useState<string | null>(null);
   const FILE_EXTS = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
+  const [editingTagsId, setEditingTagsId] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState("");
 
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRowClick = useCallback((r: DisplayRow) => {
@@ -833,6 +842,47 @@ function InvoiceTable({
               {isCol("accountNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountNumber}>{r.accountNumber}</td>}
               {isCol("lineManager") && <td className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>}
               {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
+              {isCol("tags") && (
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {r.tags.map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
+                        {tag}
+                        {onRemoveTag && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
+                          <button onClick={() => void onRemoveTag(r.id, tag, r.tags)} className="ml-0.5 text-teal-500 hover:text-red-500">✕</button>
+                        )}
+                      </span>
+                    ))}
+                    {onSaveTag && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter") && (
+                      editingTagsId === r.id ? (
+                        <input
+                          autoFocus
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && tagInput.trim()) {
+                              void onSaveTag(r.id, tagInput, r.tags);
+                              setTagInput("");
+                              setEditingTagsId(null);
+                            }
+                            if (e.key === "Escape") { setEditingTagsId(null); setTagInput(""); }
+                          }}
+                          onBlur={() => { setEditingTagsId(null); setTagInput(""); }}
+                          placeholder="add tag..."
+                          className="w-16 rounded border border-gray-300 px-1.5 py-0.5 text-[11px] focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => { setEditingTagsId(r.id); setTagInput(""); }}
+                          className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-500 hover:bg-teal-100 hover:text-teal-700 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-teal-900/40"
+                        >
+                          +
+                        </button>
+                      )
+                    )}
+                  </div>
+                </td>
+              )}
               {isCol("actions") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 {(() => {
                   const submitterCanEdit = isSubmitter && (r.status === "pending_manager" || r.status === "submitted");
@@ -1118,6 +1168,7 @@ export function InvoicesBoard({
   const [producerFilter, setProducerFilter] = useState("");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("");
   const [managerFilter, setManagerFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortField, setSortField] = useState<"" | "guest" | "invoiceDate" | "amount" | "producer" | "programme">("");
@@ -1345,6 +1396,7 @@ export function InvoicesBoard({
         hasMissingInfo,
         missingFields,
         files,
+        tags: (inv as { tags?: string[] | null }).tags ?? [],
       } satisfies DisplayRow;
     });
   }, [invoices, departmentMap, programMap, profileMap]);
@@ -1359,6 +1411,7 @@ export function InvoicesBoard({
       if (producerFilter && r.producer !== producerFilter) return false;
       if (paymentTypeFilter && r.paymentType.toLowerCase().replace(/\s+/g, "_") !== paymentTypeFilter) return false;
       if (managerFilter && r.lineManager !== managerFilter) return false;
+      if (tagFilter && !r.tags.includes(tagFilter)) return false;
       if (dateFrom && r.invoiceDate !== "—" && r.invoiceDate < dateFrom) return false;
       if (dateTo && r.invoiceDate !== "—" && r.invoiceDate > dateTo) return false;
       if (!q) return true;
@@ -1478,6 +1531,40 @@ export function InvoicesBoard({
     setPreviewDownloadUrl(null);
     setPreviewLoading(false);
   }, []);
+
+  const saveTag = useCallback(async (invoiceId: string, newTag: string, currentTags: string[]) => {
+    const tag = newTag.trim().toLowerCase();
+    if (!tag || currentTags.includes(tag)) return;
+    const updated = [...currentTags, tag];
+    try {
+      const res = await fetch("/api/invoices/tags", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_id: invoiceId, tags: updated }),
+      });
+      if (res.ok) {
+        const row = rows.find((r) => r.id === invoiceId);
+        if (row) row.tags = updated;
+        toast.success(`Tag "${tag}" added`);
+      }
+    } catch { /* */ }
+  }, [rows]);
+
+  const removeTag = useCallback(async (invoiceId: string, tagToRemove: string, currentTags: string[]) => {
+    const updated = currentTags.filter((t) => t !== tagToRemove);
+    try {
+      const res = await fetch("/api/invoices/tags", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_id: invoiceId, tags: updated }),
+      });
+      if (res.ok) {
+        const row = rows.find((r) => r.id === invoiceId);
+        if (row) row.tags = updated;
+        toast.success(`Tag "${tagToRemove}" removed`);
+      }
+    } catch { /* */ }
+  }, [rows]);
 
   const openPdf = useCallback(async (invoiceId: string, storagePath?: string) => {
     setPreviewLoading(true);
@@ -2613,6 +2700,10 @@ export function InvoicesBoard({
             <option value="">Dept EP</option>
             {Array.from(new Set(rows.map((r) => r.lineManager))).filter((v) => v !== "—").sort().map((v) => (<option key={v} value={v}>{v}</option>))}
           </select>
+          <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+            <option value="">Tags</option>
+            {Array.from(new Set(rows.flatMap((r) => r.tags))).sort().map((t) => (<option key={t} value={t}>{t}</option>))}
+          </select>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="From" />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="To" />
           <select value={sortField} onChange={(e) => setSortField(e.target.value as typeof sortField)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
@@ -2689,7 +2780,7 @@ export function InvoicesBoard({
             <button
               onClick={() => {
                 setSearch(""); setDepartmentFilter(""); setProgrammeFilter(""); setGroupFilter("");
-                setMissingInfoFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter("");
+                setMissingInfoFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter(""); setTagFilter("");
                 setDateFrom(""); setDateTo(""); setSortField("");
               }}
               className="rounded-lg bg-gray-100 px-2 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-200"
@@ -2749,6 +2840,12 @@ export function InvoicesBoard({
                 <button onClick={() => setManagerFilter("")} className="ml-0.5 hover:text-indigo-900">✕</button>
               </span>
             )}
+            {tagFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-xs text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                Tag: {tagFilter}
+                <button onClick={() => setTagFilter("")} className="ml-0.5 hover:text-teal-900">✕</button>
+              </span>
+            )}
             {dateFrom && (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
                 From: {dateFrom}
@@ -2770,7 +2867,7 @@ export function InvoicesBoard({
             <button
               onClick={() => {
                 setSearch(""); setDepartmentFilter(""); setProgrammeFilter(""); setGroupFilter("");
-                setMissingInfoFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter("");
+                setMissingInfoFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter(""); setTagFilter("");
                 setDateFrom(""); setDateTo(""); setSortField("");
               }}
               className="ml-auto rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-100"
@@ -2801,6 +2898,7 @@ export function InvoicesBoard({
                 setProducerFilter("");
                 setPaymentTypeFilter("");
                 setManagerFilter("");
+                setTagFilter("");
                 setDateFrom("");
                 setDateTo("");
                 setSortField("");
@@ -2897,6 +2995,8 @@ export function InvoicesBoard({
               profilePairs={profilePairs}
               managerProfilePairs={managerProfilePairs}
               producerColorsMap={producerColorsMap}
+              onSaveTag={saveTag}
+              onRemoveTag={removeTag}
             />
             </div>
           </section>

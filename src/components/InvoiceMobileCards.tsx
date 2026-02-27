@@ -33,6 +33,7 @@ type DisplayRow = {
   hasMissingInfo: boolean;
   missingFields: string[];
   files: { storage_path: string; file_name: string }[];
+  tags: string[];
 };
 
 type TimelineEvent = {

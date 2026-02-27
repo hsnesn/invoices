@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { GenerateInvoiceForm } from "@/components/GenerateInvoiceForm";
+
+type DuplicateHit = {
+  id: string;
+  guest: string;
+  amount: number | null;
+  date: string | null;
+  status: string;
+  invoice_number: string | null;
+  match_reasons: string[];
+};
 
 const fetcher = (url: string) =>
   fetch(url).then(async (r) => {
@@ -55,6 +65,9 @@ function SubmitPageContent() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [duplicates, setDuplicates] = useState<DuplicateHit[]>([]);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [duplicateChecked, setDuplicateChecked] = useState(false);
 
   useEffect(() => {
     if (deptError) setError(deptError.message ?? "Failed to load departments");
@@ -78,6 +91,35 @@ function SubmitPageContent() {
   }, [departmentId]);
 
   const markTouched = (field: string) => () => setTouched((p) => ({ ...p, [field]: true }));
+
+  const checkDuplicates = useCallback(async () => {
+    if (!guestName.trim()) return;
+    try {
+      const res = await fetch("/api/invoices/check-duplicates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guest_name: guestName.trim(),
+          invoice_date: txDate1 || undefined,
+          department_id: departmentId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.duplicates?.length > 0) {
+        setDuplicates(data.duplicates);
+      } else {
+        setDuplicates([]);
+      }
+      setDuplicateChecked(true);
+    } catch {
+      setDuplicateChecked(true);
+    }
+  }, [guestName, txDate1, departmentId]);
+
+  useEffect(() => {
+    setDuplicateChecked(false);
+    setDuplicates([]);
+  }, [guestName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +149,15 @@ function SubmitPageContent() {
         return;
       }
     }
+
+    if (!duplicateChecked) {
+      await checkDuplicates();
+    }
+    if (!showDuplicateWarning && duplicates.length > 0) {
+      setShowDuplicateWarning(true);
+      return;
+    }
+
     setLoading(true);
 
     const serviceDescription = [
@@ -226,13 +277,34 @@ function SubmitPageContent() {
             id="guestName"
             value={guestName}
             onChange={(e) => setGuestName(e.target.value.slice(0, 255))}
-            onBlur={markTouched("guestName")}
+            onBlur={() => { markTouched("guestName")(); void checkDuplicates(); }}
             className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 aria-[invalid=true]:border-red-500"
             aria-invalid={touched.guestName && !guestName.trim() ? true : undefined}
             aria-describedby={touched.guestName && !guestName.trim() ? "guestName-error" : undefined}
           />
           {touched.guestName && !guestName.trim() && <p id="guestName-error" className="mt-1 text-sm text-red-600" role="alert">Guest name is required</p>}
           <p className="mt-1 text-right text-sm text-slate-500">{guestName.length}/255</p>
+          {duplicates.length > 0 && (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/30">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+                <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                Potential duplicate{duplicates.length > 1 ? "s" : ""} found ({duplicates.length})
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {duplicates.slice(0, 3).map((d) => (
+                  <div key={d.id} className="flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                    <span className="font-medium">{d.guest}</span>
+                    {d.amount != null && <span>| {d.amount.toLocaleString("en-GB", { style: "currency", currency: "GBP" })}</span>}
+                    {d.date && <span>| {d.date}</span>}
+                    <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-medium dark:bg-amber-800">{d.status.replace(/_/g, " ")}</span>
+                    {d.match_reasons.map((r) => (
+                      <span key={r} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] dark:bg-amber-900">{r}</span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
@@ -448,6 +520,58 @@ function SubmitPageContent() {
         </div>
       )}
       </>
+      )}
+
+      {showDuplicateWarning && duplicates.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white shadow-2xl dark:border-amber-800 dark:bg-slate-900">
+            <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-4 dark:border-amber-800 dark:bg-amber-950/30 rounded-t-2xl">
+              <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              <div>
+                <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-200">Possible Duplicate Invoice</h3>
+                <p className="text-sm text-amber-600 dark:text-amber-400">We found existing invoices that may be duplicates.</p>
+              </div>
+            </div>
+            <div className="max-h-72 overflow-y-auto px-6 py-4 space-y-3">
+              {duplicates.map((d) => (
+                <div key={d.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-900 dark:text-white">{d.guest}</span>
+                    <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-200">{d.status.replace(/_/g, " ")}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    {d.invoice_number && <span>INV# {d.invoice_number}</span>}
+                    {d.amount != null && <span>| {d.amount.toLocaleString("en-GB", { style: "currency", currency: "GBP" })}</span>}
+                    {d.date && <span>| {d.date}</span>}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {d.match_reasons.map((r) => (
+                      <span key={r} className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">{r}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+              <button
+                onClick={() => setShowDuplicateWarning(false)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowDuplicateWarning(false);
+                  const form = document.querySelector("form");
+                  if (form) form.requestSubmit();
+                }}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500"
+              >
+                Submit Anyway
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

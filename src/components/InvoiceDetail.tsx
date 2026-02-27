@@ -23,6 +23,7 @@ export function InvoiceDetail({
   const [addingFile, setAddingFile] = useState(false);
   const [excelPreview, setExcelPreview] = useState<{ name: string; html: string } | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: "pdf" | "image" | "other" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [adminComment, setAdminComment] = useState("");
@@ -33,6 +34,9 @@ export function InvoiceDetail({
   const [message, setMessage] = useState<{ type: string; text: string } | null>(
     null
   );
+  const [tags, setTags] = useState<string[]>((invoice.tags as string[]) ?? []);
+  const [tagInput, setTagInput] = useState("");
+  const [showTagInput, setShowTagInput] = useState(false);
 
   const status = (workflow?.status as string) ?? "submitted";
   const raw = (extracted?.raw_json as Record<string, unknown> | undefined) ?? {};
@@ -100,14 +104,17 @@ export function InvoiceDetail({
       : `/api/invoices/${invoice.id}/pdf`;
     const d = await fetch(url).then((r) => r.json()).catch(() => null);
     if (!d?.url) return;
-    const fileRes = await fetch(d.url);
-    const blob = await fileRes.blob();
-    const mime = blob.type.toLowerCase();
+
     const pathLower = (path ?? "").toLowerCase();
     const nameLower = (fileName ?? "").toLowerCase();
-    const isExcel = mime.includes("sheet") || mime.includes("excel") || pathLower.endsWith(".xlsx") || pathLower.endsWith(".xls") || nameLower.endsWith(".xlsx") || nameLower.endsWith(".xls");
+    const isExcel = pathLower.endsWith(".xlsx") || pathLower.endsWith(".xls") || nameLower.endsWith(".xlsx") || nameLower.endsWith(".xls");
+    const isPdf = pathLower.endsWith(".pdf") || nameLower.endsWith(".pdf") || (!path && !isExcel);
+    const isImage = /\.(jpe?g|png|gif|webp)$/i.test(pathLower) || /\.(jpe?g|png|gif|webp)$/i.test(nameLower);
+
     if (isExcel) {
       try {
+        const fileRes = await fetch(d.url);
+        const blob = await fileRes.blob();
         const XLSX = await import("xlsx");
         const arrayBuf = await blob.arrayBuffer();
         const wb = XLSX.read(arrayBuf, { type: "array" });
@@ -121,6 +128,10 @@ export function InvoiceDetail({
       } catch {
         window.open(d.url, "_blank", "noopener,noreferrer");
       }
+    } else if (isPdf) {
+      setPreviewFile({ url: d.url, name: fileName ?? "Invoice PDF", type: "pdf" });
+    } else if (isImage) {
+      setPreviewFile({ url: d.url, name: fileName ?? "Image", type: "image" });
     } else {
       window.open(d.url, "_blank", "noopener,noreferrer");
     }
@@ -198,6 +209,28 @@ export function InvoiceDetail({
     }
   };
 
+  const addTag = async (newTag: string) => {
+    const tag = newTag.trim().toLowerCase();
+    if (!tag || tags.includes(tag)) return;
+    const updated = [...tags, tag];
+    const res = await fetch("/api/invoices/tags", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_id: invoice.id, tags: updated }),
+    });
+    if (res.ok) setTags(updated);
+  };
+
+  const removeTag = async (tagToRemove: string) => {
+    const updated = tags.filter((t) => t !== tagToRemove);
+    const res = await fetch("/api/invoices/tags", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_id: invoice.id, tags: updated }),
+    });
+    if (res.ok) setTags(updated);
+  };
+
   const canManagerApprove =
     profile.role === "manager" &&
     status === "pending_manager" &&
@@ -251,6 +284,49 @@ export function InvoiceDetail({
           {message.text}
         </div>
       )}
+
+      {/* Tags */}
+      <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tags</span>
+          {tags.map((tag) => (
+            <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-teal-500/20 px-2.5 py-1 text-xs font-medium text-teal-300">
+              {tag}
+              {(profile.role === "admin" || profile.role === "manager" || profile.role === "operations") && (
+                <button onClick={() => void removeTag(tag)} className="text-teal-400 hover:text-red-400">✕</button>
+              )}
+            </span>
+          ))}
+          {(profile.role === "admin" || profile.role === "manager" || profile.role === "operations" || profile.role === "submitter") && (
+            showTagInput ? (
+              <input
+                autoFocus
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && tagInput.trim()) {
+                    void addTag(tagInput);
+                    setTagInput("");
+                    setShowTagInput(false);
+                  }
+                  if (e.key === "Escape") { setShowTagInput(false); setTagInput(""); }
+                }}
+                onBlur={() => { setShowTagInput(false); setTagInput(""); }}
+                placeholder="Type tag & press Enter"
+                className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+              />
+            ) : (
+              <button
+                onClick={() => { setShowTagInput(true); setTagInput(""); }}
+                className="rounded-full border border-dashed border-slate-600 px-2.5 py-1 text-xs text-slate-400 hover:border-teal-500 hover:text-teal-400"
+              >
+                + Add tag
+              </button>
+            )
+          )}
+          {tags.length === 0 && !showTagInput && <span className="text-xs text-slate-500">No tags</span>}
+        </div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-6">
@@ -577,6 +653,88 @@ export function InvoiceDetail({
         </div>
       )}
 
+      {/* File Preview Modal (PDF / Image) */}
+      {previewFile && (
+        <div className="fixed inset-0 z-50 flex bg-black/70 backdrop-blur-sm" onClick={() => setPreviewFile(null)}>
+          <div className="flex h-full w-full flex-col lg:flex-row" onClick={(e) => e.stopPropagation()}>
+            {/* Preview Pane */}
+            <div className="flex flex-1 flex-col min-h-0">
+              <div className="flex items-center justify-between border-b border-slate-700 bg-slate-900 px-4 py-3">
+                <h3 className="font-medium text-slate-200 truncate">{previewFile.name}</h3>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={previewFile.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600"
+                  >
+                    Open in new tab
+                  </a>
+                  <button onClick={() => setPreviewFile(null)} className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-400 hover:bg-slate-600 hover:text-slate-200">
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto bg-slate-800 p-2">
+                {previewFile.type === "pdf" ? (
+                  <iframe
+                    src={previewFile.url}
+                    className="h-full w-full rounded-lg border border-slate-700"
+                    title="Invoice preview"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center p-4">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewFile.url}
+                      alt={previewFile.name}
+                      className="max-h-full max-w-full rounded-lg object-contain shadow-lg"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Side Panel: Extracted Data */}
+            {extracted && (
+              <div className="w-full border-t border-slate-700 bg-slate-900 p-5 lg:w-80 lg:border-l lg:border-t-0 overflow-y-auto">
+                <h4 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-400">Extracted Data</h4>
+                <dl className="space-y-3 text-sm">
+                  <div>
+                    <dt className="text-slate-500">Beneficiary</dt>
+                    <dd className="font-medium text-slate-200">{beneficiary}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Account</dt>
+                    <dd className="font-mono text-slate-200">{accountNumber}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Sort Code</dt>
+                    <dd className="font-mono text-slate-200">{sortCode}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Invoice #</dt>
+                    <dd className="text-slate-200">{invoiceNumber}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Net Amount</dt>
+                    <dd className="text-slate-200">{netAmount != null ? `${netAmount} ${extractedCurrency}` : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">VAT</dt>
+                    <dd className="text-slate-200">{vatAmount != null ? `${vatAmount} ${extractedCurrency}` : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Gross Amount</dt>
+                    <dd className="text-lg font-semibold text-emerald-400">{grossAmount != null ? `${grossAmount} ${extractedCurrency}` : "—"}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Excel Preview Modal */}
       {excelPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setExcelPreview(null)}>
           <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
