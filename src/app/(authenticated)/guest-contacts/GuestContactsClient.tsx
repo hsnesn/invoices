@@ -7,6 +7,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toUserFriendlyError } from "@/lib/error-messages";
 import { toast } from "sonner";
+import { PHONE_COUNTRIES, DEFAULT_PHONE_COUNTRY, inferPhoneCountry } from "@/lib/phone-country-codes";
 
 type FilterParams = {
   search?: string;
@@ -652,7 +653,7 @@ export function GuestContactsClient({
     }
   };
 
-  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; organization?: string | null; bio?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => {
+  const saveContact = async (payload: { guest_name: string; phone?: string | null; phone_country?: string; email?: string | null; title?: string | null; organization?: string | null; bio?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => {
     setSaving(true);
     try {
       if (editContact?.guest_contact_id) {
@@ -691,7 +692,7 @@ export function GuestContactsClient({
     }
   };
 
-  const createContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => {
+  const createContact = async (payload: { guest_name: string; phone?: string | null; phone_country?: string; email?: string | null; title?: string | null }) => {
     setSaving(true);
     try {
       const res = await fetch("/api/guest-contacts/upsert", {
@@ -1670,6 +1671,7 @@ export function GuestContactsClient({
           initial={{
             guest_name: editContact.guest_name,
             phone: editContact.phone,
+            phone_country: inferPhoneCountry(editContact.phone),
             email: editContact.email,
             title: editContact.title,
             organization: editContact.organization ?? "",
@@ -1689,7 +1691,7 @@ export function GuestContactsClient({
       {addModal && (
         <ContactFormModal
           modalTitle="Add contact"
-          initial={{ guest_name: "", phone: "", email: "", title: "" }}
+          initial={{ guest_name: "", phone: "", phone_country: DEFAULT_PHONE_COUNTRY, email: "", title: "" }}
           onSave={(payload) => createContact(payload)}
           onClose={() => setAddModal(false)}
           saving={saving}
@@ -1953,14 +1955,15 @@ function ContactFormModal({
   showConflictOfInterest,
 }: {
   modalTitle: string;
-  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null; organization?: string; bio?: string; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string };
-  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; organization?: string | null; bio?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => void;
+  initial: { guest_name: string; phone: string | null; phone_country?: string; email: string | null; title: string | null; organization?: string; bio?: string; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string };
+  onSave: (p: { guest_name: string; phone?: string | null; phone_country?: string; email?: string | null; title?: string | null; organization?: string | null; bio?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => void;
   onClose: () => void;
   saving: boolean;
   showConflictOfInterest?: boolean;
 }) {
   const [guestName, setGuestName] = useState(initial.guest_name);
   const [phone, setPhone] = useState(initial.phone ?? "");
+  const [phoneCountry, setPhoneCountry] = useState(initial.phone_country ?? DEFAULT_PHONE_COUNTRY);
   const [email, setEmail] = useState(initial.email ?? "");
   const [title, setTitle] = useState(initial.title ?? "");
   const [organization, setOrganization] = useState(initial.organization ?? "");
@@ -1983,6 +1986,7 @@ function ContactFormModal({
     onSave({
       guest_name: name,
       phone: phone.trim() || null,
+      phone_country: phoneCountry,
       email: email.trim() || null,
       title: title.trim() || null,
       organization: organization.trim() || null,
@@ -2121,13 +2125,29 @@ function ContactFormModal({
             <label htmlFor="phone" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Phone
             </label>
-            <input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            />
+            <div className="flex gap-2">
+              <select
+                id="phone_country"
+                value={phoneCountry}
+                onChange={(e) => setPhoneCountry(e.target.value)}
+                className="w-36 shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                aria-label="Country code"
+              >
+                {PHONE_COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.dial} {c.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. 7740 123456"
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
           </div>
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">

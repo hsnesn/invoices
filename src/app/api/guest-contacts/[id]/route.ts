@@ -22,6 +22,7 @@ export async function PATCH(
     const body = (await request.json()) as {
       guest_name?: string;
       phone?: string | null;
+      phone_country?: string;
       email?: string | null;
       title?: string | null;
       organization?: string | null;
@@ -38,7 +39,7 @@ export async function PATCH(
       if (!emailCheck.valid) return NextResponse.json({ error: emailCheck.message }, { status: 400 });
     }
     if (body.phone !== undefined) {
-      const phoneCheck = validatePhone(body.phone);
+      const phoneCheck = validatePhone(body.phone, body.phone_country);
       if (!phoneCheck.valid) return NextResponse.json({ error: phoneCheck.message }, { status: 400 });
     }
 
@@ -47,7 +48,7 @@ export async function PATCH(
     if (body.guest_name !== undefined) updates.guest_name = body.guest_name.trim() || null;
     if (body.phone !== undefined) {
       const p = body.phone?.trim() || null;
-      updates.phone = p ? (formatPhone(p) ?? p) : null;
+      updates.phone = p ? (formatPhone(p, body.phone_country) ?? p) : null;
     }
     if (body.email !== undefined) updates.email = body.email?.trim() || null;
     if (body.title !== undefined) {

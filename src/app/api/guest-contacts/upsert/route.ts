@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       guest_name?: string;
       phone?: string | null;
+      phone_country?: string;
       email?: string | null;
       title?: string | null;
       is_favorite?: boolean;
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     if (!emailCheck.valid) {
       return NextResponse.json({ error: emailCheck.message }, { status: 400 });
     }
-    const phoneCheck = validatePhone(body.phone);
+    const phoneCheck = validatePhone(body.phone, body.phone_country);
     if (!phoneCheck.valid) {
       return NextResponse.json({ error: phoneCheck.message }, { status: 400 });
     }
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     const phoneVal = body.phone?.trim() || null;
     const payload: Record<string, unknown> = {
       guest_name: guestName,
-      phone: phoneVal ? (formatPhone(phoneVal) ?? phoneVal) : null,
+      phone: phoneVal ? (formatPhone(phoneVal, body.phone_country) ?? phoneVal) : null,
       email: body.email?.trim() || null,
       title: rawTitle,
       title_category: titleCategory,

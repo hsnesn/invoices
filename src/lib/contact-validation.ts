@@ -1,7 +1,7 @@
 /**
  * Validation for guest contact email and phone.
  */
-import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,32 +21,42 @@ export function validateEmail(s: string | null | undefined): { valid: boolean; m
 
 export function isValidPhone(s: string | null | undefined): boolean {
   if (!s?.trim()) return true;
-  try {
-    return isValidPhoneNumber(s.trim());
-  } catch {
-    return false;
-  }
+  return s.trim().replace(/\D/g, "").length >= 6;
 }
 
-export function validatePhone(s: string | null | undefined): { valid: boolean; message?: string; formatted?: string } {
+export function validatePhone(s: string | null | undefined, defaultCountry?: string): { valid: boolean; message?: string; formatted?: string } {
   if (!s?.trim()) return { valid: true };
-  try {
-    const parsed = parsePhoneNumber(s.trim());
-    if (!parsed || !parsed.isValid()) {
-      return { valid: false, message: "Invalid phone number" };
-    }
+  const trimmed = s.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length < 6) {
+    return { valid: false, message: "Phone number too short (min 6 digits)" };
+  }
+  const parsed = tryParsePhone(trimmed, defaultCountry);
+  if (parsed?.isValid()) {
     return { valid: true, formatted: parsed.formatInternational() };
+  }
+  return { valid: true };
+}
+
+function tryParsePhone(value: string, defaultCountry?: string) {
+  const countries = defaultCountry ? [defaultCountry, "GB", "TR", "US"] : ["GB", "TR", "US"];
+  for (const country of countries) {
+    try {
+      const p = parsePhoneNumberFromString(value, country as "GB" | "TR" | "US");
+      if (p?.isValid()) return p;
+    } catch {
+      // continue
+    }
+  }
+  try {
+    return parsePhoneNumberFromString(value);
   } catch {
-    return { valid: false, message: "Invalid phone number format" };
+    return null;
   }
 }
 
-export function formatPhone(s: string | null | undefined): string | null {
+export function formatPhone(s: string | null | undefined, defaultCountry?: string): string | null {
   if (!s?.trim()) return null;
-  try {
-    const parsed = parsePhoneNumber(s.trim());
-    return parsed?.isValid() ? parsed.formatInternational() : s.trim();
-  } catch {
-    return s.trim();
-  }
+  const parsed = tryParsePhone(s.trim(), defaultCountry);
+  return parsed?.isValid() ? parsed.formatInternational() : s.trim();
 }
