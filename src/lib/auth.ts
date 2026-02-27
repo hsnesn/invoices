@@ -90,6 +90,11 @@ export async function requireAdminOrOperations() {
 export async function requirePageAccess(pageKey: PageKey) {
   const { session, profile } = await requireAuth();
   if (profile.role === "admin") return { session, profile };
+  // Guest contacts: admin only by default; others need explicit allowed_pages grant
+  if (pageKey === "guest_contacts") {
+    if (profile.allowed_pages?.includes("guest_contacts")) return { session, profile };
+    redirect("/dashboard");
+  }
   if (profile.role === "viewer" && ["guest_invoices", "freelancer_invoices", "reports"].includes(pageKey)) return { session, profile };
   const pages = profile.allowed_pages;
   if (!pages || pages.length === 0) return { session, profile };

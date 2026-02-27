@@ -37,6 +37,8 @@ function SubmitPageContent() {
     fetcher
   );
   const [guestName, setGuestName] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
   const [title, setTitle] = useState("");
   const [producer, setProducer] = useState("");
   const [producerLoaded, setProducerLoaded] = useState(false);
@@ -110,6 +112,8 @@ function SubmitPageContent() {
     const serviceDescription = [
       `Guest Name: ${guestName}`,
       `Title: ${title}`,
+      guestPhone.trim() ? `Guest Phone: ${guestPhone.trim()}` : "",
+      guestEmail.trim() ? `Guest Email: ${guestEmail.trim()}` : "",
       `Producer: ${producer}`,
       `Topic: ${topic}`,
       `Department Name: ${departments.find((d) => d.id === departmentId)?.name ?? ""}`,
@@ -245,6 +249,17 @@ function SubmitPageContent() {
             aria-describedby={touched.title && !title.trim() ? "title-error" : undefined}
           />
           {touched.title && !title.trim() && <p id="title-error" className="mt-1 text-sm text-red-600" role="alert">Title is required</p>}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="guestPhone" className="block text-sm font-semibold text-slate-800">Guest Phone</label>
+            <input id="guestPhone" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="Optional" className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900" />
+          </div>
+          <div>
+            <label htmlFor="guestEmail" className="block text-sm font-semibold text-slate-800">Guest Email</label>
+            <input id="guestEmail" type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="Optional" className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900" />
+          </div>
         </div>
 
         <div>

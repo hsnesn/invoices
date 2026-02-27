@@ -17,6 +17,7 @@ export const ALL_PAGES = [
   { key: "salaries", label: "Salaries" },
   { key: "setup", label: "Setup" },
   { key: "reports", label: "Reports" },
+  { key: "guest_contacts", label: "Guest Contacts" },
   { key: "user_management", label: "User Management" },
 ] as const;
 

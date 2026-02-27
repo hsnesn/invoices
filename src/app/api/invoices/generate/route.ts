@@ -194,6 +194,8 @@ export async function POST(request: NextRequest) {
     const service_description = [
       `Guest Name: ${data.guestName}`,
       `Title: ${data.title}`,
+      data.guestPhone?.trim() ? `Guest Phone: ${data.guestPhone.trim()}` : "",
+      data.guestEmail?.trim() ? `Guest Email: ${data.guestEmail.trim()}` : "",
       `Producer: ${data.producer}`,
       `Topic: ${appearances.map((a) => a.topic).filter(Boolean).join("; ") || "—"}`,
       `Department Name: ${""}`,
@@ -227,6 +229,10 @@ export async function POST(request: NextRequest) {
         appearances,
         expenses,
         paypal: data.paypal?.trim() || null,
+        guest_name: data.guestName?.trim() || null,
+        guest_phone: data.guestPhone?.trim() || null,
+        guest_email: data.guestEmail?.trim() || null,
+        title: data.title?.trim() || null,
       },
     });
 
