@@ -941,7 +941,7 @@ export function FreelancerBoard({
       case "month": return <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">{r.month}</span>;
       case "bookedBy": return r.bookedBy;
       case "serviceDescription": return <span className="max-w-[180px] truncate block" title={r.serviceDescription}>{r.serviceDescription}</span>;
-      case "additionalCostReason": return r.additionalCostReason;
+      case "additionalCostReason": return <span className="max-w-[140px] truncate block" title={r.additionalCostReason}>{r.additionalCostReason}</span>;
       case "deptManager": return r.deptManager;
       case "bookingForm": {
         const hasBookingForm = ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
