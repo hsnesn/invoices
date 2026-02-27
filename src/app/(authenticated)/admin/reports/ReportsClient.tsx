@@ -18,7 +18,7 @@ type ReportData = {
   monthlyTrend: { month: string; count: number; amount: number }[];
   yoy: { thisYear: { year: number; count: number; amount: number }; lastYear: { year: number; count: number; amount: number } };
   processing: { avg: number | null; min: number | null; max: number | null; count: number };
-  topGuests: Record<string, { count: number; amount: number; type: string }>;
+  topGuests: Record<string, { count: number; amount: number }>;
   rejections: { byProducer: Record<string, number>; byDepartment: Record<string, number>; reasons: Record<string, number> };
   freelancer: { byContractor: Record<string, { count: number; amount: number }>; byServiceDesc: Record<string, { count: number; amount: number }>; byBookedBy: Record<string, { count: number; amount: number }>; total: number; totalAmount: number };
   generatedAt: string; emailSent?: boolean; emailError?: string;
@@ -78,21 +78,35 @@ export function ReportsClient() {
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
     const getY = () => (doc as never as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY ?? 20;
     doc.setFontSize(16); doc.text(`Invoice Report — ${report.period}`, 14, 15);
-    doc.setFontSize(9); doc.text(`Type: ${report.invoiceType} | Generated: ${new Date(report.generatedAt).toLocaleString("en-GB")}`, 14, 21);
+    doc.setFontSize(9); doc.text(`Type: ${report.invoiceType} | Tab: ${activeTab} | Generated: ${new Date(report.generatedAt).toLocaleString("en-GB")}`, 14, 21);
 
-    autoTable(doc, { startY: 26, theme: "grid", headStyles: { fillColor: [59, 130, 246] }, head: [["Metric", "Value"]], body: [["Total Invoices", String(report.summary.totalInvoices)], ["Total Amount", fmt(report.summary.totalAmount)], ["Paid", `${report.summary.paidInvoices} (${fmt(report.summary.paidAmount)})`], ["Pending", fmt(report.summary.pendingAmount)], ["Rejected", String(report.summary.rejectedCount)], ["Avg Processing", report.processing.avg != null ? `${report.processing.avg} days` : "N/A"]] });
+    let startY = 26;
+    if (activeTab === "overview") {
+      autoTable(doc, { startY: 26, theme: "grid", headStyles: { fillColor: [59, 130, 246] }, head: [["Metric", "Value"]], body: [["Total Invoices", String(report.summary.totalInvoices)], ["Total Amount", fmt(report.summary.totalAmount)], ["Paid", `${report.summary.paidInvoices} (${fmt(report.summary.paidAmount)})`], ["Pending", fmt(report.summary.pendingAmount)], ["Rejected", String(report.summary.rejectedCount)], ["Avg Processing", report.processing.avg != null ? `${report.processing.avg} days` : "N/A"]] });
+      const de = Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount);
+      if (de.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Department Breakdown", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [16, 185, 129] }, head: [["Department", "Count", "Amount"]], body: de.map(([d, v]) => [d, String(v.count), fmt(v.amount)]), styles: { fontSize: 8 } }); }
+    } else if (activeTab === "producers") {
+      const pe = Object.entries(report.byProducer).sort((a, b) => b[1].amount - a[1].amount);
+      if (pe.length) { doc.setFontSize(11); doc.text("Top Producers", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [124, 58, 237] }, head: [["Producer", "Total", "Amount", "Paid", "Unpaid", "Avg"]], body: pe.map(([n, d]) => [n, String(d.count), fmt(d.amount), String(d.paidCount), String(d.unpaidCount), fmt(d.count > 0 ? d.amount / d.count : 0)]), styles: { fontSize: 8 } }); }
+    } else if (activeTab === "guests") {
+      const ge = Object.entries(report.topGuests).sort((a, b) => b[1].amount - a[1].amount).slice(0, 30);
+      if (ge.length) { doc.setFontSize(11); doc.text("Top Guests by Spend", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [234, 88, 12] }, head: [["Name", "Count", "Amount"]], body: ge.map(([n, d]) => [n, String(d.count), fmt(d.amount)]), styles: { fontSize: 8 } }); }
+    } else if (activeTab === "rejections") {
+      const { rejections } = report;
+      doc.setFontSize(11); doc.text("Rejection Summary", 14, startY + 8);
+      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [239, 68, 68] }, head: [["Metric", "Value"]], body: [["Total Rejected", String(report.summary.rejectedCount)], ["Rejection Rate", report.summary.totalInvoices > 0 ? ((report.summary.rejectedCount / report.summary.totalInvoices) * 100).toFixed(1) + "%" : "0%"]], styles: { fontSize: 9 } });
+      const reasonEntries = Object.entries(rejections.reasons).sort((a, b) => b[1] - a[1]);
+      if (reasonEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Rejection Reasons", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [239, 68, 68] }, head: [["Reason", "Count"]], body: reasonEntries.map(([r, c]) => [r, String(c)]), styles: { fontSize: 8 } }); }
+    } else if (activeTab === "freelancer") {
+      const { freelancer } = report;
+      doc.setFontSize(11); doc.text("Contractor Invoices", 14, startY + 8);
+      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Metric", "Value"]], body: [["Total", String(freelancer.total)], ["Total Amount", fmt(freelancer.totalAmount)]], styles: { fontSize: 9 } });
+      const contractorEntries = Object.entries(freelancer.byContractor).sort((a, b) => b[1].amount - a[1].amount).slice(0, 30);
+      if (contractorEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Top Contractors", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Contractor", "Count", "Amount"]], body: contractorEntries.map(([n, d]) => [n, String(d.count), fmt(d.amount)]), styles: { fontSize: 8 } }); }
+    }
 
-    const de = Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount);
-    if (de.length) { doc.setFontSize(11); doc.text("Department Breakdown", 14, getY() + 8); autoTable(doc, { startY: getY() + 11, theme: "grid", headStyles: { fillColor: [16, 185, 129] }, head: [["Department", "Count", "Amount"]], body: de.map(([d, v]) => [d, String(v.count), fmt(v.amount)]), styles: { fontSize: 8 } }); }
-
-    const pe = Object.entries(report.byProducer).sort((a, b) => b[1].amount - a[1].amount);
-    if (pe.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Top Producers", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [124, 58, 237] }, head: [["Producer", "Total", "Amount", "Paid", "Unpaid", "Avg"]], body: pe.map(([n, d]) => [n, String(d.count), fmt(d.amount), String(d.paidCount), String(d.unpaidCount), fmt(d.count > 0 ? d.amount / d.count : 0)]), styles: { fontSize: 8 } }); }
-
-    const ge = Object.entries(report.topGuests).sort((a, b) => b[1].amount - a[1].amount).slice(0, 20);
-    if (ge.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Top Guests / Contractors", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [234, 88, 12] }, head: [["Name", "Type", "Count", "Amount"]], body: ge.map(([n, d]) => [n, d.type, String(d.count), fmt(d.amount)]), styles: { fontSize: 8 } }); }
-
-    doc.save(`invoice-report-${report.period.replace(/\s+/g, "-")}.pdf`);
-  }, [report]);
+    doc.save(`invoice-report-${report.period.replace(/\s+/g, "-")}-${activeTab}.pdf`);
+  }, [report, activeTab]);
 
   const years = useMemo(() => { const y = new Date().getFullYear(); return Array.from({ length: 5 }, (_, i) => y - i); }, []);
   const TABS = useMemo(() => {
@@ -307,16 +321,16 @@ function ProducersTab({ report }: { report: ReportData }) {
 
 function GuestsTab({ report }: { report: ReportData }) {
   const entries = Object.entries(report.topGuests).sort((a, b) => b[1].amount - a[1].amount);
-  if (entries.length === 0) return <Empty text="No guest/contractor data for this period." />;
+  if (entries.length === 0) return <Empty text="No guest data for this period." />;
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700"><h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Top Guests & Contractors by Spend</h3></div>
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700"><h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Top Guests by Spend</h3></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-700/50"><tr><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">#</th><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Name</th><th className="px-4 py-2 text-center text-xs font-semibold uppercase text-gray-500">Type</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Invoices</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Amount</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Avg</th></tr></thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">{entries.slice(0, 30).map(([name, d], i) => <tr key={name} className="hover:bg-slate-50 dark:hover:bg-slate-700/50"><td className="px-4 py-2 text-gray-400">{i + 1}</td><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{name}</td><td className="px-4 py-2 text-center"><span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${d.type === "freelancer" ? "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300" : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"}`}>{d.type}</span></td><td className="px-4 py-2 text-right">{d.count}</td><td className="px-4 py-2 text-right font-bold">{fmt(d.amount)}</td><td className="px-4 py-2 text-right text-blue-600 dark:text-blue-400">{fmt(d.count > 0 ? d.amount / d.count : 0)}</td></tr>)}</tbody>
-            <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50 font-bold"><td className="px-4 py-2" colSpan={3}>Total ({entries.length})</td><td className="px-4 py-2 text-right">{entries.reduce((s, [, d]) => s + d.count, 0)}</td><td className="px-4 py-2 text-right">{fmt(entries.reduce((s, [, d]) => s + d.amount, 0))}</td><td className="px-4 py-2"></td></tr></tfoot>
+            <thead className="bg-slate-50 dark:bg-slate-700/50"><tr><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">#</th><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Name</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Invoices</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Amount</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Avg</th></tr></thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">{entries.slice(0, 30).map(([name, d], i) => <tr key={name} className="hover:bg-slate-50 dark:hover:bg-slate-700/50"><td className="px-4 py-2 text-gray-400">{i + 1}</td><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{name}</td><td className="px-4 py-2 text-right">{d.count}</td><td className="px-4 py-2 text-right font-bold">{fmt(d.amount)}</td><td className="px-4 py-2 text-right text-blue-600 dark:text-blue-400">{fmt(d.count > 0 ? d.amount / d.count : 0)}</td></tr>)}</tbody>
+            <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50 font-bold"><td className="px-4 py-2" colSpan={2}>Total ({entries.length})</td><td className="px-4 py-2 text-right">{entries.reduce((s, [, d]) => s + d.count, 0)}</td><td className="px-4 py-2 text-right">{fmt(entries.reduce((s, [, d]) => s + d.amount, 0))}</td><td className="px-4 py-2"></td></tr></tfoot>
           </table>
         </div>
       </div>

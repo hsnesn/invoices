@@ -232,13 +232,15 @@ export async function POST(req: NextRequest) {
     const minProcessingDays = processingTimes.length > 0 ? Math.min(...processingTimes) : null;
     const maxProcessingDays = processingTimes.length > 0 ? Math.max(...processingTimes) : null;
 
-    // Top guests/contractors
-    const byGuest: Record<string, { count: number; amount: number; type: string }> = {};
+    // Top guests only (exclude freelancers - they have their own Contractor tab)
+    const topGuests: Record<string, { count: number; amount: number }> = {};
     for (const r of processed) {
-      const name = r.type === "freelancer" ? r.contractor : r.guest;
+      if (r.type === "freelancer") continue;
+      const name = r.guest;
       if (name === "—") continue;
-      if (!byGuest[name]) byGuest[name] = { count: 0, amount: 0, type: r.type };
-      byGuest[name].count++; byGuest[name].amount += r.amount;
+      if (!topGuests[name]) topGuests[name] = { count: 0, amount: 0 };
+      topGuests[name].count++;
+      topGuests[name].amount += r.amount;
     }
 
     // Rejection analysis
@@ -274,7 +276,7 @@ export async function POST(req: NextRequest) {
       byDepartment, byStatus, byProducer, byPaymentType,
       monthlyTrend, yoy,
       processing: { avg: avgProcessingDays, min: minProcessingDays, max: maxProcessingDays, count: processingTimes.length },
-      topGuests: byGuest,
+      topGuests,
       rejections: { byProducer: rejectionsByProducer, byDepartment: rejectionsByDept, reasons: rejectionReasons },
       freelancer: { byContractor, byServiceDesc, byBookedBy, total: flRows.length, totalAmount: flRows.reduce((s, r) => s + r.amount, 0) },
       generatedAt: new Date().toISOString(),
