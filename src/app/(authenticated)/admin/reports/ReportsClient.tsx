@@ -81,34 +81,36 @@ export function ReportsClient() {
     const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
+    const { ensurePdfFont } = await import("@/lib/pdf-font");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
+    await ensurePdfFont(doc);
     const getY = () => (doc as never as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY ?? 20;
     doc.setFontSize(16); doc.text(`Invoice Report — ${report.period}`, 14, 15);
     doc.setFontSize(9); doc.text(`Type: ${report.invoiceType} | Tab: ${activeTab} | Generated: ${formatDate(report.generatedAt)}`, 14, 21);
 
     let startY = 26;
     if (activeTab === "overview") {
-      autoTable(doc, { startY: 26, theme: "grid", headStyles: { fillColor: [59, 130, 246] }, head: [["Metric", "Value"]], body: [["Total Invoices", String(report.summary.totalInvoices)], ["Total Amount", formatCurrency(report.summary.totalAmount)], ["Paid", `${report.summary.paidInvoices} (${formatCurrency(report.summary.paidAmount)})`], ["Pending", formatCurrency(report.summary.pendingAmount)], ["Rejected", String(report.summary.rejectedCount)], ["Avg Processing", report.processing.avg != null ? `${report.processing.avg} days` : "N/A"]] });
+      autoTable(doc, { startY: 26, theme: "grid", headStyles: { fillColor: [59, 130, 246] }, head: [["Metric", "Value"]], body: [["Total Invoices", String(report.summary.totalInvoices)], ["Total Amount", formatCurrency(report.summary.totalAmount)], ["Paid", `${report.summary.paidInvoices} (${formatCurrency(report.summary.paidAmount)})`], ["Pending", formatCurrency(report.summary.pendingAmount)], ["Rejected", String(report.summary.rejectedCount)], ["Avg Processing", report.processing.avg != null ? `${report.processing.avg} days` : "N/A"]], styles: { font: "Roboto", fontSize: 9 } });
       const de = Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount);
-      if (de.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Department Breakdown", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [16, 185, 129] }, head: [["Department", "Count", "Amount"]], body: de.map(([d, v]) => [d, String(v.count), formatCurrency(v.amount)]), styles: { fontSize: 8 } }); }
+      if (de.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Department Breakdown", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [16, 185, 129] }, head: [["Department", "Count", "Amount"]], body: de.map(([d, v]) => [d, String(v.count), formatCurrency(v.amount)]), styles: { font: "Roboto", fontSize: 8 } }); }
     } else if (activeTab === "producers") {
       const pe = Object.entries(report.byProducer).sort((a, b) => b[1].amount - a[1].amount);
-      if (pe.length) { doc.setFontSize(11); doc.text("Top Producers", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [124, 58, 237] }, head: [["Producer", "Total", "Amount", "Paid", "Unpaid", "Avg"]], body: pe.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount), String(d.paidCount), String(d.unpaidCount), formatCurrency(d.count > 0 ? d.amount / d.count : 0)]), styles: { fontSize: 8 } }); }
+      if (pe.length) { doc.setFontSize(11); doc.text("Top Producers", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [124, 58, 237] }, head: [["Producer", "Total", "Amount", "Paid", "Unpaid", "Avg"]], body: pe.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount), String(d.paidCount), String(d.unpaidCount), formatCurrency(d.count > 0 ? d.amount / d.count : 0)]), styles: { font: "Roboto", fontSize: 8 } }); }
     } else if (activeTab === "guests") {
       const ge = Object.entries(report.topGuests).sort((a, b) => b[1].amount - a[1].amount).slice(0, 30);
-      if (ge.length) { doc.setFontSize(11); doc.text("Top Guests by Spend", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [234, 88, 12] }, head: [["Name", "Count", "Amount"]], body: ge.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount)]), styles: { fontSize: 8 } }); }
+      if (ge.length) { doc.setFontSize(11); doc.text("Top Guests by Spend", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [234, 88, 12] }, head: [["Name", "Count", "Amount"]], body: ge.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount)]), styles: { font: "Roboto", fontSize: 8 } }); }
     } else if (activeTab === "rejections") {
       const { rejections } = report;
       doc.setFontSize(11); doc.text("Rejection Summary", 14, startY + 8);
-      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [239, 68, 68] }, head: [["Metric", "Value"]], body: [["Total Rejected", String(report.summary.rejectedCount)], ["Rejection Rate", report.summary.totalInvoices > 0 ? ((report.summary.rejectedCount / report.summary.totalInvoices) * 100).toFixed(1) + "%" : "0%"]], styles: { fontSize: 9 } });
+      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [239, 68, 68] }, head: [["Metric", "Value"]], body: [["Total Rejected", String(report.summary.rejectedCount)], ["Rejection Rate", report.summary.totalInvoices > 0 ? ((report.summary.rejectedCount / report.summary.totalInvoices) * 100).toFixed(1) + "%" : "0%"]], styles: { font: "Roboto", fontSize: 9 } });
       const reasonEntries = Object.entries(rejections.reasons).sort((a, b) => b[1] - a[1]);
-      if (reasonEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Rejection Reasons", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [239, 68, 68] }, head: [["Reason", "Count"]], body: reasonEntries.map(([r, c]) => [r, String(c)]), styles: { fontSize: 8 } }); }
+      if (reasonEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Rejection Reasons", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [239, 68, 68] }, head: [["Reason", "Count"]], body: reasonEntries.map(([r, c]) => [r, String(c)]), styles: { font: "Roboto", fontSize: 8 } }); }
     } else if (activeTab === "freelancer") {
       const { freelancer } = report;
       doc.setFontSize(11); doc.text("Contractor Invoices", 14, startY + 8);
-      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Metric", "Value"]], body: [["Total", String(freelancer.total)], ["Total Amount", formatCurrency(freelancer.totalAmount)]], styles: { fontSize: 9 } });
+      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Metric", "Value"]], body: [["Total", String(freelancer.total)], ["Total Amount", formatCurrency(freelancer.totalAmount)]], styles: { font: "Roboto", fontSize: 9 } });
       const contractorEntries = Object.entries(freelancer.byContractor).sort((a, b) => b[1].amount - a[1].amount).slice(0, 30);
-      if (contractorEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Top Contractors", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Contractor", "Count", "Amount"]], body: contractorEntries.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount)]), styles: { fontSize: 8 } }); }
+      if (contractorEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Top Contractors", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Contractor", "Count", "Amount"]], body: contractorEntries.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount)]), styles: { font: "Roboto", fontSize: 8 } }); }
     }
 
     doc.save(`invoice-report-${report.period.replace(/\s+/g, "-")}-${activeTab}.pdf`);

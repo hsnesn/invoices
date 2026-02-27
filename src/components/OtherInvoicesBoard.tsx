@@ -499,14 +499,16 @@ export function OtherInvoicesBoard({
     const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
+    const { ensurePdfFont } = await import("@/lib/pdf-font");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
+    await ensurePdfFont(doc);
     doc.setFontSize(14);
     doc.text("Other Invoices Report", 14, 15);
     doc.setFontSize(8);
     doc.text(`Generated: ${formatDate(new Date())} | ${data.length} invoices`, 14, 20);
     autoTable(doc, {
       startY: 25,
-      styles: { fontSize: 7, cellPadding: 2 },
+      styles: { font: "Roboto", fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [59, 130, 246] },
       head: [["Amount", "Currency", "Beneficiary", "Sort Code", "Account No", "INV Number", "Submitted by", "Company", "INV date", "Due date", "Purpose", "Status"]],
       body: data.map((r) => [

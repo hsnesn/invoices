@@ -644,7 +644,9 @@ export function SalariesBoard({
       const { formatDate, formatCurrency } = getFormatters(exportLocale);
       const { default: jsPDF } = await import("jspdf");
       const { default: autoTable } = await import("jspdf-autotable");
+      const { ensurePdfFont } = await import("@/lib/pdf-font");
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
+      await ensurePdfFont(doc);
       doc.setFontSize(14);
       doc.text("Salary Report", 14, 15);
       doc.setFontSize(8);
@@ -652,7 +654,7 @@ export function SalariesBoard({
       const bank = (s: SalaryRow) => getBankDisplay(s);
       autoTable(doc, {
         startY: 25,
-        styles: { fontSize: 7, cellPadding: 2 },
+        styles: { font: "Roboto", fontSize: 7, cellPadding: 2 },
         headStyles: { fillColor: [59, 130, 246] },
         head: [["Employee", "Net Pay", "Sort Code", "Account", "Reference", "Month", "Date"]],
         body: filtered.map((s) => {
