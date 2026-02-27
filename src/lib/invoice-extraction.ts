@@ -195,6 +195,11 @@ function regexExtractFromText(text: string) {
   const date =
     full.match(/\b(20\d{2}[-\/.]\d{1,2}[-\/.]\d{1,2})\b/)?.[1]?.replace(/[/.]/g, "-") ??
     null;
+  const dueDate =
+    lineValue([
+      /(?:due\s*date|payment\s*due|date\s*due)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4}|\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2})/i,
+      /(?:due|payable\s*by)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4}|\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2})/i,
+    ])?.replace(/[/.]/g, "-") ?? null;
 
   let beneficiary: string | null = beneficiaryFromLabel ?? null;
   for (const line of lines) {
@@ -227,6 +232,13 @@ function regexExtractFromText(text: string) {
       /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
     ]) ?? null;
 
+  let dueDateNorm: string | null = null;
+  if (dueDate) {
+    const m = dueDate.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
+    if (m) dueDateNorm = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) dueDateNorm = dueDate;
+  }
+
   return {
     beneficiary_name: stripInternalRefs(beneficiary),
     company_name: stripInternalRefs(rawCompany),
@@ -234,6 +246,7 @@ function regexExtractFromText(text: string) {
     sort_code: sortCodeRaw ? normalizeSortCode(sortCodeRaw) ?? sortCodeRaw : null,
     invoice_number: stripInternalRefs(invoiceNumber),
     invoice_date: date,
+    due_date: dueDateNorm || dueDate,
     net_amount: parseNumberLike(netRaw),
     vat_amount: parseNumberLike(vatRaw),
     gross_amount: parseNumberLike(grossRaw),
@@ -374,6 +387,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     sort_code?: string | null;
     invoice_number?: string | null;
     invoice_date?: string | null;
+    due_date?: string | null;
     net_amount?: number | null;
     vat_amount?: number | null;
     gross_amount?: number | null;
@@ -392,13 +406,14 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     sort_code: `Extract ONLY the UK sort code from the bank details. Look for "Sort Code", "Sort/Branch Code". Exactly 6 digits. NEVER use Company Reg. No. or other numbers.` + CERTAIN_SUFFIX,
     invoice_number: `Extract ONLY the invoice number. Look for "Invoice No." or "Invoice Number" - often format like INV-123. NEVER use "Company Reg. No.", "Registration No.", "VAT No." - those are different. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
     invoice_date: `Extract ONLY the invoice date. Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
+    due_date: `Extract ONLY the payment due date or "due by" date from this invoice. Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
     gross_amount: `Extract ONLY the final total amount to pay. Look for "Grand Total", "Total", "Amount Due", "Total Payable". NOT subtotals. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
     currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP.` + CERTAIN_SUFFIX,
     guest_phone: `Extract ONLY the guest/contact phone number from this invoice. Look for "Phone", "Tel", "Mobile", "Contact" - the number where the invoice sender can be reached. UK format: +44 or 0xx. NEVER use bank account number, sort code, or VAT number.` + CERTAIN_SUFFIX,
     guest_email: `Extract ONLY the guest/contact email address from this invoice. Look for "Email", "E-mail", "Contact" - the email where the invoice sender can be reached. Format: name@domain.com. NEVER use TRT World or internal emails.` + CERTAIN_SUFFIX,
   };
 
-  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "currency", "guest_phone", "guest_email"];
+  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "due_date", "currency", "guest_phone", "guest_email"];
 
   async function extractSingleField(
     fieldKey: string,
@@ -464,7 +479,8 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     const v = (regexParsed as Record<string, unknown>)[k];
     if (k === "gross_amount") return typeof v === "number" && v > 0;
     if (k === "invoice_number") return typeof v === "string" && v.trim().length >= 3;
-    if (k === "invoice_date") return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim());
+    if (k === "invoice_date") return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test((v as string).trim());
+    if (k === "due_date") return typeof v === "string" && (v as string).trim().length >= 8;
     if (k === "currency") return typeof v === "string" && ["GBP", "EUR", "USD", "TRY"].includes((v as string).toUpperCase());
     return v != null && String(v).trim() !== "";
   };

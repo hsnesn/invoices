@@ -35,8 +35,9 @@ export async function GET(request: NextRequest) {
         service_description,
         created_at,
         storage_path,
+        submitter_user_id,
         invoice_workflows(status, paid_date, payment_reference),
-        invoice_extracted_fields(beneficiary_name, invoice_number, invoice_date, gross_amount, extracted_currency, net_amount, vat_amount, account_number, sort_code),
+        invoice_extracted_fields(beneficiary_name, invoice_number, invoice_date, gross_amount, extracted_currency, net_amount, vat_amount, account_number, sort_code, raw_json),
         invoice_files(storage_path, file_name)
       `)
       .eq("invoice_type", "other")
@@ -70,17 +71,31 @@ export async function GET(request: NextRequest) {
         const beneficiary = (ext as { beneficiary_name?: string })?.beneficiary_name ?? "";
         const invNo = (ext as { invoice_number?: string })?.invoice_number ?? "";
         const amount = String((ext as { gross_amount?: number })?.gross_amount ?? "");
+        const raw = (ext as { raw_json?: Record<string, unknown> })?.raw_json;
+        const company = (raw?.company_name as string) ?? "";
         return (
           desc.toLowerCase().includes(q) ||
           beneficiary.toLowerCase().includes(q) ||
           invNo.toLowerCase().includes(q) ||
           amount.includes(q) ||
+          company.toLowerCase().includes(q) ||
           (r as { id: string }).id.toLowerCase().includes(q)
         );
       });
     }
 
-    return NextResponse.json(list);
+    const submitterIds = Array.from(new Set(list.map((r) => (r as { submitter_user_id?: string }).submitter_user_id).filter((id): id is string => Boolean(id))));
+    const { data: profiles } = submitterIds.length > 0
+      ? await supabase.from("profiles").select("id, full_name").in("id", submitterIds)
+      : { data: [] };
+    const profileMap = Object.fromEntries((profiles ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name || p.id]));
+
+    const enriched = list.map((r) => {
+      const sid = (r as { submitter_user_id?: string }).submitter_user_id;
+      return { ...r, submitted_by: sid ? profileMap[sid] ?? sid : null };
+    });
+
+    return NextResponse.json(enriched);
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
