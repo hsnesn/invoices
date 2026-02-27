@@ -237,7 +237,7 @@ export async function sendSubmissionEmail(params: {
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A new invoice has been submitted and is waiting for review.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
-      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending", "#fef3c7", "#92400e")}</p>
       ${btn(link, "View Invoice")}
       <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center">You received this because you are involved in this invoice's approval process.</p>
     `),
@@ -410,7 +410,7 @@ export async function sendManagerAssignedEmail(params: {
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">You have been assigned${params.assignedByName ? ` by <strong>${params.assignedByName}</strong>` : ""} to review this invoice.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
-      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending", "#fef3c7", "#92400e")}</p>
       ${btn(link, "Review Invoice", "#f59e0b")}
     `),
   });
@@ -441,7 +441,7 @@ export async function sendResubmittedEmail(params: {
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A previously rejected invoice has been corrected and resubmitted${params.submitterName ? ` by <strong>${params.submitterName}</strong>` : ""} for your review.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
-      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending", "#fef3c7", "#92400e")}</p>
       ${btn(link, "Review Invoice", "#f59e0b")}
     `),
   });
