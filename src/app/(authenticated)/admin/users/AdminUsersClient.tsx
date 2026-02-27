@@ -66,6 +66,17 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
     return list;
   }, [users, search, roleFilter, statusFilter]);
 
+  const filteredInvitations = useMemo(() => {
+    if (!search.trim()) return invitations;
+    const q = search.toLowerCase();
+    return invitations.filter(
+      (inv) =>
+        inv.email.toLowerCase().includes(q) ||
+        (inv.full_name?.toLowerCase().includes(q)) ||
+        inv.role.toLowerCase().includes(q)
+    );
+  }, [invitations, search]);
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -214,6 +225,28 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
         </button>
       </div>
 
+      {/* Global Search */}
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+          <svg className="h-5 w-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+        </div>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search users and invitations by name, email or role..."
+          className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-10 text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400/20"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch("")}
+            className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        )}
+      </div>
+
       {/* Invite */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="mb-4 flex items-center justify-between">
@@ -322,7 +355,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       {/* Invitations */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <h2 className="border-b border-gray-200 bg-gray-50 px-4 py-3 text-lg font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
-          Invitations ({invitations.length})
+          Invitations ({filteredInvitations.length}{search.trim() && filteredInvitations.length !== invitations.length ? ` / ${invitations.length}` : ""})
         </h2>
         <div className="overflow-x-auto">
           <table className="min-w-full">
@@ -337,10 +370,10 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {invitations.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No invitations sent yet</td></tr>
+              {filteredInvitations.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">{search.trim() ? "No invitations matching your search" : "No invitations sent yet"}</td></tr>
               ) : (
-                invitations.map((inv) => (
+                filteredInvitations.map((inv) => (
                   <tr key={inv.id} className="bg-white hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{inv.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{inv.full_name || "—"}</td>
@@ -398,15 +431,8 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       {/* Users */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Users ({filteredUsers.length})</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Users ({filteredUsers.length}{(search.trim() || roleFilter || statusFilter) && filteredUsers.length !== users.length ? ` / ${users.length}` : ""})</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, email..."
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
-            />
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
