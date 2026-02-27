@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toUserFriendlyError } from "@/lib/error-messages";
 
 type Contact = {
@@ -9,7 +9,7 @@ type Contact = {
   title: string | null;
   phone: string | null;
   email: string | null;
-  invoice_id: string;
+  invoice_id: string | null;
   created_at: string;
 };
 
@@ -26,6 +26,9 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [search, setSearch] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [extractMessage, setExtractMessage] = useState<string | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedGuest, setSelectedGuest] = useState<string | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessment, setAssessment] = useState<string | null>(null);
@@ -46,6 +49,41 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       setExtractMessage("Request failed");
     } finally {
       setExtracting(false);
+    }
+  };
+
+  const runBulkUpload = async () => {
+    const input = fileInputRef.current;
+    if (!input?.files?.length) {
+      setBulkMessage("Select files first.");
+      return;
+    }
+    const files = Array.from(input.files);
+    if (files.length > 100) {
+      setBulkMessage("Maximum 100 files per upload.");
+      return;
+    }
+    setBulkUploading(true);
+    setBulkMessage(null);
+    try {
+      const formData = new FormData();
+      for (const f of files) formData.append("files", f);
+      const res = await fetch("/api/admin/bulk-upload-guest-contacts", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBulkMessage(data.message ?? `Processed ${data.total} files. ${data.contactsAdded} contacts added.`);
+        input.value = "";
+        window.location.reload();
+      } else {
+        setBulkMessage(data.error ?? "Bulk upload failed");
+      }
+    } catch {
+      setBulkMessage("Request failed");
+    } finally {
+      setBulkUploading(false);
     }
   };
 
@@ -136,17 +174,47 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           aria-label="Search contacts"
         />
         {isAdmin && (
-          <button
-            type="button"
-            onClick={runExtraction}
-            disabled={extracting}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-          >
-            {extracting ? "Scanning invoices..." : "Scan all invoices for contact info"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={runExtraction}
+              disabled={extracting}
+              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+            >
+              {extracting ? "Scanning invoices..." : "Scan all invoices for contact info"}
+            </button>
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg"
+                className="hidden"
+                aria-label="Select invoice files for bulk upload"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Select files (max 100)
+              </button>
+            </>
+            <button
+              type="button"
+              onClick={runBulkUpload}
+              disabled={bulkUploading}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {bulkUploading ? "Processing..." : "Upload and extract contacts"}
+            </button>
+          </>
         )}
         {extractMessage && (
           <span className="text-sm text-gray-600 dark:text-gray-400">{extractMessage}</span>
+        )}
+        {bulkMessage && (
+          <span className="text-sm text-gray-600 dark:text-gray-400">{bulkMessage}</span>
         )}
       </div>
 
@@ -185,7 +253,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
               </tr>
             ) : (
               filtered.map((c) => (
-                <tr key={c.invoice_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <tr key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                     {c.guest_name}
                   </td>
@@ -211,12 +279,16 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <Link
-                      href={`/invoices/${c.invoice_id}`}
-                      className="text-sky-600 hover:underline dark:text-sky-400"
-                    >
-                      View
-                    </Link>
+                    {c.invoice_id ? (
+                      <Link
+                        href={`/invoices/${c.invoice_id}`}
+                        className="text-sky-600 hover:underline dark:text-sky-400"
+                      >
+                        View
+                      </Link>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <button

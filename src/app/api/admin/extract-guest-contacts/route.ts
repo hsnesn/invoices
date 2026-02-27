@@ -15,7 +15,7 @@ export async function POST() {
     const { data: invoices } = await supabase
       .from("invoices")
       .select("id")
-      .neq("invoice_type", "freelancer")
+      .in("invoice_type", ["guest", "salary"])
       .not("storage_path", "is", null);
 
     if (!invoices?.length) {

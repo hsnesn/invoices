@@ -8,11 +8,15 @@ export const revalidate = 0;
 export default async function GuestContactsPage() {
   const { profile } = await requirePageAccess("guest_contacts");
   const supabase = createAdminClient();
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select("id, service_description, generated_invoice_data, created_at, invoice_extracted_fields(raw_json)")
-    .neq("invoice_type", "freelancer")
-    .order("created_at", { ascending: false });
+  const [{ data: invoices }, { data: guestContactsRows }] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select("id, service_description, generated_invoice_data, created_at, invoice_extracted_fields(raw_json)")
+      .neq("invoice_type", "freelancer")
+      .neq("invoice_type", "guest_contact_scan")
+      .order("created_at", { ascending: false }),
+    supabase.from("guest_contacts").select("guest_name, phone, email, title, updated_at").order("guest_name"),
+  ]);
 
   function parseServiceDesc(desc: string | null | undefined): Record<string, string> {
     if (!desc?.trim()) return {};
@@ -37,7 +41,7 @@ export default async function GuestContactsPage() {
     return null;
   }
 
-  const rows: { guest_name: string; title: string | null; phone: string | null; email: string | null; invoice_id: string; created_at: string }[] = [];
+  const rows: { guest_name: string; title: string | null; phone: string | null; email: string | null; invoice_id: string | null; created_at: string }[] = [];
 
   for (const inv of invoices ?? []) {
     const meta = parseServiceDesc(inv.service_description);
@@ -87,6 +91,29 @@ export default async function GuestContactsPage() {
   for (const r of rows) {
     const key = r.guest_name.toLowerCase().trim();
     if (!seen.has(key)) seen.set(key, r);
+  }
+
+  for (const gc of guestContactsRows ?? []) {
+    const key = (gc.guest_name ?? "").toLowerCase().trim();
+    if (!key) continue;
+    const existing = seen.get(key);
+    const merged = {
+      guest_name: gc.guest_name ?? "",
+      title: existing?.title ?? gc.title ?? null,
+      phone: existing?.phone ?? gc.phone ?? null,
+      email: existing?.email ?? gc.email ?? null,
+      invoice_id: (existing?.invoice_id as string) || null,
+      created_at: existing?.created_at ?? gc.updated_at ?? "",
+    };
+    if (!existing) {
+      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null });
+    } else if ((gc.phone && !existing.phone) || (gc.email && !existing.email)) {
+      seen.set(key, {
+        ...merged,
+        phone: (merged.phone || gc.phone) ?? null,
+        email: (merged.email || gc.email) ?? null,
+      });
+    }
   }
 
   const contacts = Array.from(seen.values()).sort((a, b) =>

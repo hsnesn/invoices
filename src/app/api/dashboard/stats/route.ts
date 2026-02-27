@@ -18,7 +18,7 @@ export async function GET() {
     const { data: guestInvoices } = await supabase
       .from("invoices")
       .select("id, created_at, invoice_workflows(status)")
-      .neq("invoice_type", "freelancer");
+      .in("invoice_type", ["guest", "salary"]);
 
     const { data: flInvoices } = await supabase
       .from("invoices")
