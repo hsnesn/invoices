@@ -153,7 +153,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   const { data: stats, mutate } = useSWR<Stats>(
     canSeeStats ? "/api/dashboard/stats" : null,
     statsFetcher,
-    { refreshInterval: 15000, revalidateOnFocus: true, dedupingInterval: 5000 }
+    { refreshInterval: 10000, revalidateOnFocus: true, dedupingInterval: 3000 }
   );
 
   const visiblePages = PAGES.filter((p) => {
@@ -195,7 +195,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       {canSeeStats && stats && (
         <div className="mb-8">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs text-gray-500 dark:text-gray-400">Updates every 30s</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Auto-refresh every 10s</span>
             <button
               type="button"
               onClick={() => void mutate()}

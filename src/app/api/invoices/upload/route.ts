@@ -132,10 +132,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const today = new Date().toISOString().slice(0, 10);
     const { error: wfError } = await supabaseAdmin.from("invoice_workflows").insert({
       invoice_id: invoiceId,
       status: "pending_manager",
       manager_user_id: managerUserId,
+      pending_manager_since: today,
     });
 
     if (wfError) {

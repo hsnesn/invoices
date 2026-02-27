@@ -611,15 +611,31 @@ export function FreelancerBoard({
   const bulkApprove = useCallback(async () => {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Approve ${selectedIds.size} invoice(s)?`)) return;
-    for (const id of Array.from(selectedIds)) { await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "approved_by_manager", manager_confirmed: true }) }); }
-    refreshAndKeepVisible();
+    setActionLoadingId("bulk");
+    try {
+      const res = await fetch("/api/invoices/bulk-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoice_ids: Array.from(selectedIds), to_status: "approved_by_manager", manager_confirmed: true }) });
+      const data = (await res.json().catch(() => ({}))) as { success?: number; failed?: { id: string; error: string }[] };
+      if (!res.ok) { toast.error((data as { error?: string }).error ?? "Bulk approve failed"); return; }
+      if ((data.failed?.length ?? 0) > 0) toast.error(`${data.success ?? 0} approved. ${data.failed!.length} failed`);
+      else toast.success(`${data.success ?? 0} invoice(s) approved`);
+      setSelectedIds(new Set());
+      refreshAndKeepVisible();
+    } finally { setActionLoadingId(null); }
   }, [selectedIds, refreshAndKeepVisible]);
   const bulkReject = useCallback(async () => {
     if (selectedIds.size === 0) return;
     const reason = window.prompt(`Rejection reason for ${selectedIds.size} invoice(s):`);
     if (!reason?.trim()) return;
-    for (const id of Array.from(selectedIds)) { await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "rejected", rejection_reason: reason.trim() }) }); }
-    refreshAndKeepVisible();
+    setActionLoadingId("bulk");
+    try {
+      const res = await fetch("/api/invoices/bulk-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoice_ids: Array.from(selectedIds), to_status: "rejected", rejection_reason: reason.trim() }) });
+      const data = (await res.json().catch(() => ({}))) as { success?: number; failed?: { id: string; error: string }[] };
+      if (!res.ok) { toast.error((data as { error?: string }).error ?? "Bulk reject failed"); return; }
+      if ((data.failed?.length ?? 0) > 0) toast.error(`${data.success ?? 0} rejected. ${data.failed!.length} failed`);
+      else toast.success(`${data.success ?? 0} invoice(s) rejected`);
+      setSelectedIds(new Set());
+      refreshAndKeepVisible();
+    } finally { setActionLoadingId(null); }
   }, [selectedIds, refreshAndKeepVisible]);
   const bulkDownload = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -693,20 +709,22 @@ export function FreelancerBoard({
 
     setActionLoadingId("bulk");
     try {
-      const errors: string[] = [];
-      for (const id of ids) {
-        const res = await fetch(`/api/invoices/${id}/status`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to_status: toStatus, ...payload }),
-        });
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        if (!res.ok) errors.push(`Invoice ${id}: ${data.error ?? res.statusText}`);
-      }
-      if (errors.length > 0) {
-        toast.error(errors.join("\n"));
+      const res = await fetch("/api/invoices/bulk-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_ids: ids, to_status: toStatus, ...payload }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { success?: number; failed?: { id: string; error: string }[] };
+      if (!res.ok) {
+        toast.error((data as { error?: string }).error ?? "Bulk status change failed");
         return;
       }
+      if ((data.failed?.length ?? 0) > 0) {
+        toast.error(`${data.success ?? 0} updated. ${data.failed!.length} failed`);
+      } else {
+        toast.success(`${data.success ?? 0} invoice(s) updated`);
+      }
+      setSelectedIds(new Set());
       refreshAndKeepVisible();
     } finally {
       setActionLoadingId(null);

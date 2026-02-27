@@ -242,10 +242,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invoice insert failed: " + invError.message }, { status: 500 });
     }
 
+    const today = new Date().toISOString().slice(0, 10);
     const { error: wfError } = await supabaseAdmin.from("invoice_workflows").insert({
       invoice_id: invoiceId,
       status: "pending_manager",
       manager_user_id: managerUserId,
+      pending_manager_since: today,
     });
 
     if (wfError) {

@@ -448,6 +448,68 @@ export async function sendResubmittedEmail(params: {
 }
 
 /* ------------------------------------------------------------------ */
+/* SLA reminder: invoice pending too long                             */
+/* ------------------------------------------------------------------ */
+
+export type PendingInvoiceItem = {
+  invoiceId: string;
+  invoiceNumber?: string;
+  guestOrContractor: string;
+  amount: string;
+  daysPending: number;
+};
+
+export async function sendSlaReminderEmail(params: {
+  managerEmail: string;
+  managerName?: string;
+  slaDays: number;
+  items: PendingInvoiceItem[];
+}) {
+  const link = `${APP_URL}/invoices`;
+  const rows = params.items.map(
+    (i) => `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0"><a href="${APP_URL}/invoices/${i.invoiceId}" style="color:#2563eb;text-decoration:none">${i.invoiceNumber ? `#${i.invoiceNumber}` : i.invoiceId.slice(0, 8)}</a></td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${i.guestOrContractor}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${i.amount}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${i.daysPending} days</td></tr>`
+  ).join("");
+  const table = `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f1f5f9"><th style="padding:8px 12px;text-align:left">Invoice</th><th style="padding:8px 12px;text-align:left">Guest/Contractor</th><th style="padding:8px 12px;text-align:left">Amount</th><th style="padding:8px 12px;text-align:left">Pending</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return sendEmail({
+    to: params.managerEmail,
+    subject: `${params.items.length} invoice(s) overdue for your approval (${params.slaDays}+ days)`,
+    html: wrap("Approval Reminder", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.managerName ? ` ${params.managerName}` : ""},</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The following invoice(s) have been pending your approval for more than <strong>${params.slaDays} days</strong>. Please review and approve or reject them.</p>
+      <div style="margin:16px 0">${table}</div>
+      ${btn(link, "View Pending Invoices", "#f59e0b")}
+    `),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Pending digest: daily/weekly summary for managers                  */
+/* ------------------------------------------------------------------ */
+
+export async function sendPendingDigestEmail(params: {
+  managerEmail: string;
+  managerName?: string;
+  periodLabel: string;
+  items: PendingInvoiceItem[];
+}) {
+  const link = `${APP_URL}/invoices`;
+  const rows = params.items.map(
+    (i) => `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0"><a href="${APP_URL}/invoices/${i.invoiceId}" style="color:#2563eb;text-decoration:none">${i.invoiceNumber ? `#${i.invoiceNumber}` : i.invoiceId.slice(0, 8)}</a></td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${i.guestOrContractor}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${i.amount}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${i.daysPending}d</td></tr>`
+  ).join("");
+  const table = `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f1f5f9"><th style="padding:8px 12px;text-align:left">Invoice</th><th style="padding:8px 12px;text-align:left">Guest/Contractor</th><th style="padding:8px 12px;text-align:left">Amount</th><th style="padding:8px 12px;text-align:left">Pending</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return sendEmail({
+    to: params.managerEmail,
+    subject: `${params.periodLabel}: ${params.items.length} invoice(s) awaiting your approval`,
+    html: wrap("Pending Invoices Summary", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.managerName ? ` ${params.managerName}` : ""},</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Here is your ${params.periodLabel.toLowerCase()} summary of invoices awaiting your approval.</p>
+      <div style="margin:16px 0">${table}</div>
+      ${btn(link, "Review Invoices", "#2563eb")}
+    `),
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Admin approved (ready for payment)                                  */
 /* ------------------------------------------------------------------ */
 

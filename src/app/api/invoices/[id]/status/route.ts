@@ -617,10 +617,12 @@ export async function POST(
             { status: 400 }
           );
         }
+        const today = new Date().toISOString().slice(0, 10);
         await supabase
           .from("invoice_workflows")
           .update({
             status: "pending_manager",
+            pending_manager_since: today,
             ...(fromStatus === "rejected" ? { rejection_reason: null } : {}),
           })
           .eq("invoice_id", invoiceId);
@@ -731,10 +733,12 @@ export async function POST(
       }
     } else if ((profile.role === "submitter" || isOwner) && profile.role !== "viewer") {
       if (to_status === "pending_manager" && fromStatus === "rejected") {
+        const today = new Date().toISOString().slice(0, 10);
         await supabase
           .from("invoice_workflows")
           .update({
             status: "pending_manager",
+            pending_manager_since: today,
             rejection_reason: null,
           })
           .eq("invoice_id", invoiceId);
