@@ -211,6 +211,22 @@ function regexExtractFromText(text: string) {
 
   let rawCompany = companyFromLabel && /[A-Za-z]{2,}/.test(companyFromLabel) && !/^\d+$/.test(companyFromLabel.replace(/\s/g, "")) && !looksLikeLocation(companyFromLabel) ? companyFromLabel : null;
   if (!rawCompany && companyFromDomainName) rawCompany = companyFromDomainName;
+
+  // Contact info: phone and email from document
+  let phone =
+    lineValue([
+      /(?:phone|tel|mobile|mob|telephone)\s*[:\-.]?\s*([+\d\s\-()]{10,25})/i,
+      /(\+44\s*\d{2,4}\s*\d{3,4}\s*\d{3,4})/,
+      /(0\d{2,4}\s*\d{3,4}\s*\d{3,4})/,
+    ])?.replace(/\s+/g, " ").trim() ?? null;
+  // Exclude 8-digit numbers (likely account numbers, not phones)
+  if (phone && /^\d{8}$/.test(phone.replace(/\D/g, ""))) phone = null;
+  const email =
+    lineValue([
+      /(?:email|e-?mail)\s*[:\-.]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
+      /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
+    ]) ?? null;
+
   return {
     beneficiary_name: stripInternalRefs(beneficiary),
     company_name: stripInternalRefs(rawCompany),
@@ -222,6 +238,8 @@ function regexExtractFromText(text: string) {
     vat_amount: parseNumberLike(vatRaw),
     gross_amount: parseNumberLike(grossRaw),
     currency,
+    guest_phone: phone && phone.length >= 10 ? phone : null,
+    guest_email: email && !/trt|trtworld/i.test(email) ? email : null,
   };
 }
 
@@ -376,9 +394,11 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     invoice_date: `Extract ONLY the invoice date. Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
     gross_amount: `Extract ONLY the final total amount to pay. Look for "Grand Total", "Total", "Amount Due", "Total Payable". NOT subtotals. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
     currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP.` + CERTAIN_SUFFIX,
+    guest_phone: `Extract ONLY the guest/contact phone number from this invoice. Look for "Phone", "Tel", "Mobile", "Contact" - the number where the invoice sender can be reached. UK format: +44 or 0xx. NEVER use bank account number, sort code, or VAT number.` + CERTAIN_SUFFIX,
+    guest_email: `Extract ONLY the guest/contact email address from this invoice. Look for "Email", "E-mail", "Contact" - the email where the invoice sender can be reached. Format: name@domain.com. NEVER use TRT World or internal emails.` + CERTAIN_SUFFIX,
   };
 
-  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "currency"];
+  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "currency", "guest_phone", "guest_email"];
 
   async function extractSingleField(
     fieldKey: string,
@@ -455,6 +475,10 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
       (parsed as Record<string, unknown>)[k] = v;
     }
   }
+  // Always merge contact info from regex (for guest contacts list)
+  const rp = regexParsed as Record<string, unknown>;
+  if (rp.guest_phone) (parsed as Record<string, unknown>).guest_phone = rp.guest_phone;
+  if (rp.guest_email) (parsed as Record<string, unknown>).guest_email = rp.guest_email;
 
   try {
     if (!openai) throw new Error("OPENAI_API_KEY missing");

@@ -6,11 +6,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function GuestContactsPage() {
-  await requirePageAccess("guest_contacts");
+  const { profile } = await requirePageAccess("guest_contacts");
   const supabase = createAdminClient();
   const { data: invoices } = await supabase
     .from("invoices")
-    .select("id, service_description, generated_invoice_data, created_at")
+    .select("id, service_description, generated_invoice_data, created_at, invoice_extracted_fields(raw_json)")
     .neq("invoice_type", "freelancer")
     .order("created_at", { ascending: false });
 
@@ -47,10 +47,14 @@ export default async function GuestContactsPage() {
       guest_email?: string | null;
       title?: string | null;
     } | null;
+    const extRaw = (inv as { invoice_extracted_fields?: { raw_json?: Record<string, unknown> }[] | { raw_json?: Record<string, unknown> } | null }).invoice_extracted_fields;
+    const ext = Array.isArray(extRaw) ? extRaw[0] : extRaw;
+    const raw = ext?.raw_json ?? {};
 
     const guestName =
       gen?.guest_name?.trim() ||
       fromMeta(meta, ["guest name", "guest", "guest_name"]) ||
+      (typeof raw.beneficiary_name === "string" ? raw.beneficiary_name.trim() : null) ||
       null;
     const title =
       gen?.title?.trim() ||
@@ -59,10 +63,12 @@ export default async function GuestContactsPage() {
     const phone =
       gen?.guest_phone?.trim() ||
       fromMeta(meta, ["guest phone", "guest phone number", "phone"]) ||
+      (typeof raw.guest_phone === "string" ? raw.guest_phone.trim() : null) ||
       null;
     const email =
       gen?.guest_email?.trim() ||
       fromMeta(meta, ["guest email", "guest email address", "email"]) ||
+      (typeof raw.guest_email === "string" ? raw.guest_email.trim() : null) ||
       null;
 
     if (!guestName) continue;
@@ -89,7 +95,7 @@ export default async function GuestContactsPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-6">
-      <GuestContactsClient contacts={contacts} />
+      <GuestContactsClient contacts={contacts} isAdmin={profile.role === "admin"} />
     </div>
   );
 }

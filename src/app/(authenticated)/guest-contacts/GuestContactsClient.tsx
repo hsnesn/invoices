@@ -12,8 +12,28 @@ type Contact = {
   created_at: string;
 };
 
-export function GuestContactsClient({ contacts }: { contacts: Contact[] }) {
+export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]; isAdmin?: boolean }) {
   const [search, setSearch] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractMessage, setExtractMessage] = useState<string | null>(null);
+
+  const runExtraction = async () => {
+    setExtracting(true);
+    setExtractMessage(null);
+    try {
+      const res = await fetch("/api/admin/extract-guest-contacts", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setExtractMessage(data.message ?? "Done. Refresh the page to see updated contacts.");
+      } else {
+        setExtractMessage(data.error ?? "Extraction failed");
+      }
+    } catch {
+      setExtractMessage("Request failed");
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const filtered = contacts.filter((c) => {
     const q = search.toLowerCase().trim();
@@ -43,7 +63,7 @@ export function GuestContactsClient({ contacts }: { contacts: Contact[] }) {
         </Link>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
           type="search"
           value={search}
@@ -52,6 +72,19 @@ export function GuestContactsClient({ contacts }: { contacts: Contact[] }) {
           className="w-full max-w-md rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Search contacts"
         />
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={runExtraction}
+            disabled={extracting}
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+          >
+            {extracting ? "Scanning invoices..." : "Scan all invoices for contact info"}
+          </button>
+        )}
+        {extractMessage && (
+          <span className="text-sm text-gray-600 dark:text-gray-400">{extractMessage}</span>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800">
