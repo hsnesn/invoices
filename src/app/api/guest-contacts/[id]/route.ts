@@ -22,6 +22,8 @@ export async function PATCH(
       phone?: string | null;
       email?: string | null;
       title?: string | null;
+      is_favorite?: boolean;
+      tags?: string[];
     };
 
     const supabase = createAdminClient();
@@ -30,6 +32,8 @@ export async function PATCH(
     if (body.phone !== undefined) updates.phone = body.phone?.trim() || null;
     if (body.email !== undefined) updates.email = body.email?.trim() || null;
     if (body.title !== undefined) updates.title = body.title?.trim() || null;
+    if (body.is_favorite !== undefined) updates.is_favorite = body.is_favorite;
+    if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => typeof t === "string") : [];
 
     const { data, error } = await supabase
       .from("guest_contacts")

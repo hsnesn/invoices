@@ -14,6 +14,8 @@ export async function POST(request: NextRequest) {
       phone?: string | null;
       email?: string | null;
       title?: string | null;
+      is_favorite?: boolean;
+      tags?: string[];
     };
 
     const guestName = body.guest_name?.trim();
@@ -29,13 +31,15 @@ export async function POST(request: NextRequest) {
       .eq("guest_name_key", key)
       .maybeSingle();
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       guest_name: guestName,
       phone: body.phone?.trim() || null,
       email: body.email?.trim() || null,
       title: body.title?.trim() || null,
       updated_at: new Date().toISOString(),
     };
+    if (body.is_favorite !== undefined) payload.is_favorite = body.is_favorite;
+    if (body.tags !== undefined) payload.tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => typeof t === "string") : [];
 
     if (existing) {
       const { data, error } = await supabase

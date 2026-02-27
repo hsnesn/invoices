@@ -13,8 +13,13 @@ type Contact = {
   email: string | null;
   invoice_id: string | null;
   created_at: string;
+  last_appearance_date?: string;
+  department_name?: string | null;
+  program_name?: string | null;
   ai_contact_info?: AiContactInfo;
   guest_contact_id?: string;
+  is_favorite?: boolean;
+  tags?: string[];
 };
 
 type Appearance = {
@@ -42,10 +47,18 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [appearances, setAppearances] = useState<Appearance[]>([]);
   const [filterBy, setFilterBy] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [progFilter, setProgFilter] = useState<string>("all");
+  const [favoriteFilter, setFavoriteFilter] = useState<boolean | null>(null);
   const [sortBy, setSortBy] = useState<string>("name");
+  const [viewMode, setViewMode] = useState<"table" | "card">("table");
+  const [page, setPage] = useState(1);
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [addModal, setAddModal] = useState(false);
+  const [bulkEmailModal, setBulkEmailModal] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const PAGE_SIZE = 25;
 
   const runExtraction = async () => {
     setExtracting(true);
@@ -240,6 +253,9 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   };
   const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
 
+  const departments = Array.from(new Set(contacts.map((c) => c.department_name).filter(Boolean))) as string[];
+  const programs = Array.from(new Set(contacts.map((c) => c.program_name).filter(Boolean))) as string[];
+
   const filtered = contacts
     .filter((c) => {
       const q = search.toLowerCase().trim();
@@ -248,32 +264,86 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         c.guest_name.toLowerCase().includes(q) ||
         (c.title?.toLowerCase().includes(q) ?? false) ||
         (c.phone?.includes(q) ?? false) ||
-        (c.email?.toLowerCase().includes(q) ?? false);
+        (c.email?.toLowerCase().includes(q) ?? false) ||
+        (c.tags?.some((t) => t.toLowerCase().includes(q)) ?? false);
       if (!matchesSearch) return false;
       if (filterBy === "has_phone") return !!(c.phone || c.ai_contact_info?.phone);
       if (filterBy === "has_email") return !!(c.email || c.ai_contact_info?.email);
       if (filterBy === "has_ai") return !!c.ai_contact_info;
       if (filterBy === "missing_phone") return !c.phone && !c.ai_contact_info?.phone;
       if (filterBy === "missing_email") return !c.email && !c.ai_contact_info?.email;
-      if (dateFilter !== "all" && c.created_at) {
-        const t = new Date(c.created_at).getTime();
-        if (dateFilter === "7") return t >= dateCutoff(7);
-        if (dateFilter === "30") return t >= dateCutoff(30);
-        if (dateFilter === "90") return t >= dateCutoff(90);
-        if (dateFilter === "year") return t >= startOfYear;
+      if (dateFilter !== "all") {
+        const d = c.last_appearance_date || c.created_at;
+        if (!d) return false;
+        const t = new Date(d).getTime();
+        if (dateFilter === "7" && t < dateCutoff(7)) return false;
+        if (dateFilter === "30" && t < dateCutoff(30)) return false;
+        if (dateFilter === "90" && t < dateCutoff(90)) return false;
+        if (dateFilter === "year" && t < startOfYear) return false;
       }
+      if (deptFilter !== "all" && c.department_name !== deptFilter) return false;
+      if (progFilter !== "all" && c.program_name !== progFilter) return false;
+      if (favoriteFilter === true && !c.is_favorite) return false;
+      if (favoriteFilter === false && c.is_favorite) return false;
       return true;
     })
     .sort((a, b) => {
       if (sortBy === "date") {
-        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        const ta = (a.last_appearance_date || a.created_at) ? new Date(a.last_appearance_date || a.created_at).getTime() : 0;
+        const tb = (b.last_appearance_date || b.created_at) ? new Date(b.last_appearance_date || b.created_at).getTime() : 0;
         return tb - ta;
       }
       return a.guest_name.localeCompare(b.guest_name);
     });
 
-  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => {
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+
+  const similarNames = (() => {
+    const seen = new Map<string, string[]>();
+    for (const c of contacts) {
+      const key = c.guest_name.toLowerCase().replace(/\s+/g, " ").trim();
+      const parts = key.split(/\s+/);
+      const short = parts.length >= 2 ? `${parts[0]} ${parts[parts.length - 1]}` : key;
+      if (!seen.has(short)) seen.set(short, []);
+      const arr = seen.get(short)!;
+      if (!arr.includes(c.guest_name)) arr.push(c.guest_name);
+    }
+    return Array.from(seen.values()).filter((arr) => arr.length > 1);
+  })();
+
+  const toggleFavorite = async (c: Contact) => {
+    const next = !c.is_favorite;
+    if (c.guest_contact_id) {
+      try {
+        const res = await fetch(`/api/guest-contacts/${c.guest_contact_id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_favorite: next }),
+          credentials: "same-origin",
+        });
+        if (res.ok) window.location.reload();
+        else alert((await res.json()).error ?? "Failed");
+      } catch {
+        alert("Request failed");
+      }
+    } else {
+      try {
+        const res = await fetch("/api/guest-contacts/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guest_name: c.guest_name, is_favorite: next }),
+          credentials: "same-origin",
+        });
+        if (res.ok) window.location.reload();
+        else alert((await res.json()).error ?? "Failed");
+      } catch {
+        alert("Request failed");
+      }
+    }
+  };
+
+  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[] }) => {
     setSaving(true);
     try {
       if (editContact?.guest_contact_id) {
@@ -397,7 +467,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         />
         <select
           value={filterBy}
-          onChange={(e) => setFilterBy(e.target.value)}
+          onChange={(e) => { setFilterBy(e.target.value); setPage(1); }}
           className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Filter contacts"
         >
@@ -410,7 +480,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         </select>
         <select
           value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
+          onChange={(e) => { setDateFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           aria-label="Filter by invoice date"
         >
@@ -429,6 +499,57 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           <option value="name">Sort by name</option>
           <option value="date">Sort by date (newest)</option>
         </select>
+        {departments.length > 0 && (
+          <select
+            value={deptFilter}
+            onChange={(e) => { setDeptFilter(e.target.value); setPage(1); }}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            aria-label="Filter by department"
+          >
+            <option value="all">All departments</option>
+            {departments.sort().map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        )}
+        {programs.length > 0 && (
+          <select
+            value={progFilter}
+            onChange={(e) => { setProgFilter(e.target.value); setPage(1); }}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            aria-label="Filter by programme"
+          >
+            <option value="all">All programmes</option>
+            {programs.sort().map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        )}
+        <button
+          type="button"
+          onClick={() => setFavoriteFilter(favoriteFilter === true ? null : true)}
+          className={`rounded-lg px-3 py-2 text-sm font-medium ${favoriteFilter === true ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"}`}
+        >
+          ★ Favorites
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setViewMode("table")}
+            className={`rounded-lg px-3 py-2 text-sm ${viewMode === "table" ? "bg-gray-200 dark:bg-gray-700" : "border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"}`}
+            aria-label="Table view"
+          >
+            Table
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("card")}
+            className={`rounded-lg px-3 py-2 text-sm ${viewMode === "card" ? "bg-gray-200 dark:bg-gray-700" : "border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"}`}
+            aria-label="Card view"
+          >
+            Card
+          </button>
+        </div>
         {isAdmin && (
           <>
             <button
@@ -479,6 +600,14 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             >
               Add contact
             </button>
+            <button
+              type="button"
+              onClick={() => setBulkEmailModal(true)}
+              disabled={selectedGuests.size === 0}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
+            >
+              Bulk email ({selectedGuests.size})
+            </button>
           </>
         )}
         <button
@@ -497,11 +626,45 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         )}
       </div>
 
-      <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-        Showing {filtered.length} of {contacts.length} contacts
-        {(filterBy !== "all" || dateFilter !== "all") && " (filtered)"}
-      </p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} contacts
+          {(filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || favoriteFilter) && " (filtered)"}
+        </p>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800"
+            >
+              Previous
+            </button>
+            <span className="px-2 text-sm text-gray-600 dark:text-gray-400">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
 
+      {similarNames.length > 0 && (
+        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-900/20">
+          <strong className="text-amber-800 dark:text-amber-200">Possible duplicates:</strong>{" "}
+          {similarNames.slice(0, 3).map((arr) => arr.join(" / ")).join(" • ")}
+          {similarNames.length > 3 && ` (+${similarNames.length - 3} more)`}
+        </div>
+      )}
+
+      {viewMode === "table" ? (
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-auto">
           <thead className="bg-gray-50 dark:bg-gray-900">
@@ -510,7 +673,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                 <th className="w-10 px-2 py-3 text-left">
                   <input
                     type="checkbox"
-                    checked={filtered.length > 0 && selectedGuests.size >= Array.from(new Set(filtered.map((c) => c.guest_name))).length}
+                    checked={paginated.length > 0 && selectedGuests.size >= Array.from(new Set(paginated.map((c) => c.guest_name))).length}
                     onChange={toggleSelectAll}
                     aria-label="Select all guests"
                     className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
@@ -521,7 +684,13 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                 Guest Name
               </th>
               <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Invoice date
+                Last appearance
+              </th>
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                Dept
+              </th>
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                Programme
               </th>
               <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Title
@@ -549,16 +718,16 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {filtered.length === 0 ? (
+            {paginated.length === 0 ? (
               <tr>
-                <td colSpan={isAdmin ? 10 : 8} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colSpan={isAdmin ? 12 : 10} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   {contacts.length === 0
                     ? "No guest data found yet. Data appears from invoices (guest name, title, phone, email when available)."
                     : "No matches for your search."}
                 </td>
               </tr>
             ) : (
-              filtered.map((c) => (
+              paginated.map((c) => (
                 <tr key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   {isAdmin && (
                     <td className="px-2 py-2 align-top">
@@ -572,10 +741,26 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                     </td>
                   )}
                   <td className="max-w-[140px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
-                    <span className="block truncate" title={c.guest_name}>{c.guest_name}</span>
+                    <span className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite(c)}
+                        className="shrink-0 text-amber-500 hover:text-amber-600"
+                        title={c.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        {c.is_favorite ? "★" : "☆"}
+                      </button>
+                      <span className="block truncate" title={c.guest_name}>{c.guest_name}</span>
+                    </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
-                    {c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    {(c.last_appearance_date || c.created_at) ? new Date(c.last_appearance_date || c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                  </td>
+                  <td className="max-w-[100px] px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400 truncate" title={c.department_name ?? undefined}>
+                    {c.department_name || "—"}
+                  </td>
+                  <td className="max-w-[100px] px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400 truncate" title={c.program_name ?? undefined}>
+                    {c.program_name || "—"}
                   </td>
                   <td className="max-w-[200px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
                     <span className="block truncate" title={c.title || undefined}>{c.title || "—"}</span>
@@ -703,6 +888,68 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           </tbody>
         </table>
       </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {paginated.map((c) => (
+            <div
+              key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`}
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800"
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => toggleFavorite(c)} className="shrink-0 text-amber-500 hover:text-amber-600">
+                      {c.is_favorite ? "★" : "☆"}
+                    </button>
+                    <span className="font-medium text-gray-900 dark:text-white">{c.guest_name}</span>
+                  </div>
+                  {c.title && <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">{c.title}</p>}
+                </div>
+                {isAdmin && (
+                  <input
+                    type="checkbox"
+                    checked={selectedGuests.has(c.guest_name)}
+                    onChange={() => toggleGuestSelection(c.guest_name)}
+                    className="h-4 w-4 rounded border-gray-300 text-amber-600"
+                  />
+                )}
+              </div>
+              <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                {c.phone && <a href={`tel:${c.phone}`} className="block truncate text-sky-600 dark:text-sky-400">{c.phone}</a>}
+                {(c.email || c.ai_contact_info?.email) && (
+                  <a href={`mailto:${c.email || c.ai_contact_info?.email}`} className="block truncate text-sky-600 dark:text-sky-400">
+                    {c.email || c.ai_contact_info?.email}
+                  </a>
+                )}
+                {(c.department_name || c.program_name) && (
+                  <p className="text-xs text-gray-500">{[c.department_name, c.program_name].filter(Boolean).join(" • ")}</p>
+                )}
+                {(c.last_appearance_date || c.created_at) && (
+                  <p className="text-xs text-gray-500">
+                    Last: {new Date(c.last_appearance_date || c.created_at).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {c.invoice_id && (
+                  <Link href={`/invoices/${c.invoice_id}`} className="text-xs text-sky-600 dark:text-sky-400">View invoice</Link>
+                )}
+                <button type="button" onClick={() => openGuestAssessment(c.guest_name)} className="text-xs text-sky-600 dark:text-sky-400">
+                  AI Assessment
+                </button>
+                {isAdmin && (
+                  <>
+                    <button type="button" onClick={() => setEditContact(c)} className="text-xs text-gray-500">Edit</button>
+                    {c.guest_contact_id && (
+                      <button type="button" onClick={() => deleteContact(c.guest_contact_id!)} className="text-xs text-red-600">Remove</button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {selectedGuest && (
         <div
@@ -771,7 +1018,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       {editContact && (
         <ContactFormModal
           modalTitle="Edit contact"
-          initial={{ guest_name: editContact.guest_name, phone: editContact.phone, email: editContact.email, title: editContact.title }}
+          initial={{ guest_name: editContact.guest_name, phone: editContact.phone, email: editContact.email, title: editContact.title, tags: editContact.tags }}
           onSave={(payload) => saveContact(payload)}
           onClose={() => setEditContact(null)}
           saving={saving}
@@ -787,6 +1034,96 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           saving={saving}
         />
       )}
+
+      {bulkEmailModal && (
+        <BulkEmailModal
+          contacts={filtered.filter((c) => selectedGuests.has(c.guest_name))}
+          onClose={() => setBulkEmailModal(false)}
+          onSent={() => { setBulkEmailModal(false); window.location.reload(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function BulkEmailModal({ contacts, onClose, onSent }: { contacts: Contact[]; onClose: () => void; onSent: () => void }) {
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const withEmail = contacts.filter((c) => c.email || c.ai_contact_info?.email);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subject.trim() || !message.trim()) {
+      alert("Subject and message are required");
+      return;
+    }
+    if (withEmail.length === 0) {
+      alert("No selected contacts have email addresses");
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch("/api/guest-contacts/bulk-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contacts: withEmail.map((c) => ({ guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email })),
+          subject: subject.trim(),
+          message: message.trim(),
+        }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message ?? "Email sent.");
+        onSent();
+      } else {
+        alert(data.error ?? "Failed to send");
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Bulk email</h2>
+        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+          {withEmail.length} of {contacts.length} selected have email. Email will be sent to each recipient.
+        </p>
+        <form onSubmit={handleSend} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Subject *</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              required
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Message *</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              required
+              rows={5}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Cancel</button>
+            <button type="submit" disabled={sending || withEmail.length === 0} className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50">
+              {sending ? "Sending..." : "Send"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -799,8 +1136,8 @@ function ContactFormModal({
   saving,
 }: {
   modalTitle: string;
-  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null };
-  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => void;
+  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null; tags?: string[] };
+  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[] }) => void;
   onClose: () => void;
   saving: boolean;
 }) {
@@ -808,6 +1145,7 @@ function ContactFormModal({
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [email, setEmail] = useState(initial.email ?? "");
   const [title, setTitle] = useState(initial.title ?? "");
+  const [tagsStr, setTagsStr] = useState((initial.tags ?? []).join(", "));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -816,11 +1154,13 @@ function ContactFormModal({
       alert("Guest name is required (min 2 chars)");
       return;
     }
+    const tags = tagsStr.split(",").map((t) => t.trim()).filter(Boolean);
     onSave({
       guest_name: name,
       phone: phone.trim() || null,
       email: email.trim() || null,
       title: title.trim() || null,
+      tags: tags.length > 0 ? tags : undefined,
     });
   };
 
@@ -897,6 +1237,19 @@ function ContactFormModal({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="tags" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Tags (comma-separated)
+            </label>
+            <input
+              id="tags"
+              type="text"
+              value={tagsStr}
+              onChange={(e) => setTagsStr(e.target.value)}
+              placeholder="e.g. VIP, regular, journalist"
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             />
           </div>
