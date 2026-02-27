@@ -6,6 +6,7 @@ import { ExportLocaleSelector } from "@/components/ExportLocaleSelector";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toUserFriendlyError } from "@/lib/error-messages";
+import { toast } from "sonner";
 
 type FilterParams = {
   search?: string;
@@ -52,13 +53,15 @@ type Appearance = {
   invoice_id: string;
 };
 
-const COLUMN_IDS = ["guest_name", "last_appearance", "department", "programme", "title", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
+const COLUMN_IDS = ["guest_name", "last_appearance", "department", "programme", "title", "title_category", "topic", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
 const COLUMN_LABELS: Record<string, string> = {
   guest_name: "Guest Name",
   last_appearance: "Last appearance",
   department: "Dept",
   programme: "Programme",
   title: "Title",
+  title_category: "Title category",
+  topic: "Topic",
   phone: "Phone",
   email: "Email",
   invoice: "Invoice",
@@ -366,12 +369,30 @@ export function GuestContactsClient({
     }
   };
 
+  const toggleSelectAllFiltered = () => {
+    const filteredNames = Array.from(new Set(filteredContacts.map((c) => c.guest_name)));
+    const allSelected = filteredNames.length > 0 && filteredNames.every((n) => selectedGuests.has(n));
+    if (allSelected) {
+      setSelectedGuests((prev) => {
+        const next = new Set(prev);
+        for (const n of filteredNames) next.delete(n);
+        return next;
+      });
+    } else {
+      setSelectedGuests((prev) => {
+        const next = new Set(prev);
+        for (const n of filteredNames) next.add(n);
+        return next;
+      });
+    }
+  };
+
   const runBulkAiSearch = async () => {
     const namesToSearch = selectedGuests.size > 0
       ? Array.from(selectedGuests)
       : Array.from(new Set(filteredContacts.map((c) => c.guest_name)));
     if (namesToSearch.length === 0) {
-      alert("No guests to search.");
+      toast.error("No guests to search.");
       return;
     }
     setBulkSearching(true);
@@ -384,13 +405,13 @@ export function GuestContactsClient({
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message + (data.errors?.length ? `\n\nSome errors:\n${data.errors.slice(0, 5).join("\n")}` : ""));
+        toast.success(data.message + (data.errors?.length ? ` Some errors: ${data.errors.slice(0, 3).join("; ")}` : ""));
         window.location.reload();
       } else {
-        alert(data.error ?? "Bulk search failed");
+        toast.error(data.error ?? "Bulk search failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setBulkSearching(false);
     }
@@ -409,10 +430,10 @@ export function GuestContactsClient({
       if (res.ok) {
         window.location.reload();
       } else {
-        alert(data.error ?? "Search failed");
+        toast.error(data.error ?? "Search failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setSearchingGuest(null);
     }
@@ -493,9 +514,9 @@ export function GuestContactsClient({
           credentials: "same-origin",
         });
         if (res.ok) window.location.reload();
-        else alert((await res.json()).error ?? "Failed");
+        else toast.error((await res.json()).error ?? "Failed");
       } catch {
-        alert("Request failed");
+        toast.error("Request failed");
       }
     } else {
       try {
@@ -506,9 +527,9 @@ export function GuestContactsClient({
           credentials: "same-origin",
         });
         if (res.ok) window.location.reload();
-        else alert((await res.json()).error ?? "Failed");
+        else toast.error((await res.json()).error ?? "Failed");
       } catch {
-        alert("Request failed");
+        toast.error("Request failed");
       }
     }
   };
@@ -528,7 +549,7 @@ export function GuestContactsClient({
           setEditContact(null);
           window.location.reload();
         } else {
-          alert(data.error ?? "Update failed");
+          toast.error(data.error ?? "Update failed");
         }
       } else {
         const res = await fetch("/api/guest-contacts/upsert", {
@@ -542,11 +563,11 @@ export function GuestContactsClient({
           setEditContact(null);
           window.location.reload();
         } else {
-          alert(data.error ?? "Update failed");
+          toast.error(data.error ?? "Update failed");
         }
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setSaving(false);
     }
@@ -555,7 +576,7 @@ export function GuestContactsClient({
   const createContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => {
     setSaving(true);
     try {
-      const res = await fetch("/api/guest-contacts", {
+      const res = await fetch("/api/guest-contacts/upsert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -566,10 +587,10 @@ export function GuestContactsClient({
         setAddModal(false);
         window.location.reload();
       } else {
-        alert(data.error ?? "Create failed");
+        toast.error(data.error ?? "Create failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setSaving(false);
     }
@@ -585,6 +606,8 @@ export function GuestContactsClient({
       department: (c) => c.department_name ?? "",
       programme: (c) => c.program_name ?? "",
       title: (c) => c.title ?? "",
+      title_category: (c) => c.title_category ?? "",
+      topic: (c) => c.topic_category ?? c.topic ?? "",
       phone: (c) => c.phone ?? c.ai_contact_info?.phone ?? "",
       email: (c) => c.email ?? c.ai_contact_info?.email ?? "",
       invoice: (c) => c.invoice_id ? `${window.location.origin}/invoices/${c.invoice_id}` : "",
@@ -624,10 +647,10 @@ export function GuestContactsClient({
         setMergeModal(null);
         window.location.reload();
       } else {
-        alert(data.error ?? "Merge failed");
+        toast.error(data.error ?? "Merge failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setMerging(false);
     }
@@ -641,10 +664,10 @@ export function GuestContactsClient({
       if (res.ok) {
         window.location.reload();
       } else {
-        alert(data.error ?? "Delete failed");
+        toast.error(data.error ?? "Delete failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     }
   };
 
@@ -923,10 +946,21 @@ export function GuestContactsClient({
       </div>
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount} contacts
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount} contacts
           {(filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all" || favoriteFilter != null) && " (filtered)"}
-        </p>
+          </p>
+          {isAdmin && totalCount > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectAllFiltered}
+              className="text-xs text-sky-600 hover:underline dark:text-sky-400"
+            >
+              {filteredContacts.every((c) => selectedGuests.has(c.guest_name)) ? "Clear selection" : "Select all filtered"}
+            </button>
+          )}
+        </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-1">
             <button
@@ -1058,6 +1092,12 @@ export function GuestContactsClient({
               {visibleColumns.has("title") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Title</th>
               )}
+              {visibleColumns.has("title_category") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Title category</th>
+              )}
+              {visibleColumns.has("topic") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Topic</th>
+              )}
               {visibleColumns.has("phone") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Phone</th>
               )}
@@ -1089,7 +1129,7 @@ export function GuestContactsClient({
               </tr>
             ) : (
               contacts.map((c) => (
-                <tr key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <tr key={c.guest_contact_id ?? `guest-${c.guest_name}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   {isAdmin && (
                     <td className="px-2 py-2 align-top">
                       <input
@@ -1134,6 +1174,16 @@ export function GuestContactsClient({
                   {visibleColumns.has("title") && (
                     <td className="max-w-[200px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
                       <span className="block truncate" title={c.title || undefined}>{c.title || "—"}</span>
+                    </td>
+                  )}
+                  {visibleColumns.has("title_category") && (
+                    <td className="max-w-[120px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
+                      <span className="block truncate" title={c.title_category || undefined}>{c.title_category || "—"}</span>
+                    </td>
+                  )}
+                  {visibleColumns.has("topic") && (
+                    <td className="max-w-[160px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
+                      <span className="block truncate" title={c.topic || c.topic_category || undefined}>{c.topic_category || c.topic || "—"}</span>
                     </td>
                   )}
                   {visibleColumns.has("phone") && (
@@ -1278,7 +1328,7 @@ export function GuestContactsClient({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {contacts.map((c) => (
             <div
-              key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`}
+              key={c.guest_contact_id ?? `guest-${c.guest_name}`}
               className="rounded-xl border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800"
             >
               <div className="mb-2 flex items-start justify-between gap-2">
@@ -1290,6 +1340,7 @@ export function GuestContactsClient({
                     <span className="font-medium text-gray-900 dark:text-white">{c.guest_name}</span>
                   </div>
                   {c.title && <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">{c.title}</p>}
+                  {(c.topic || c.topic_category) && <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-gray-500">{c.topic_category || c.topic}</p>}
                 </div>
                 {isAdmin && (
                   <input
@@ -1532,11 +1583,11 @@ function BulkEmailModal({ contacts, onClose, onSent }: { contacts: Contact[]; on
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim() || !message.trim()) {
-      alert("Subject and message are required");
+      toast.error("Subject and message are required");
       return;
     }
     if (withEmail.length === 0) {
-      alert("No selected contacts have email addresses");
+      toast.error("No selected contacts have email addresses");
       return;
     }
     setSending(true);
@@ -1553,13 +1604,13 @@ function BulkEmailModal({ contacts, onClose, onSent }: { contacts: Contact[]; on
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message ?? "Email sent.");
+        toast.success(data.message ?? "Email sent.");
         onSent();
       } else {
-        alert(data.error ?? "Failed to send");
+        toast.error(data.error ?? "Failed to send");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setSending(false);
     }
@@ -1628,7 +1679,7 @@ function ContactFormModal({
     e.preventDefault();
     const name = guestName.trim();
     if (!name || name.length < 2) {
-      alert("Guest name is required (min 2 chars)");
+      toast.error("Guest name is required (min 2 chars)");
       return;
     }
     const tags = tagsStr.split(",").map((t) => t.trim()).filter(Boolean);

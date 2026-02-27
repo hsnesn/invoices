@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import type { PageKey } from "@/lib/types";
+import { getOrCreateTitleCategory } from "@/lib/guest-contact-categorize";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +23,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "guest_name is required (min 2 chars)" }, { status: 400 });
     }
 
+    const rawTitle = body.title?.trim() || null;
+    const titleCategory = rawTitle ? await getOrCreateTitleCategory(rawTitle) : null;
+
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("guest_contacts")
@@ -29,7 +33,8 @@ export async function POST(request: NextRequest) {
         guest_name: guestName,
         phone: body.phone?.trim() || null,
         email: body.email?.trim() || null,
-        title: body.title?.trim() || null,
+        title: rawTitle,
+        title_category: titleCategory,
         source: "manual",
       })
       .select()

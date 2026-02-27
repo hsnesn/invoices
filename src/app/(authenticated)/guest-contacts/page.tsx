@@ -28,6 +28,7 @@ export default async function GuestContactsPage({
   };
   const { profile } = await requirePageAccess("guest_contacts");
   const supabase = createAdminClient();
+  const INVOICE_LIMIT = 2000;
   const [
     { data: invoices },
     { data: guestContactsRows },
@@ -39,7 +40,8 @@ export default async function GuestContactsPage({
       .select("id, service_description, generated_invoice_data, created_at, department_id, program_id, invoice_extracted_fields(raw_json)")
       .neq("invoice_type", "freelancer")
       .neq("invoice_type", "guest_contact_scan")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(INVOICE_LIMIT),
     supabase.from("guest_contacts").select("id, guest_name, phone, email, title, title_category, topic, topic_category, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags").order("guest_name"),
     supabase.from("departments").select("id, name"),
     supabase.from("programs").select("id, name, department_id"),
