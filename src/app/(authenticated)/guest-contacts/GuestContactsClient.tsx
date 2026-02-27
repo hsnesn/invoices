@@ -425,7 +425,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: "fixed" }}>
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-auto">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               {isAdmin && (
@@ -439,29 +439,29 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                   />
                 </th>
               )}
-              <th className="w-[12%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Guest Name
               </th>
-              <th className="w-[18%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Title
               </th>
-              <th className="w-[10%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Phone
               </th>
-              <th className="w-[12%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Email
               </th>
-              <th className="w-[8%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Invoice
               </th>
-              <th className="min-w-[280px] w-[25%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 AI Found
               </th>
-              <th className="w-[10%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 AI Assessment
               </th>
               {isAdmin && (
-                <th className="w-[8%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                   Actions
                 </th>
               )}
@@ -480,7 +480,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
               filtered.map((c) => (
                 <tr key={`${c.guest_name}-${c.invoice_id ?? "bulk"}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   {isAdmin && (
-                    <td className="px-2 py-3">
+                    <td className="px-2 py-2 align-top">
                       <input
                         type="checkbox"
                         checked={selectedGuests.has(c.guest_name)}
@@ -490,31 +490,31 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       />
                     </td>
                   )}
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                    {c.guest_name}
+                  <td className="max-w-[140px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
+                    <span className="block truncate" title={c.guest_name}>{c.guest_name}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                    {c.title || "—"}
+                  <td className="max-w-[200px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
+                    <span className="block truncate" title={c.title || undefined}>{c.title || "—"}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                  <td className="max-w-[120px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
                     {c.phone ? (
-                      <a href={`tel:${c.phone}`} className="text-sky-600 hover:underline dark:text-sky-400">
+                      <a href={`tel:${c.phone}`} title={c.phone} className="block truncate text-sky-600 hover:underline dark:text-sky-400">
                         {c.phone}
                       </a>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                  <td className="max-w-[160px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
                     {c.email ? (
-                      <a href={`mailto:${c.email}`} className="text-sky-600 hover:underline dark:text-sky-400">
+                      <a href={`mailto:${c.email}`} title={c.email} className="block truncate text-sky-600 hover:underline dark:text-sky-400">
                         {c.email}
                       </a>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-3 py-2 align-top text-sm">
                     {c.invoice_id ? (
                       <Link
                         href={`/invoices/${c.invoice_id}`}
@@ -526,39 +526,39 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
                     )}
                   </td>
-                  <td className="min-w-[280px] px-4 py-3 text-sm break-words" style={{ overflowWrap: "anywhere", wordBreak: "break-all" }}>
+                  <td className="max-w-[220px] px-3 py-2 align-top text-sm">
                     {c.ai_contact_info ? (
-                      <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         {c.ai_contact_info.phone && (
-                          <div className="flex items-center gap-1">
-                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-                              AI
-                            </span>
-                            <a href={`tel:${c.ai_contact_info.phone}`} className="text-sky-600 hover:underline dark:text-sky-400 break-all">
-                              {c.ai_contact_info.phone}
-                            </a>
-                          </div>
+                          <a href={`tel:${c.ai_contact_info.phone}`} title={c.ai_contact_info.phone} className="inline-flex items-center gap-0.5 truncate max-w-full text-sky-600 hover:underline dark:text-sky-400">
+                            <span className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">AI</span>
+                            <span className="truncate">{c.ai_contact_info.phone}</span>
+                          </a>
                         )}
                         {c.ai_contact_info.email && (
-                          <div className="flex items-center gap-1">
-                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-                              AI
-                            </span>
-                            <a href={`mailto:${c.ai_contact_info.email}`} className="text-sky-600 hover:underline dark:text-sky-400 break-all">
-                              {c.ai_contact_info.email}
-                            </a>
-                          </div>
+                          <a href={`mailto:${c.ai_contact_info.email}`} title={c.ai_contact_info.email} className="inline-flex items-center gap-0.5 truncate max-w-full text-sky-600 hover:underline dark:text-sky-400">
+                            <span className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">AI</span>
+                            <span className="truncate">{c.ai_contact_info.email}</span>
+                          </a>
                         )}
-                        {c.ai_contact_info.social_media?.map((url) => (
-                          <div key={url} className="flex items-start gap-1">
-                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-                              AI
-                            </span>
-                            <a href={url} target="_blank" rel="noopener noreferrer" title={url} className="min-w-0 text-sky-600 hover:underline dark:text-sky-400" style={{ overflowWrap: "anywhere", wordBreak: "break-all" }}>
-                              {url}
+                        {c.ai_contact_info.social_media?.map((url) => {
+                          let label = "Link";
+                          try {
+                            if (url.includes("instagram")) label = "Instagram";
+                            else if (url.includes("linkedin")) label = "LinkedIn";
+                            else if (url.includes("twitter") || url.includes("x.com")) label = "X";
+                            else if (url.includes("facebook")) label = "Facebook";
+                            else label = new URL(url).hostname.replace("www.", "");
+                          } catch {
+                            label = url.length > 20 ? url.slice(0, 17) + "…" : url;
+                          }
+                          return (
+                            <a key={url} href={url} target="_blank" rel="noopener noreferrer" title={url} className="inline-flex items-center gap-0.5 text-sky-600 hover:underline dark:text-sky-400">
+                              <span className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">AI</span>
+                              <span>{label}</span>
                             </a>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {!c.ai_contact_info.phone && !c.ai_contact_info.email && (!c.ai_contact_info.social_media?.length) && (
                           <span className="text-gray-400 text-xs">No AI results</span>
                         )}
@@ -566,7 +566,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                           type="button"
                           onClick={() => runAiSearch(c.guest_name)}
                           disabled={!!searchingGuest}
-                          className="mt-1 block text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 disabled:opacity-50"
+                          className="shrink-0 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 disabled:opacity-50"
                         >
                           {searchingGuest === c.guest_name ? "Searching..." : "Search again"}
                         </button>
@@ -582,7 +582,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       </button>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-3 py-2 align-top text-sm">
                     <button
                       type="button"
                       onClick={() => openGuestAssessment(c.guest_name)}
@@ -592,7 +592,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                     </button>
                   </td>
                   {isAdmin && (
-                    <td className="px-4 py-3 text-sm">
+                    <td className="whitespace-nowrap px-3 py-2 align-top text-sm">
                       <div className="flex flex-wrap gap-1">
                         <button
                           type="button"
