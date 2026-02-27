@@ -19,28 +19,26 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
 
+    const msgColsBase = "id, sender_id, recipient_id, content, created_at, read_at, invoice_id";
+    const msgColsFull = msgColsBase + ", parent_message_id, attachment_path, attachment_name";
     let query = supabase
       .from("messages")
-      .select("id, sender_id, recipient_id, content, created_at, read_at, invoice_id, parent_message_id, attachment_path, attachment_name")
+      .select(msgColsFull)
       .limit(200);
 
     if (conversationWith) {
-      const [r1, r2] = await Promise.all([
-        supabase
-          .from("messages")
-          .select("id, sender_id, recipient_id, content, created_at, read_at, invoice_id, parent_message_id, attachment_path, attachment_name")
-          .eq("sender_id", userId)
-          .eq("recipient_id", conversationWith)
-          .order("created_at", { ascending: true })
-          .limit(200),
-        supabase
-          .from("messages")
-          .select("id, sender_id, recipient_id, content, created_at, read_at, invoice_id, parent_message_id, attachment_path, attachment_name")
-          .eq("sender_id", conversationWith)
-          .eq("recipient_id", userId)
-          .order("created_at", { ascending: true })
-          .limit(200),
+      let cols = msgColsFull;
+      let [r1, r2] = await Promise.all([
+        supabase.from("messages").select(cols).eq("sender_id", userId).eq("recipient_id", conversationWith).order("created_at", { ascending: true }).limit(200),
+        supabase.from("messages").select(cols).eq("sender_id", conversationWith).eq("recipient_id", userId).order("created_at", { ascending: true }).limit(200),
       ]);
+      if (r1.error && (r1.error as { message?: string }).message?.includes("column")) {
+        cols = msgColsBase;
+        [r1, r2] = await Promise.all([
+          supabase.from("messages").select(cols).eq("sender_id", userId).eq("recipient_id", conversationWith).order("created_at", { ascending: true }).limit(200),
+          supabase.from("messages").select(cols).eq("sender_id", conversationWith).eq("recipient_id", userId).order("created_at", { ascending: true }).limit(200),
+        ]);
+      }
       const merged = [
         ...(r1.data ?? []),
         ...(r2.data ?? []),
@@ -119,8 +117,19 @@ export async function GET(request: NextRequest) {
       query = query.ilike("content", `%${searchQ}%`);
     }
 
-    const { data: rows, error } = await query;
+    let { data: rows, error } = await query;
 
+    if (error && (error as { message?: string }).message?.includes("column")) {
+      query = supabase.from("messages").select(msgColsBase).limit(200)
+        .order("created_at", { ascending: false });
+      if (folder === "inbox") query = query.eq("recipient_id", userId);
+      else if (folder === "sent") query = query.eq("sender_id", userId);
+      else query = query.or(`recipient_id.eq.${userId},sender_id.eq.${userId}`);
+      if (searchQ) query = query.ilike("content", `%${searchQ}%`);
+      const retry = await query;
+      rows = retry.data;
+      error = retry.error;
+    }
     if (error) throw error;
 
     const userIds = Array.from(
