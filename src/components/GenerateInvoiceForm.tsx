@@ -13,6 +13,24 @@ const fetcher = (url: string) => fetch(url).then(async (r) => {
 type Appearance = { programmeName: string; topic: string; date: string; amount: string };
 type Expense = { label: string; amount: string };
 
+type GuestTemplate = {
+  id: string;
+  name: string;
+  title: string | null;
+  guest_name: string | null;
+  guest_address: string | null;
+  guest_phone: string | null;
+  guest_email: string | null;
+  account_name: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  sort_code: string | null;
+  bank_address: string | null;
+  paypal: string | null;
+  department_id: string | null;
+  program_id: string | null;
+};
+
 export function GenerateInvoiceForm() {
   const today = new Date().toISOString().slice(0, 10);
   const router = useRouter();
@@ -45,6 +63,89 @@ export function GenerateInvoiceForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [producerLoaded, setProducerLoaded] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateMessage, setTemplateMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const templatesFetcher = (url: string) =>
+    fetch(url).then(async (r) => {
+      const d = await r.json();
+      if (!r.ok) return [] as GuestTemplate[];
+      return Array.isArray(d) ? d : [];
+    });
+  const { data: templates = [], mutate: mutateTemplates } = useSWR<GuestTemplate[]>(
+    "/api/guest-invoice-templates",
+    templatesFetcher
+  );
+
+  const loadTemplate = (t: GuestTemplate) => {
+    setTitle(t.title ?? "");
+    setGuestName(t.guest_name ?? "");
+    setGuestAddress(t.guest_address ?? "");
+    setGuestPhone(t.guest_phone ?? "");
+    setGuestEmail(t.guest_email ?? "");
+    setAccountName(t.account_name ?? "");
+    setBankName(t.bank_name ?? "");
+    setAccountNumber(t.account_number ?? "");
+    setSortCode(t.sort_code ?? "");
+    setBankAddress(t.bank_address ?? "");
+    setPaypal(t.paypal ?? "");
+    if (t.department_id) setDepartmentId(t.department_id);
+    if (t.program_id) setProgramId(t.program_id);
+  };
+
+  const deleteTemplate = async (id: string) => {
+    try {
+      const res = await fetch(`/api/guest-invoice-templates/${id}`, { method: "DELETE" });
+      if (res.ok) mutateTemplates();
+    } catch {
+      setTemplateMessage({ type: "error", text: "Failed to delete template" });
+    }
+  };
+
+  const saveAsTemplate = async () => {
+    const name = saveTemplateName.trim();
+    if (!name) {
+      setTemplateMessage({ type: "error", text: "Template name is required" });
+      return;
+    }
+    setSavingTemplate(true);
+    setTemplateMessage(null);
+    try {
+      const res = await fetch("/api/guest-invoice-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          title,
+          guest_name: guestName,
+          guest_address: guestAddress,
+          guest_phone: guestPhone,
+          guest_email: guestEmail,
+          account_name: accountName,
+          bank_name: bankName,
+          account_number: accountNumber,
+          sort_code: sortCode,
+          bank_address: bankAddress,
+          paypal,
+          department_id: departmentId || undefined,
+          program_id: programId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        mutateTemplates();
+        setSaveTemplateName("");
+        setTemplateMessage({ type: "success", text: "Template saved" });
+      } else {
+        setTemplateMessage({ type: "error", text: data.error ?? "Failed to save template" });
+      }
+    } catch {
+      setTemplateMessage({ type: "error", text: "Connection error" });
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/profile")
@@ -155,6 +256,80 @@ export function GenerateInvoiceForm() {
       <p className="text-sm text-slate-600">
         Generate an invoice when the guest has not provided one. The PDF will be created and added to the Files section.
       </p>
+
+      {/* Template selector and save */}
+      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-600 dark:bg-slate-800/50">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Saved templates</h3>
+        <p className="mt-1 text-xs text-slate-500">Load a template to pre-fill guest and bank details, or save the current form as a template.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <select
+            value=""
+            onChange={(e) => {
+              const id = e.target.value;
+              if (id) {
+                const t = templates.find((x) => x.id === id);
+                if (t) loadTemplate(t);
+                e.target.value = "";
+              }
+            }}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            aria-label="Load template"
+          >
+            <option value="">Load template...</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2">
+            <input
+              value={saveTemplateName}
+              onChange={(e) => setSaveTemplateName(e.target.value)}
+              placeholder="Template name"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
+              aria-label="Template name for save"
+            />
+            <button
+              type="button"
+              onClick={saveAsTemplate}
+              disabled={savingTemplate || !saveTemplateName.trim()}
+              className="rounded-lg bg-slate-600 px-3 py-2 text-sm font-medium text-white hover:bg-slate-500 disabled:opacity-50"
+            >
+              {savingTemplate ? "Saving..." : "Save as template"}
+            </button>
+          </div>
+        </div>
+        {templateMessage && (
+          <p className={`mt-2 text-sm ${templateMessage.type === "success" ? "text-emerald-600" : "text-red-600"}`}>
+            {templateMessage.text}
+          </p>
+        )}
+        {templates.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {templates.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 text-xs text-slate-700 dark:bg-slate-600 dark:text-slate-200"
+              >
+                <button
+                  type="button"
+                  onClick={() => loadTemplate(t)}
+                  className="hover:underline"
+                >
+                  {t.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteTemplate(t.id)}
+                  className="ml-0.5 rounded p-0.5 text-slate-500 hover:bg-slate-300 hover:text-red-600 dark:hover:bg-slate-500 dark:hover:text-red-400"
+                  aria-label={`Delete template ${t.name}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Internal - for list display (not on invoice) */}
       <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-950/20">
