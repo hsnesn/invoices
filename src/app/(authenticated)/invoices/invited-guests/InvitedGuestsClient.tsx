@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
+import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
 
 type ProducerGuest = {
   id: string;
@@ -57,8 +58,11 @@ export function InvitedGuestsClient({
     include_program_description: true,
     attach_calendar: true,
     bcc_producer: true,
+    greeting_type: "dear" as "dear" | "mr_ms",
   });
 
+  const [showPreview, setShowPreview] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
   useEffect(() => {
@@ -124,6 +128,7 @@ export function InvitedGuestsClient({
           include_program_description: form.include_program_description,
           attach_calendar: form.attach_calendar,
           bcc_producer: form.bcc_producer,
+          greeting_type: form.greeting_type,
         }),
         credentials: "same-origin",
       });
@@ -207,6 +212,7 @@ export function InvitedGuestsClient({
               include_program_description: true,
               attach_calendar: true,
               bcc_producer: true,
+              greeting_type: "dear",
             });
           }}
           className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
@@ -309,6 +315,7 @@ export function InvitedGuestsClient({
                               include_program_description: true,
                               attach_calendar: true,
                               bcc_producer: true,
+                              greeting_type: "dear",
                             });
                           }}
                           className="text-sky-600 hover:underline text-xs"
@@ -332,8 +339,34 @@ export function InvitedGuestsClient({
               {inviteModal === "new" ? "Invite New Guest" : "Send Invitation"}
             </h2>
             <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-              Title is required before sending. Email is saved to your list after send.
+              Title is required before sending. Guest is saved to main contact list and your list after send.
             </p>
+            {guests.length > 0 && (
+              <div>
+                <label className="mb-1 block text-sm font-medium">Load from previous guest</label>
+                <select
+                  className={inputCls}
+                  value=""
+                  onChange={(e) => {
+                    const g = guests.find((x) => x.guest_name === e.target.value);
+                    if (g) {
+                      setForm((p) => ({
+                        ...p,
+                        guest_name: g.guest_name,
+                        email: g.email || "",
+                        title: g.title || "",
+                        program_name: g.program_name || defaultProgramName,
+                      }));
+                    }
+                  }}
+                >
+                  <option value="">— Select to pre-fill —</option>
+                  {guests.map((g) => (
+                    <option key={g.id} value={g.guest_name}>{g.guest_name} {g.email ? `(${g.email})` : ""}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium">Guest name *</label>
@@ -411,6 +444,13 @@ export function InvitedGuestsClient({
                 )}
               </div>
               <div>
+                <label className="mb-1 block text-sm font-medium">Greeting</label>
+                <select value={form.greeting_type} onChange={(e) => setForm((p) => ({ ...p, greeting_type: e.target.value as "dear" | "mr_ms" }))} className={inputCls}>
+                  <option value="dear">Dear [full name]</option>
+                  <option value="mr_ms">Dear Mr./Ms. [surname]</option>
+                </select>
+              </div>
+              <div>
                 <label className="mb-1 block text-sm font-medium">General topic</label>
                 <select value={form.general_topic} onChange={(e) => setForm((p) => ({ ...p, general_topic: e.target.value }))} className={inputCls}>
                   <option value="">— Select —</option>
@@ -462,9 +502,77 @@ export function InvitedGuestsClient({
                 <input type="checkbox" checked={form.include_program_description} onChange={(e) => setForm((p) => ({ ...p, include_program_description: e.target.checked }))} className="h-4 w-4 rounded text-sky-600" />
                 <span className="text-sm">Include program description in email</span>
               </label>
-              <div className="flex gap-2">
+              <div>
+                <button type="button" onClick={() => setShowPreview((p) => !p)} className="rounded-lg border px-3 py-1.5 text-sm">
+                  {showPreview ? "Hide preview" : "Preview email"}
+                </button>
+              </div>
+              {showPreview && form.guest_name.trim() && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900">
+                  <p className="mb-2 font-medium">Email preview:</p>
+                  <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                    {`Subject: TRT World – Invitation to the program: ${form.program_name.trim() || "our program"}
+
+${buildInviteGreeting(form.guest_name, form.greeting_type)},
+
+I hope this message finds you well.
+
+I am writing to invite you to participate in ${form.program_name.trim() || "our program"}, which will be broadcast on TRT World and will focus on ${form.program_specific_topic.trim() || "the scheduled topic"}.${form.include_program_description && form.program_name.trim() && getProgramDescription(form.program_name) ? `
+
+${getProgramDescription(form.program_name)}` : ""}
+
+The recording is scheduled for ${form.record_date.trim() || "TBD"} at ${form.record_time.trim() || "TBD"}.
+
+${form.format === "remote" ? "The recording will be conducted remotely via Skype or Zoom." : `The recording will take place in our studio. The address is: ${form.studio_address || "—"}`}${form.format === "studio" ? `
+
+We can arrange to pick you up from your preferred location and drop you back after the recording.` : ""}
+
+Would you be interested in joining us for this program? Please reply to this email to confirm your participation.
+
+Best regards,
+${selectedProducer.full_name}`}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setInviteModal(null)} className="rounded-lg border px-4 py-2 text-sm">
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingDraft || !form.guest_name.trim()}
+                  onClick={async () => {
+                    if (!form.guest_name.trim()) return;
+                    setSavingDraft(true);
+                    try {
+                      const res = await fetch("/api/producer-guests", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          guest_name: form.guest_name.trim(),
+                          email: form.email.trim() || null,
+                          title: form.title.trim() || null,
+                          program_name: form.program_name.trim() || null,
+                        }),
+                        credentials: "same-origin",
+                      });
+                      if (res.ok) {
+                        toast.success("Guest saved to your list");
+                        const list = await fetch("/api/producer-guests", { credentials: "same-origin" }).then((r) => r.json());
+                        setGuests(Array.isArray(list) ? list : []);
+                      } else {
+                        const d = await res.json();
+                        toast.error(d.error ?? "Failed to save");
+                      }
+                    } catch {
+                      toast.error("Failed to save");
+                    } finally {
+                      setSavingDraft(false);
+                    }
+                  }}
+                  className="rounded-lg border border-sky-600 px-4 py-2 text-sm text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 disabled:opacity-50"
+                >
+                  {savingDraft ? "Saving..." : "Save draft"}
                 </button>
                 <button
                   type="button"

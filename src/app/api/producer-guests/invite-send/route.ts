@@ -8,17 +8,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 import { generateInviteIcs } from "@/lib/ics-generator";
 import { getProgramDescription } from "@/lib/program-descriptions";
+import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
 
 function escapeHtml(s: string): string {
   return s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function politeGreeting(guestName: string): string {
-  const name = guestName.trim();
-  if (!name) return "Dear Sir or Madam";
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `Dear Mr./Ms. ${parts[parts.length - 1]}`;
-  return `Dear ${name}`;
 }
 
 function buildInviteHtml(params: {
@@ -31,8 +24,9 @@ function buildInviteHtml(params: {
   format: "remote" | "studio";
   studioAddress: string;
   programDescription?: string | null;
+  greetingType?: GreetingType;
 }): string {
-  const greeting = politeGreeting(params.guestName);
+  const greeting = buildInviteGreeting(params.guestName, params.greetingType ?? "dear");
   const safe = {
     greeting: escapeHtml(greeting),
     producerName: escapeHtml(params.producerName),
@@ -88,6 +82,7 @@ export async function POST(request: NextRequest) {
       include_program_description?: boolean;
       attach_calendar?: boolean;
       bcc_producer?: boolean;
+      greeting_type?: "dear" | "mr_ms";
     };
 
     const guestName = body.guest_name?.trim();
@@ -117,6 +112,7 @@ export async function POST(request: NextRequest) {
     const bccProducer = body.bcc_producer !== false && !!producerEmail;
 
     const programDescription = includeProgramDescription ? getProgramDescription(programName) : null;
+    const greetingType = (body.greeting_type === "mr_ms" ? "mr_ms" : "dear") as GreetingType;
 
     const subjectBase = `TRT World – Invitation to the program: ${programName}`;
     const html = buildInviteHtml({
@@ -129,6 +125,7 @@ export async function POST(request: NextRequest) {
       format,
       studioAddress,
       programDescription,
+      greetingType,
     });
 
     const attachments: { filename: string; content: Buffer | string }[] = [];
@@ -151,7 +148,8 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
-    const nameNorm = guestName.toLowerCase().trim().replace(/\s+/g, " ");
+    const guestNameNorm = guestName.trim().replace(/\s+/g, " ");
+    const nameNorm = guestNameNorm.toLowerCase();
 
     const { data: existingGc } = await supabase.from("guest_contacts").select("id").eq("guest_name_key", nameNorm).maybeSingle();
     const updateData = {
@@ -166,7 +164,7 @@ export async function POST(request: NextRequest) {
     if (existingGc?.id) {
       await supabase.from("guest_contacts").update(updateData).eq("id", existingGc.id);
     } else {
-      await supabase.from("guest_contacts").insert({ guest_name: guestName, ...updateData });
+      await supabase.from("guest_contacts").insert({ guest_name: guestNameNorm, ...updateData });
     }
 
     const { data: gcRow } = await supabase.from("guest_contacts").select("id").eq("guest_name_key", nameNorm).maybeSingle();

@@ -5,23 +5,13 @@ import { sendEmail } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateInviteIcs } from "@/lib/ics-generator";
 import { getProgramDescription } from "@/lib/program-descriptions";
+import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
 
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 500;
 
 function escapeHtml(s: string): string {
   return s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function politeGreeting(guestName: string): string {
-  const name = guestName.trim();
-  if (!name) return "Dear Sir or Madam";
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    const lastName = parts[parts.length - 1];
-    return `Dear Mr./Ms. ${lastName}`;
-  }
-  return `Dear ${name}`;
 }
 
 function buildInviteHtml(params: {
@@ -35,8 +25,11 @@ function buildInviteHtml(params: {
   studioAddress: string;
   programDescription?: string | null;
   customGreeting?: string | null;
+  greetingType?: GreetingType;
 }): string {
-  const greeting = params.customGreeting?.trim() || politeGreeting(params.guestName);
+  const greeting =
+    params.customGreeting?.trim() ||
+    buildInviteGreeting(params.guestName, params.greetingType ?? "dear");
   const safe = {
     greeting: escapeHtml(greeting),
     producerName: escapeHtml(params.producerName),
@@ -100,6 +93,7 @@ export async function POST(request: NextRequest) {
       include_program_description?: boolean;
       attach_calendar?: boolean;
       bcc_producer?: boolean;
+      greeting_type?: "dear" | "mr_ms";
       custom_greetings?: Record<string, string>;
       contacts?: { guest_name: string; email?: string | null }[];
       subject?: string;
@@ -131,6 +125,7 @@ export async function POST(request: NextRequest) {
       const attachCalendar = body.attach_calendar !== false;
       const bccProducer = body.bcc_producer !== false && !!producerEmail;
       const customGreetings = body.custom_greetings ?? {};
+      const greetingType = (body.greeting_type === "mr_ms" ? "mr_ms" : "dear") as GreetingType;
 
       const programDescription = includeProgramDescription ? getProgramDescription(programName) : null;
 
@@ -150,6 +145,7 @@ export async function POST(request: NextRequest) {
           format,
           studioAddress,
           programDescription,
+          greetingType,
           customGreeting: customGreetings[c.guest_name],
         });
 
@@ -174,7 +170,8 @@ export async function POST(request: NextRequest) {
           const guestName = c.guest_name || "Guest";
           const guestEmail = c.email!;
 
-          const nameNorm = guestName.toLowerCase().trim().replace(/\s+/g, " ");
+          const guestNameNorm = guestName.trim().replace(/\s+/g, " ");
+          const nameNorm = guestNameNorm.toLowerCase();
           const { data: existing } = await supabase
             .from("guest_contacts")
             .select("id")
@@ -196,7 +193,7 @@ export async function POST(request: NextRequest) {
           } else {
             const { data: inserted } = await supabase
               .from("guest_contacts")
-              .insert({ guest_name: guestName, ...updateData })
+              .insert({ guest_name: guestNameNorm, ...updateData })
               .select("id")
               .single();
             contactId = inserted?.id ?? null;

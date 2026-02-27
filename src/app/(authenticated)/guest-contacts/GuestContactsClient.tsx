@@ -9,6 +9,7 @@ import { toUserFriendlyError } from "@/lib/error-messages";
 import { toast } from "sonner";
 import { PHONE_COUNTRIES, DEFAULT_PHONE_COUNTRY, inferPhoneCountry } from "@/lib/phone-country-codes";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
+import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
 
 type FilterParams = {
   search?: string;
@@ -1894,6 +1895,7 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
   const [programName, setProgramName] = useState("");
   const [generalTopic, setGeneralTopic] = useState("");
   const [programSpecificTopic, setProgramSpecificTopic] = useState("");
+  const [greetingType, setGreetingType] = useState<GreetingType>("dear");
   const [recordDate, setRecordDate] = useState("");
   const [recordTime, setRecordTime] = useState("");
   const [format, setFormat] = useState<"remote" | "studio">("remote");
@@ -1989,6 +1991,7 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
         include_program_description: includeProgramDescription,
         attach_calendar: attachCalendar,
         bcc_producer: bccProducer,
+        greeting_type: greetingType,
         custom_greetings: Object.keys(customGreetings).length ? customGreetings : undefined,
       });
     } else {
@@ -2084,6 +2087,13 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                 )}
               </div>
               <div>
+                <label className="mb-1 block text-sm font-medium">Greeting</label>
+                <select value={greetingType} onChange={(e) => setGreetingType(e.target.value as GreetingType)} className={inputCls}>
+                  <option value="dear">Dear [full name]</option>
+                  <option value="mr_ms">Dear Mr./Ms. [surname]</option>
+                </select>
+              </div>
+              <div>
                 <label className="mb-1 block text-sm font-medium">General topic</label>
                 <select value={generalTopic} onChange={(e) => setGeneralTopic(e.target.value)} className={inputCls}>
                   <option value="">— Select —</option>
@@ -2159,6 +2169,7 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                         setProgramName(t.programName);
                         setGeneralTopic(t.generalTopic ?? "");
                         setProgramSpecificTopic(t.programSpecificTopic ?? (t as { topic?: string }).topic ?? "");
+                        setGreetingType((t as { greetingType?: GreetingType }).greetingType ?? "dear");
                         setFormat(t.format as "remote" | "studio");
                         setStudioAddress(t.studioAddress);
                       }
@@ -2177,7 +2188,7 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                   onClick={() => {
                     const name = prompt("Template name (e.g. Roundtable Studio)?");
                     if (name?.trim()) {
-                      const next = [...savedTemplates, { name: name.trim(), programName, generalTopic, programSpecificTopic, format, studioAddress }];
+                      const next = [...savedTemplates, { name: name.trim(), programName, generalTopic, programSpecificTopic, format, studioAddress, greetingType }];
                       setSavedTemplates(next);
                       try {
                         localStorage.setItem(INVITE_TEMPLATES_KEY, JSON.stringify(next));
@@ -2218,7 +2229,7 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                   <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-gray-700 dark:text-gray-300">
                     {`Subject: TRT World – Invitation to the program: ${programName.trim() || "our program"}
 
-${customGreetings[withEmail[0].guest_name] || (withEmail[0].guest_name.split(/\s+/).length >= 2 ? `Dear Mr./Ms. ${withEmail[0].guest_name.split(/\s+/).pop()}` : `Dear ${withEmail[0].guest_name}`)},
+${customGreetings[withEmail[0].guest_name] || buildInviteGreeting(withEmail[0].guest_name, greetingType)},
 
 I hope this message finds you well.
 
