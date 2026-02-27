@@ -61,6 +61,7 @@ export default async function HelpPage() {
           <li><a href="#contractor-approval" className="hover:text-sky-600 dark:hover:text-sky-400">Contractor approval workflow</a></li>
           <li><a href="#other-invoices" className="hover:text-sky-600 dark:hover:text-sky-400">Other invoices</a></li>
           <li><a href="#salaries" className="hover:text-sky-600 dark:hover:text-sky-400">Salaries</a></li>
+          <li><a href="#email-notifications" className="hover:text-sky-600 dark:hover:text-sky-400">Email notifications by stage</a></li>
           <li><a href="#setup" className="hover:text-sky-600 dark:hover:text-sky-400">Setup</a></li>
           <li><a href="#reports" className="hover:text-sky-600 dark:hover:text-sky-400">Reports</a></li>
           <li><a href="#users" className="hover:text-sky-600 dark:hover:text-sky-400">User management</a></li>
@@ -264,45 +265,131 @@ export default async function HelpPage() {
           <Tip>Salaries are separate from guest and contractor invoices. They have their own list and workflow.</Tip>
         </section>
 
-        {/* 15. Setup */}
+        {/* 15. Email notifications by stage */}
+        <section id="email-notifications" className="scroll-mt-24">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">15. Email notifications — stay informed at every stage</h2>
+          <p className="mt-2">
+            The system keeps everyone in the loop with <strong>automatic email notifications</strong> at key workflow stages. No need to chase updates — you receive an email when an invoice moves to a stage that concerns you. Admin can enable or disable each stage and choose who receives emails in <strong>Setup → Email settings</strong>.
+          </p>
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30">
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+              Why this matters: Clear communication reduces delays, avoids &quot;I didn&apos;t know it was ready&quot; situations, and gives submitters peace of mind when their invoice is approved or paid.
+            </p>
+          </div>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Guest & contractor invoices</h3>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[480px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="py-2 pr-4 text-left font-semibold text-gray-900 dark:text-white">Stage</th>
+                  <th className="py-2 pr-4 text-left font-semibold text-gray-900 dark:text-white">When</th>
+                  <th className="py-2 text-left font-semibold text-gray-900 dark:text-white">Who receives email</th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-700 dark:text-gray-300">
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 font-medium">Submission</td>
+                  <td className="py-2.5 pr-4">Invoice uploaded or generated</td>
+                  <td className="py-2.5">Submitter (confirmation), Line Manager (if assigned)</td>
+                </tr>
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 font-medium">Manager assigned</td>
+                  <td className="py-2.5 pr-4">Invoice assigned to a line manager</td>
+                  <td className="py-2.5">Line Manager</td>
+                </tr>
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 font-medium">Manager approved</td>
+                  <td className="py-2.5 pr-4">Line manager approves the invoice</td>
+                  <td className="py-2.5">Submitter, Admin, Operations Room</td>
+                </tr>
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 font-medium">Manager rejected</td>
+                  <td className="py-2.5 pr-4">Line manager rejects with a reason</td>
+                  <td className="py-2.5">Submitter (includes rejection reason)</td>
+                </tr>
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 font-medium">Resubmitted</td>
+                  <td className="py-2.5 pr-4">Submitter fixes and resubmits after rejection</td>
+                  <td className="py-2.5">Line Manager</td>
+                </tr>
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 font-medium">Ready for payment</td>
+                  <td className="py-2.5 pr-4">Admin approves; invoice moves to finance</td>
+                  <td className="py-2.5">Finance, Submitter</td>
+                </tr>
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2.5 pr-4 font-medium">Paid</td>
+                  <td className="py-2.5 pr-4">Finance marks the invoice as paid</td>
+                  <td className="py-2.5">Submitter, Admin</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Contractor invoices — Booking Form</h3>
+          <p className="mt-2">
+            When a line manager approves a <strong>contractor invoice</strong>, the system automatically generates a Booking Form PDF and sends two emails:
+          </p>
+          <ul className="mt-2 list-inside list-disc space-y-1">
+            <li><strong>Email A</strong> — To the approver (line manager) with the PDF attached</li>
+            <li><strong>Email B</strong> — To London Operations with the PDF attached</li>
+          </ul>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            This happens automatically. If it fails, admin can trigger it manually from the invoice detail page (Send Booking Form).
+          </p>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Salaries</h3>
+          <p className="mt-2">
+            When a salary record is marked as paid, the employee receives a <strong>payment confirmation email</strong> with details.
+          </p>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Automated reminders (cron)</h3>
+          <p className="mt-2">
+            If configured, the system can send:
+          </p>
+          <ul className="mt-2 list-inside list-disc space-y-1">
+            <li><strong>SLA reminder</strong> — To line managers when invoices exceed a set number of days in &quot;Pending manager&quot;</li>
+            <li><strong>Pending digest</strong> — Daily or weekly summary of pending invoices to managers</li>
+          </ul>
+          <Tip>Users can opt out of invoice emails in their Profile. Admin controls which stages send emails in Setup → Email settings.</Tip>
+        </section>
+
+        {/* 16. Setup */}
         <section id="setup" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">15. Setup (admin only)</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">16. Setup (admin only)</h2>
           <p className="mt-2">
             In Setup you manage <strong>Departments</strong> and <strong>Programmes</strong>. Departments are broad groups (e.g. News, Sport). Programmes belong to a department (e.g. News Hour, Sports Today). When submitting an invoice, users pick from these. Admin can also configure contractor templates, email settings, department managers, and <strong>Approval Delegation</strong> (backup approvers when a manager is absent).
           </p>
           <Tip>If you add a new programme, it appears in the dropdown the next time someone submits an invoice.</Tip>
         </section>
 
-        {/* 15. Reports */}
+        {/* 17. Reports */}
         <section id="reports" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">15. Reports</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">17. Reports</h2>
           <p className="mt-2">
             Reports show spending by month, quarter, or department. You can filter by guest or contractor invoices. Use this to see how much was paid in a period or which department spent the most. Export to Excel for further analysis.
           </p>
           <Tip>Choose the report type (monthly, quarterly, department, custom) and the date range. The system generates the report and lets you download it.</Tip>
         </section>
 
-        {/* 16. User management */}
+        {/* 18. User management */}
         <section id="users" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">16. User management (admin only)</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">18. User management (admin only)</h2>
           <p className="mt-2">
             Admin can invite new users by email, set their role, department and programmes, and choose which pages they can access (allowed_pages). You can also deactivate a user so they can no longer log in.
           </p>
           <Tip>When inviting, use the person&apos;s real email. They receive a link to set their password and join.</Tip>
         </section>
 
-        {/* 17. Invoice detail */}
+        {/* 19. Invoice detail */}
         <section id="invoice-detail" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">17. Invoice detail page</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">19. Invoice detail page</h2>
           <p className="mt-2">
             Click any invoice in the list to open its detail page. You see the PDF (or files), the status, who submitted it, who approved it, and a timeline of events. You can download files, replace a file, add a file, add notes, or change the status (if you have permission).
           </p>
           <Tip>The timeline shows every status change and who did it. Useful for auditing.</Tip>
         </section>
 
-        {/* 18. Common operations */}
+        {/* 20. Common operations */}
         <section id="common" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">18. Common operations</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">20. Common operations</h2>
           <p className="mt-2">
             <strong>Replace file:</strong> Used when you uploaded the wrong PDF. Open the invoice, click Replace file, choose the correct file. Only works when the invoice is still in early stages (submitted, rejected).<br />
             <strong>Add file:</strong> Attach an extra document (e.g. a receipt) without removing the main invoice.<br />
@@ -312,9 +399,9 @@ export default async function HelpPage() {
           <Tip>If you get an error when uploading, check the file type. Supported: PDF, DOCX, DOC, XLSX, XLS, JPEG.</Tip>
         </section>
 
-        {/* 19. FAQ */}
+        {/* 21. FAQ */}
         <section id="faq" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">19. Frequently asked questions</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">21. Frequently asked questions</h2>
           <dl className="mt-3 space-y-4">
             <div>
               <dt className="font-semibold text-gray-900 dark:text-white">I don&apos;t see the Submit button. Why?</dt>
@@ -339,9 +426,9 @@ export default async function HelpPage() {
           </dl>
         </section>
 
-        {/* 20. Glossary */}
+        {/* 22. Glossary */}
         <section id="glossary" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">20. Glossary</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">22. Glossary</h2>
           <dl className="mt-3 space-y-2 text-sm">
             <dt className="font-semibold text-gray-900 dark:text-white">Submitter</dt>
             <dd>Person who uploads or creates the invoice.</dd>

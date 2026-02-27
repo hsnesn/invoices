@@ -196,21 +196,21 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   });
 
   return (
-    <div className="mx-auto max-w-5xl pb-16">
+    <div className="mx-auto max-w-5xl min-w-0 w-full pb-24 sm:pb-16">
       {/* Hero Header */}
-      <div className="mb-12 flex flex-col items-center gap-6 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-center gap-5">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white shadow-md ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
-            <img src="/trt-logo.png" alt="TRT" className="h-8 object-contain" />
+      <div className="mb-8 sm:mb-12 flex flex-col items-start gap-6 sm:flex-row sm:items-end sm:justify-between min-w-0">
+        <div className="flex items-center gap-4 sm:gap-5 min-w-0 w-full sm:w-auto">
+          <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-white shadow-md ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
+            <img src="/trt-logo.png" alt="TRT" className="h-6 sm:h-8 object-contain" />
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-3xl">
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white break-words">
               {getGreeting()}, {profile.full_name || "User"}
             </h1>
-            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-              Invoice Approval Workflow
-              <span className="mx-2 text-gray-300 dark:text-gray-600">·</span>
-              <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+            <p className="mt-0.5 text-xs sm:text-sm text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="truncate">Invoice Approval Workflow</span>
+              <span className="text-gray-300 dark:text-gray-600 shrink-0">·</span>
+              <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300 shrink-0">
                 {profile.role}
               </span>
             </p>
@@ -220,18 +220,18 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
       {/* Metric Cards - hidden from submitters */}
       {canSeeStats && stats && (
-        <div className="mb-8">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs text-gray-500 dark:text-gray-400">Auto-refresh every 10s</span>
+        <div className="mb-8 min-w-0">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Auto-refresh every 10s</span>
             <button
               type="button"
               onClick={() => void mutate()}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
             >
               Refresh
             </button>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 min-w-0">
           <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
             <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Guest Pending</p>
             <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{stats.guest.pending}</p>

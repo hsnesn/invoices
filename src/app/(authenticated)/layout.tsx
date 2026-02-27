@@ -11,7 +11,7 @@ export default async function AuthenticatedLayout({
   return (
     <div className="flex min-h-screen flex-col bg-gray-100 dark:bg-slate-950">
       <Nav profile={profile} />
-      <main className="flex-1 p-4 sm:p-6 min-w-0 max-w-full overflow-x-hidden">
+      <main className="flex-1 p-4 sm:p-6 min-w-0 w-full max-w-full overflow-x-hidden overflow-y-auto">
         <Breadcrumb />
         {children}
       </main>

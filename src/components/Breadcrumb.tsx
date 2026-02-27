@@ -21,7 +21,7 @@ export function Breadcrumb() {
   if (segments.length === 0) return null;
 
   return (
-    <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-sm">
+    <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-sm min-w-0 flex-wrap">
       <Link
         href="/dashboard"
         className="text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
