@@ -198,15 +198,15 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   const userPages = profile.allowed_pages;
   const isSubmitter = profile.role === "submitter";
   const canSeeStats = !isSubmitter;
-  const { data: stats, mutate } = useSWR<Stats>(
+  const { data: stats, mutate, isValidating: statsValidating } = useSWR<Stats>(
     canSeeStats ? "/api/dashboard/stats" : null,
     statsFetcher,
-    { refreshInterval: 10000, revalidateOnFocus: true, dedupingInterval: 3000 }
+    { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
-  const { data: submitterStats, mutate: mutateSubmitter } = useSWR<SubmitterStats>(
+  const { data: submitterStats, mutate: mutateSubmitter, isValidating: submitterValidating } = useSWR<SubmitterStats>(
     isSubmitter ? "/api/dashboard/submitter-stats" : null,
     statsFetcher,
-    { refreshInterval: 10000, revalidateOnFocus: true, dedupingInterval: 3000 }
+    { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
 
   const visiblePages = PAGES.filter((p) => {
@@ -247,14 +247,14 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       {/* Submitter: My Pending Invoices */}
       {isSubmitter && submitterStats && (
         <div className="mb-8 min-w-0">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Auto-refresh every 10s</span>
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => void mutateSubmitter()}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+              onClick={() => void mutateSubmitter(undefined, { revalidate: true })}
+              disabled={submitterValidating}
+              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
             >
-              Refresh
+              {submitterValidating ? "Refreshing…" : "Refresh"}
             </button>
           </div>
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
@@ -275,14 +275,14 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       {/* Metric Cards - hidden from submitters */}
       {canSeeStats && (
         <div className="mb-8 min-w-0">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Auto-refresh every 10s</span>
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => void mutate()}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+              onClick={() => void mutate(undefined, { revalidate: true })}
+              disabled={statsValidating}
+              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
             >
-              Refresh
+              {statsValidating ? "Refreshing…" : "Refresh"}
             </button>
           </div>
           {!stats ? (
