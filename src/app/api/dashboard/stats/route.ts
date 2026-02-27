@@ -23,7 +23,8 @@ export async function GET() {
     const { data: flInvoices } = await supabase
       .from("invoices")
       .select("id, created_at, invoice_workflows(status)")
-      .eq("invoice_type", "freelancer");
+      .eq("invoice_type", "freelancer")
+      .limit(10000);
 
     const { data: otherInvoices } = await supabase
       .from("invoices")
@@ -46,11 +47,10 @@ export async function GET() {
     const freelancer = (flInvoices ?? []).reduce(
       (acc, inv) => {
         const wf = unwrap(inv.invoice_workflows as WfShape[] | WfShape | null);
-        const s = (wf?.status ?? "submitted") as string;
-        const pendingStatuses = ["submitted", "pending_manager", "pending_line_manager", "approved_by_manager", "pending_admin", "ready_for_payment"];
-        if (pendingStatuses.includes(s)) acc.pending++;
-        else if (["paid", "archived"].includes(s)) acc.paid++;
+        const s = String(wf?.status ?? "submitted").trim();
+        if (["paid", "archived"].includes(s)) acc.paid++;
         else if (s === "rejected") acc.rejected++;
+        else acc.pending++;
         return acc;
       },
       { pending: 0, paid: 0, rejected: 0 }
