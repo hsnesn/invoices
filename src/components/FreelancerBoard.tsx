@@ -595,16 +595,9 @@ export function FreelancerBoard({
     setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }, []);
   const handleRowClick = useCallback((r: DisplayRow) => {
-    const canSelect =
-      (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") ||
-      (currentRole === "submitter" && r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status));
-    if (canSelect && onToggleSelect) {
-      onToggleSelect(r.id);
-      return;
-    }
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
     clickTimerRef.current = setTimeout(() => { void toggleExpandRow(r.id); clickTimerRef.current = null; }, 250);
-  }, [toggleExpandRow, currentRole, currentUserId, onToggleSelect]);
+  }, [toggleExpandRow]);
   const onToggleAll = useCallback((ids: string[], checked: boolean) => {
     setSelectedIds(prev => { const n = new Set(prev); for (const id of ids) { if (checked) n.add(id); else n.delete(id); } return n; });
   }, []);

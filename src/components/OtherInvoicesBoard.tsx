@@ -60,6 +60,7 @@ type ApiRow = {
 
 type DisplayRow = {
   id: string;
+  submitterId: string | null;
   amount: string;
   amountNum: number;
   currency: string;
@@ -117,10 +118,12 @@ function statusToGroup(status: string): string {
 export function OtherInvoicesBoard({
   invoices,
   currentRole,
+  currentUserId,
   canUpload,
 }: {
   invoices: ApiRow[];
   currentRole: string;
+  currentUserId?: string;
   canUpload: boolean;
 }) {
   const router = useRouter();
@@ -136,6 +139,7 @@ export function OtherInvoicesBoard({
         const files = inv.invoice_files ?? [];
         return {
           id: inv.id,
+          submitterId: (inv as { submitter_user_id?: string }).submitter_user_id ?? null,
           amount: fmtAmount(amt, cur),
           amountNum: Number.isFinite(amt) ? amt : 0,
           currency: cur,
@@ -178,6 +182,9 @@ export function OtherInvoicesBoard({
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [timelineData, setTimelineData] = useState<{ id: string; event_type: string; created_at: string; actor_name?: string; from_status?: string; to_status?: string; payload?: unknown }[]>([]);
 
   const hasFilter = !!(search || statusFilter || submittedByFilter || dateFrom || dateTo);
   const clearFilters = () => {
@@ -544,6 +551,23 @@ export function OtherInvoicesBoard({
     });
   }, []);
 
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedRowId((prev) => (prev === id ? null : id));
+  }, []);
+
+  useEffect(() => {
+    if (!expandedRowId) {
+      setTimelineData([]);
+      return;
+    }
+    setDetailLoading(true);
+    fetch(`/api/invoices/${expandedRowId}/timeline`)
+      .then((r) => r.json())
+      .then((data) => setTimelineData(Array.isArray(data) ? data : []))
+      .catch(() => setTimelineData([]))
+      .finally(() => setDetailLoading(false));
+  }, [expandedRowId]);
+
   const onToggleAll = useCallback((ids: string[], checked: boolean) => {
     setSelectedIds((prev) => {
       const n = new Set(prev);
@@ -774,8 +798,12 @@ export function OtherInvoicesBoard({
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredRows.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="px-3 py-2">
+                  <React.Fragment key={r.id}>
+                  <tr
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors ${expandedRowId === r.id ? "bg-sky-50/50 dark:bg-sky-950/20" : ""}`}
+                    onClick={() => toggleExpand(r.id)}
+                  >
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} />
                     </td>
                     {COLUMNS.map((col) => {
@@ -856,6 +884,69 @@ export function OtherInvoicesBoard({
                       return <td key={col.key} className="px-3 py-2">—</td>;
                     })}
                   </tr>
+                  {expandedRowId === r.id && (
+                    <tr className="bg-gray-50 dark:bg-gray-800/50">
+                      <td colSpan={COLUMNS.length + 1} className="px-6 py-4">
+                        {detailLoading ? (
+                          <p className="text-sm text-gray-500">Loading...</p>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <a href={`/invoices/${r.id}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
+                                View full invoice →
+                              </a>
+                              <a href={`/messages?invoiceId=${r.id}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
+                                Message about this invoice
+                              </a>
+                              {r.submitterId && r.submitterId !== currentUserId && (
+                                <a href={`/messages?invoiceId=${r.id}&recipientId=${r.submitterId}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
+                                  Message submitter
+                                </a>
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h4>
+                              {timelineData.length === 0 ? (
+                                <p className="text-xs text-gray-400">No events yet.</p>
+                              ) : (
+                                <div className="space-y-2 max-h-60 overflow-y-auto">
+                                  {timelineData.map((ev) => {
+                                    const ch = (ev.payload as Record<string, unknown>)?.changes as Record<string, { from: string; to: string }> | undefined;
+                                    const hc = ch && Object.keys(ch).length > 0;
+                                    const ic = ev.event_type === "invoice_updated" ? "bg-amber-400" : ev.event_type.includes("reject") ? "bg-red-400" : ev.event_type.includes("approv") || ev.event_type.includes("paid") ? "bg-green-400" : "bg-blue-400";
+                                    return (
+                                      <div key={ev.id} className="flex items-start gap-2 text-xs">
+                                        <div className={`mt-0.5 h-2 w-2 rounded-full ${ic} flex-shrink-0`} />
+                                        <div className="flex-1 min-w-0">
+                                          <span className="font-medium text-gray-700 dark:text-gray-300">{ev.actor_name ?? "—"}</span>
+                                          <span className="text-gray-500"> — {ev.event_type.replace(/_/g, " ")}</span>
+                                          {ev.from_status && ev.to_status && <span className="text-gray-400"> ({ev.from_status} → {ev.to_status})</span>}
+                                          {hc && (
+                                            <div className="mt-1 space-y-0.5 rounded bg-gray-100 border border-gray-200 px-2 py-1.5 dark:bg-gray-700 dark:border-gray-600">
+                                              {Object.entries(ch).map(([f, { from, to }]) => (
+                                                <div key={f} className="flex items-center gap-1 text-[11px]">
+                                                  <span className="font-medium text-gray-600 dark:text-gray-400 capitalize">{f.replace(/_/g, " ")}:</span>
+                                                  <span className="text-red-500 line-through">{from || "—"}</span>
+                                                  <span className="text-gray-400">→</span>
+                                                  <span className="text-green-600 font-medium">{to || "—"}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          <div className="text-gray-400 mt-0.5">{new Date(ev.created_at).toLocaleString("en-GB")}</div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

@@ -12,7 +12,7 @@ function canAccessOtherInvoices(role: string, allowedPages: string[] | null): bo
 }
 
 export default async function OtherInvoicesPage() {
-  const { profile } = await requireAuth();
+  const { session, profile } = await requireAuth();
 
   if (!canAccessOtherInvoices(profile.role, profile.allowed_pages ?? null)) {
     return (
@@ -70,6 +70,7 @@ export default async function OtherInvoicesPage() {
     <OtherInvoicesBoard
       invoices={enriched as never[]}
       currentRole={profile.role}
+      currentUserId={session.user.id}
       canUpload={canUpload}
     />
   );

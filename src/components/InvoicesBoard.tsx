@@ -575,13 +575,9 @@ function InvoiceTable({
 
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRowClick = useCallback((r: DisplayRow) => {
-    if (canRowBulkSelect(r)) {
-      onToggleSelect(r.id);
-      return;
-    }
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
     clickTimerRef.current = setTimeout(() => { onToggleExpand(r.id); clickTimerRef.current = null; }, 250);
-  }, [onToggleExpand, onToggleSelect]);
+  }, [onToggleExpand]);
   const handleRowDblClick = useCallback(() => {
     if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
   }, []);
