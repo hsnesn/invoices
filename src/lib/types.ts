@@ -27,6 +27,7 @@ export type PageKey = (typeof ALL_PAGES)[number]["key"];
 export interface Profile {
   id: string;
   full_name: string | null;
+  avatar_url?: string | null;
   role: AppRole;
   department_id: string | null;
   program_ids: string[] | null;

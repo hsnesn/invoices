@@ -52,8 +52,15 @@ export function Nav({ profile }: { profile: Profile }) {
         </Link>
         <Link
           href="/profile"
-          className="hidden text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white sm:inline"
+          className="hidden items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white sm:inline-flex"
         >
+          {profile.avatar_url ? (
+            <img src={profile.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-600" />
+          ) : (
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+              {(profile.full_name || profile.role || "?")[0].toUpperCase()}
+            </span>
+          )}
           {profile.full_name || profile.role}
           <span className="ml-1 text-gray-400 dark:text-gray-500">({profile.role})</span>
         </Link>

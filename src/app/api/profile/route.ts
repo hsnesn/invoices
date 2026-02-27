@@ -20,10 +20,13 @@ export async function GET() {
 
     const receiveInvoiceEmails = (profile as { receive_invoice_emails?: boolean }).receive_invoice_emails !== false;
 
+    const avatarUrl = (profile as { avatar_url?: string | null }).avatar_url ?? null;
+
     return NextResponse.json({
       id: profile.id,
       full_name: fullName,
       email,
+      avatar_url: avatarUrl,
       role: profile.role,
       department_id: profile.department_id,
       department_name: departmentName,

@@ -7,6 +7,7 @@ type ProfileData = {
   id: string;
   full_name: string | null;
   email: string | null;
+  avatar_url: string | null;
   role: string;
   department_id: string | null;
   department_name: string | null;
@@ -33,6 +34,7 @@ export default function ProfilePage() {
   const [editName, setEditName] = useState("");
   const [receiveInvoiceEmails, setReceiveInvoiceEmails] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -71,6 +73,49 @@ export default function ProfilePage() {
       setError("Connection error.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !data || uploadingAvatar) return;
+    setUploadingAvatar(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/profile/avatar", { method: "POST", body: fd });
+      const result = await res.json();
+      if (res.ok) {
+        setData((prev) => (prev ? { ...prev, avatar_url: result.avatar_url } : null));
+        router.refresh();
+      } else {
+        setError(result?.error ?? "Upload failed.");
+      }
+    } catch {
+      setError("Upload failed.");
+    } finally {
+      setUploadingAvatar(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!data || uploadingAvatar) return;
+    setUploadingAvatar(true);
+    setError("");
+    try {
+      const res = await fetch("/api/profile/avatar", { method: "DELETE" });
+      if (res.ok) {
+        setData((prev) => (prev ? { ...prev, avatar_url: null } : null));
+        router.refresh();
+      } else {
+        setError("Failed to remove photo.");
+      }
+    } catch {
+      setError("Failed to remove photo.");
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -136,6 +181,45 @@ export default function ProfilePage() {
       )}
 
       <div className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        {/* Profile photo */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Profile Photo</label>
+          <div className="flex items-center gap-4">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700 ring-2 ring-gray-300 dark:ring-gray-600">
+              {data.avatar_url ? (
+                <img src={data.avatar_url} alt="Profile" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-2xl font-medium text-gray-500 dark:text-gray-400">
+                  {(data.full_name || data.email || "?")[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleAvatarUpload}
+                  disabled={uploadingAvatar}
+                  className="hidden"
+                />
+                {uploadingAvatar ? "Uploading..." : data.avatar_url ? "Change photo" : "Add photo"}
+              </label>
+              {data.avatar_url && (
+                <button
+                  type="button"
+                  onClick={handleAvatarRemove}
+                  disabled={uploadingAvatar}
+                  className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
+                >
+                  Remove photo
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">JPEG, PNG or WebP. Max 2MB.</p>
+        </div>
+
         {/* Name - editable */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
