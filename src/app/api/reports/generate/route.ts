@@ -283,15 +283,15 @@ export async function POST(req: NextRequest) {
     };
 
     if (body.sendEmail && body.emailTo) {
-      const { sendEmail: resendEmail } = await import("@/lib/email");
+      const { sendEmail } = await import("@/lib/email");
       const deptRows = Object.entries(byDepartment).sort((a, b) => b[1].amount - a[1].amount).map(([dept, { count, amount }]) => `<tr><td style="padding:6px 12px;border:1px solid #e5e7eb">${dept}</td><td style="padding:6px 12px;border:1px solid #e5e7eb;text-align:right">${count}</td><td style="padding:6px 12px;border:1px solid #e5e7eb;text-align:right">£${amount.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td></tr>`).join("");
       const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto"><h2 style="color:#1e293b">${invType === "all" ? "All" : invType.charAt(0).toUpperCase() + invType.slice(1)} Invoice Report — ${periodLabel}</h2><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px 12px;font-weight:bold;background:#f8fafc">Total Invoices</td><td style="padding:8px 12px;text-align:right">${totalInvoices}</td></tr><tr><td style="padding:8px 12px;font-weight:bold;background:#f8fafc">Total Amount</td><td style="padding:8px 12px;text-align:right">£${totalAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td></tr><tr><td style="padding:8px 12px;font-weight:bold;background:#f8fafc">Paid</td><td style="padding:8px 12px;text-align:right">${paidInvoices.length} (£${paidAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })})</td></tr><tr><td style="padding:8px 12px;font-weight:bold;background:#f8fafc">Avg Processing</td><td style="padding:8px 12px;text-align:right">${avgProcessingDays ?? "N/A"} days</td></tr></table><h3 style="color:#1e293b;margin-top:24px">Department Breakdown</h3><table style="width:100%;border-collapse:collapse;margin:8px 0"><thead><tr><th style="padding:8px 12px;text-align:left;background:#3b82f6;color:white">Department</th><th style="padding:8px 12px;text-align:right;background:#3b82f6;color:white">Count</th><th style="padding:8px 12px;text-align:right;background:#3b82f6;color:white">Amount</th></tr></thead><tbody>${deptRows}</tbody></table><p style="color:#94a3b8;font-size:12px;margin-top:24px">Generated: ${new Date().toLocaleString("en-GB")}</p></div>`;
-      try {
-        await resendEmail({ to: body.emailTo, subject: `Invoice Report — ${periodLabel}`, html });
+      const result = await sendEmail({ to: body.emailTo, subject: `Invoice Report — ${periodLabel}`, html });
+      if (result.success) {
         return NextResponse.json({ ...report, emailSent: true });
-      } catch (emailError) {
-        return NextResponse.json({ ...report, emailSent: false, emailError: String(emailError) });
       }
+      const errMsg = typeof result.error === "object" ? JSON.stringify(result.error) : String(result.error);
+      return NextResponse.json({ ...report, emailSent: false, emailError: errMsg });
     }
 
     return NextResponse.json(report);
