@@ -928,6 +928,9 @@ function InvoiceTable({
                           <a href={`/invoices/${expandedRowId}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
                             View full invoice →
                           </a>
+                          <a href={`/messages?invoiceId=${expandedRowId}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
+                            Message about this invoice
+                          </a>
                           {rows.find((x) => x.id === expandedRowId)?.submitterId && rows.find((x) => x.id === expandedRowId)!.submitterId !== currentUserId && (
                             <a href={`/messages?invoiceId=${expandedRowId}&recipientId=${rows.find((x) => x.id === expandedRowId)!.submitterId}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
                               Message submitter

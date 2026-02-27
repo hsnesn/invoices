@@ -30,36 +30,6 @@ type Conversation = {
   unread: number;
 };
 
-// Use /notification.mp3 if you add your own file to public/. Falls back to built-in beep.
-function playNotificationSound() {
-  try {
-    const audio = new Audio("/notification.mp3");
-    audio.volume = 0.6;
-    void audio.play().catch(() => {
-      try {
-        const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (Ctx) {
-          const ctx = new Ctx();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = 800;
-          osc.type = "sine";
-          gain.gain.setValueAtTime(0.25, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-          osc.start(ctx.currentTime);
-          osc.stop(ctx.currentTime + 0.25);
-        }
-      } catch {
-        /* ignore */
-      }
-    });
-  } catch {
-    /* ignore */
-  }
-}
-
 export default function MessagesPage() {
   const searchParams = useSearchParams();
   const invoiceIdFromUrl = searchParams.get("invoiceId");
@@ -79,7 +49,6 @@ export default function MessagesPage() {
     invoiceIdFromUrl ? { id: invoiceIdFromUrl, invoice_number: "…" } : null
   );
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
-  const lastUnreadCountRef = useRef(-1);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAllMessages = useCallback(async () => {
@@ -115,11 +84,6 @@ export default function MessagesPage() {
         convs.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
         setConversations(convs);
 
-        const unreadToMe = list.filter((m) => m.is_to_me && !m.read_at).length;
-        if (lastUnreadCountRef.current >= 0 && unreadToMe > lastUnreadCountRef.current) {
-          playNotificationSound();
-        }
-        lastUnreadCountRef.current = unreadToMe;
       }
     } catch {
       setMessages([]);
