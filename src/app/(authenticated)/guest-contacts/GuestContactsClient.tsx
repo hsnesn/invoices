@@ -32,6 +32,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [searchingGuest, setSearchingGuest] = useState<string | null>(null);
+  const [bulkSearching, setBulkSearching] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedGuest, setSelectedGuest] = useState<string | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
@@ -101,6 +102,34 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       setBulkMessage(msg.includes("abort") ? "Request timed out. Try fewer files (max 10)." : msg);
     } finally {
       setBulkUploading(false);
+    }
+  };
+
+  const runBulkAiSearch = async () => {
+    const uniqueNames = Array.from(new Set(contacts.map((c) => c.guest_name)));
+    if (uniqueNames.length === 0) {
+      alert("No guests to search.");
+      return;
+    }
+    setBulkSearching(true);
+    try {
+      const res = await fetch("/api/guest-contacts/bulk-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guest_names: uniqueNames }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message + (data.errors?.length ? `\n\nSome errors:\n${data.errors.slice(0, 5).join("\n")}` : ""));
+        window.location.reload();
+      } else {
+        alert(data.error ?? "Bulk search failed");
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setBulkSearching(false);
     }
   };
 
@@ -247,6 +276,14 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             >
               {bulkUploading ? "Processing..." : "Upload and extract contacts"}
             </button>
+            <button
+              type="button"
+              onClick={runBulkAiSearch}
+              disabled={bulkSearching || contacts.length === 0}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+            >
+              {bulkSearching ? "Searching..." : "Bulk AI search for all guests"}
+            </button>
           </>
         )}
         {extractMessage && (
@@ -299,7 +336,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                     {c.guest_name}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                  <td className="max-w-[280px] px-4 py-3 text-sm text-gray-600 dark:text-gray-300 break-words">
                     {c.title || "—"}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
@@ -332,7 +369,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="max-w-[320px] px-4 py-3 text-sm break-words">
                     {c.ai_contact_info ? (
                       <div className="space-y-1">
                         {c.ai_contact_info.phone && (
@@ -356,11 +393,11 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                           </div>
                         )}
                         {c.ai_contact_info.social_media?.map((url) => (
-                          <div key={url} className="flex items-center gap-1">
-                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                          <div key={url} className="flex items-start gap-1 break-all">
+                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                               AI
                             </span>
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[120px] text-sky-600 hover:underline dark:text-sky-400">
+                            <a href={url} target="_blank" rel="noopener noreferrer" title={url} className="min-w-0 break-all text-sky-600 hover:underline dark:text-sky-400">
                               {url}
                             </a>
                           </div>

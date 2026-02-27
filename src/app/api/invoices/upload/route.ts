@@ -9,6 +9,7 @@ import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds } 
 import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
+import { runGuestContactSearch } from "@/lib/guest-contact-search";
 
 const BUCKET = "invoices";
 const UUID_RE =
@@ -165,6 +166,14 @@ export async function POST(request: NextRequest) {
       await runInvoiceExtraction(invoiceId, session.user.id);
     } catch {
       // Keep upload successful even if extraction fails.
+    }
+
+    // Auto-trigger AI web search for guest contact (fire-and-forget)
+    const guestName =
+      (await supabaseAdmin.from("invoice_extracted_fields").select("beneficiary_name").eq("invoice_id", invoiceId).single()).data?.beneficiary_name?.trim() ||
+      parseGuestNameFromServiceDesc(service_description);
+    if (guestName && guestName.length >= 2) {
+      runGuestContactSearch(guestName).catch(() => {});
     }
 
     await createAuditEvent({

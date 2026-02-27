@@ -9,6 +9,7 @@ import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds } 
 import { createAuditEvent } from "@/lib/audit";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance, type GuestInvoiceExpense } from "@/lib/guest-invoice-pdf";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
+import { runGuestContactSearch } from "@/lib/guest-contact-search";
 
 const BUCKET = "invoices";
 const A4_WIDTH = 595.28;
@@ -308,6 +309,12 @@ export async function POST(request: NextRequest) {
       to_status: "pending_manager",
       payload: { source: "generated", storage_path: pdfPath },
     });
+
+    // Auto-trigger AI web search for guest contact (fire-and-forget)
+    const guestName = data.guestName?.trim();
+    if (guestName && guestName.length >= 2) {
+      runGuestContactSearch(guestName).catch(() => {});
+    }
 
     const enabled = await isEmailStageEnabled("submission");
     if (enabled && managerUserId) {
