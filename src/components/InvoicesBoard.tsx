@@ -2338,7 +2338,7 @@ export function InvoicesBoard({
       )}
       {/* Bulk Actions Bar - Admin/Manager/Operations: full actions; Submitter: Delete only; Viewer: Download only */}
       {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") && (
-        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed top-16 left-1/2 z-50 -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
             Guest selected
