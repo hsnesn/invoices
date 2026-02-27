@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
         invoice_extracted_fields(raw_json, gross_amount)
       `)
       .neq("invoice_type", "freelancer")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(500);
 
     const guestKey = guestName.toLowerCase().trim();
     const appearances: { topic: string; date: string; programme: string; department: string; amount: string; invoice_id: string }[] = [];
@@ -152,10 +153,19 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
+    const appearancesPayload = appearances.map((a) => ({
+      date: a.date,
+      topic: a.topic,
+      programme: a.programme,
+      department: a.department,
+      amount: a.amount,
+      invoice_id: a.invoice_id,
+    }));
+
     if (!apiKey) {
       return NextResponse.json({
-        assessment: "AI assessment unavailable (OPENAI_API_KEY not configured).",
-        appearances: appearances.map((a) => `${a.date}: ${a.topic} (${a.programme})`),
+        assessment: "AI assessment unavailable (OPENAI_API_KEY not configured in Vercel). Add it in Project Settings → Environment Variables.",
+        appearances: appearancesPayload,
       });
     }
 
@@ -197,27 +207,36 @@ ${appearancesText}
 
 Provide a concise assessment following the format described.`;
 
-    const completion = await openai.chat.completions.create({
-      model: process.env.EXTRACTION_MODEL || "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 500,
-    });
-
-    const assessment = completion.choices[0]?.message?.content?.trim() || "Unable to generate assessment.";
+    let assessment: string;
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.EXTRACTION_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 500,
+      });
+      assessment = completion.choices[0]?.message?.content?.trim() || "Unable to generate assessment.";
+    } catch (openaiError) {
+      const msg = openaiError instanceof Error ? openaiError.message : String(openaiError);
+      const isAuth = /api_key|invalid|authentication|401|unauthorized/i.test(msg);
+      const isRateLimit = /rate_limit|429|too many/i.test(msg);
+      const isTimeout = /timeout|timed out|ETIMEDOUT|ECONNRESET/i.test(msg);
+      if (isAuth) {
+        assessment = "AI assessment unavailable: OpenAI API key is invalid or missing. Check OPENAI_API_KEY in Vercel environment variables.";
+      } else if (isRateLimit) {
+        assessment = "AI assessment temporarily unavailable: Too many requests. Please try again in a moment.";
+      } else if (isTimeout) {
+        assessment = "AI assessment timed out. The OpenAI API took too long to respond. Please try again.";
+      } else {
+        assessment = `AI assessment temporarily unavailable: ${msg}`;
+      }
+    }
 
     return NextResponse.json({
       assessment,
-      appearances: appearances.map((a) => ({
-        date: a.date,
-        topic: a.topic,
-        programme: a.programme,
-        department: a.department,
-        amount: a.amount,
-        invoice_id: a.invoice_id,
-      })),
+      appearances: appearancesPayload,
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

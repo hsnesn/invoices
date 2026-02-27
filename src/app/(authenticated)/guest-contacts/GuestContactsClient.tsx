@@ -62,6 +62,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guest_name: guestName }),
         signal: controller.signal,
+        credentials: "same-origin",
       });
       clearTimeout(timeoutId);
       const text = await res.text();
@@ -79,7 +80,13 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         setAssessment(data.error ?? "Failed to load assessment.");
       }
     } catch (e) {
-      setAssessment(toUserFriendlyError(e));
+      const msg = toUserFriendlyError(e);
+      const isConnection = /connection|network|fetch|timeout/i.test(msg);
+      setAssessment(
+        isConnection
+          ? "Connection error. Check your internet. If the server times out (Vercel Hobby: 10s limit), try again or add OPENAI_API_KEY in Vercel env."
+          : msg
+      );
     } finally {
       setAssessmentLoading(false);
     }
