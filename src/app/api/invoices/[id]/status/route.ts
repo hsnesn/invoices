@@ -95,7 +95,23 @@ export async function POST(
       .single();
     const isOperationsRoom = !!orMember;
 
-    if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !isOperationsRoom) {
+    // Delegation: backup approver can act when manager is absent (valid date range)
+    let isDelegate = false;
+    if (wf.manager_user_id) {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: delegation } = await supabase
+        .from("approval_delegations")
+        .select("id")
+        .eq("delegator_user_id", wf.manager_user_id)
+        .eq("delegate_user_id", userId)
+        .lte("valid_from", today)
+        .gte("valid_until", today)
+        .limit(1)
+        .maybeSingle();
+      isDelegate = !!delegation;
+    }
+
+    if (!isOwner && !isAssigned && !isDelegate && !isAdmin && !isOperations && !isFinance && !isOperationsRoom) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

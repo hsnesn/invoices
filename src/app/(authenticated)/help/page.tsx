@@ -174,6 +174,9 @@ export default async function HelpPage() {
             If you are a manager, invoices assigned to you appear in the list. Open an invoice and you&apos;ll see <strong>Approve</strong> and <strong>Reject</strong> buttons. When you approve, the invoice moves to the next stage (admin/finance). When you reject, you must give a reason. The submitter sees that reason and can fix the invoice and resubmit.
           </p>
           <p className="mt-2">You cannot approve your own invoice. If you submitted it, someone else must approve it.</p>
+          <p className="mt-2">
+            <strong>Approval delegation:</strong> When a manager is absent (holiday, sick leave), admin can set up a backup approver in Setup → Approval Delegation. Choose the manager (delegator), the backup approver (delegate), and a date range. During that period, the delegate can approve or reject invoices assigned to the delegator. This applies to both guest and contractor invoices.
+          </p>
           <Tip>Before approving, open the PDF and check the amounts and details. Once approved, it&apos;s harder to undo.</Tip>
         </section>
 
@@ -234,7 +237,7 @@ export default async function HelpPage() {
         <section id="setup" className="scroll-mt-24">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">14. Setup (admin only)</h2>
           <p className="mt-2">
-            In Setup you manage <strong>Departments</strong> and <strong>Programmes</strong>. Departments are broad groups (e.g. News, Sport). Programmes belong to a department (e.g. News Hour, Sports Today). When submitting an invoice, users pick from these. Admin can also configure contractor templates, email settings, and department managers.
+            In Setup you manage <strong>Departments</strong> and <strong>Programmes</strong>. Departments are broad groups (e.g. News, Sport). Programmes belong to a department (e.g. News Hour, Sports Today). When submitting an invoice, users pick from these. Admin can also configure contractor templates, email settings, department managers, and <strong>Approval Delegation</strong> (backup approvers when a manager is absent).
           </p>
           <Tip>If you add a new programme, it appears in the dropdown the next time someone submits an invoice.</Tip>
         </section>
