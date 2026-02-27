@@ -234,7 +234,7 @@ export async function sendSubmissionEmail(params: {
     to,
     subject,
     html: wrap("Invoice Submitted", `
-      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A new invoice has been submitted and is awaiting manager review.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A new invoice has been submitted and is waiting for review.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Pending Manager", "#fef3c7", "#92400e")}</p>
