@@ -149,42 +149,51 @@ export default async function GuestContactsPage() {
     }
   }
 
+  function findMatchingKey(gcKey: string): string | undefined {
+    if (seen.has(gcKey)) return gcKey;
+    const gcParts = gcKey.split(/\s+/).filter(Boolean);
+    const gcFirstLast = gcParts.length >= 2 ? `${gcParts[0]} ${gcParts[gcParts.length - 1]}` : gcKey;
+    for (const seenKey of Array.from(seen.keys())) {
+      const seenParts = seenKey.split(/\s+/).filter(Boolean);
+      const seenFirstLast = seenParts.length >= 2 ? `${seenParts[0]} ${seenParts[seenParts.length - 1]}` : seenKey;
+      if (gcFirstLast === seenFirstLast || gcKey.includes(seenKey) || seenKey.includes(gcKey)) return seenKey;
+    }
+    return undefined;
+  }
+
   for (const gc of guestContactsRows ?? []) {
     const key = (gc.guest_name ?? "").toLowerCase().trim();
     if (!key) continue;
     const gcId = (gc as { id?: string }).id ?? null;
     const gcData = gc as { ai_contact_info?: AiContactInfo; is_favorite?: boolean; tags?: string[] };
-    const existing = seen.get(key);
+    const matchKey = findMatchingKey(key);
+    const existing = matchKey ? seen.get(matchKey) : undefined;
     const aiInfo = gcData.ai_contact_info ?? null;
     const merged: Row = {
       guest_name: gc.guest_name ?? "",
       title: existing?.title ?? gc.title ?? null,
-      phone: existing?.phone ?? gc.phone ?? null,
-      email: existing?.email ?? gc.email ?? null,
+      phone: (existing?.phone || gc.phone) ?? null,
+      email: (existing?.email || gc.email) ?? null,
       invoice_id: (existing?.invoice_id as string) || null,
       created_at: existing?.created_at ?? gc.updated_at ?? "",
       last_appearance_date: existing?.last_appearance_date ?? gc.updated_at ?? "",
       department_name: existing?.department_name ?? null,
       program_name: existing?.program_name ?? null,
-      ai_contact_info: aiInfo,
-      guest_contact_id: gcId ?? undefined,
-      is_favorite: gcData.is_favorite ?? false,
-      tags: gcData.tags ?? [],
+      ai_contact_info: aiInfo ?? (existing?.ai_contact_info ?? null),
+      guest_contact_id: gcId ?? existing?.guest_contact_id ?? undefined,
+      is_favorite: gcData.is_favorite ?? existing?.is_favorite ?? false,
+      tags: (gcData.tags?.length ? gcData.tags : existing?.tags) ?? [],
     };
     if (!existing) {
       seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined });
-    } else if ((gc.phone && !existing.phone) || (gc.email && !existing.email) || aiInfo || gcId) {
-      seen.set(key, {
+    } else {
+      const updateKey = matchKey ?? key;
+      seen.set(updateKey, {
         ...merged,
-        phone: (merged.phone || gc.phone) ?? null,
-        email: (merged.email || gc.email) ?? null,
-        ai_contact_info: aiInfo ?? existing.ai_contact_info ?? null,
-        guest_contact_id: gcId ?? existing.guest_contact_id ?? undefined,
+        guest_name: existing.guest_name,
         last_appearance_date: existing.last_appearance_date,
         department_name: existing.department_name,
         program_name: existing.program_name,
-        is_favorite: gcData.is_favorite ?? existing.is_favorite ?? false,
-        tags: (gcData.tags?.length ? gcData.tags : existing.tags) ?? [],
       });
     }
   }
