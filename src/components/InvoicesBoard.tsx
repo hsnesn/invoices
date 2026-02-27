@@ -116,9 +116,11 @@ type SavedFilter = {
     programmeFilter: string;
     groupFilter: string;
     missingInfoFilter: boolean;
+    anomalyFilter: boolean;
     producerFilter: string;
     paymentTypeFilter: string;
     managerFilter: string;
+    tagFilter: string;
     dateFrom: string;
     dateTo: string;
     sortField: string;
@@ -164,7 +166,29 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 }
 
 const RECENT_FILTERS_KEY = "invoice_recent_filters";
+const FILTER_STATE_KEY = "invoice_filter_state";
 const RECENT_MAX = 5;
+
+function loadFilterState(): Partial<Record<string, string | boolean>> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = sessionStorage.getItem(FILTER_STATE_KEY);
+    if (stored) return JSON.parse(stored) as Partial<Record<string, string | boolean>>;
+  } catch { /* */ }
+  return null;
+}
+
+function saveFilterState(state: Record<string, string | boolean>) {
+  try {
+    sessionStorage.setItem(FILTER_STATE_KEY, JSON.stringify(state));
+  } catch { /* */ }
+}
+
+function clearFilterState() {
+  try {
+    sessionStorage.removeItem(FILTER_STATE_KEY);
+  } catch { /* */ }
+}
 
 function pushRecentFilter(filters: SavedFilter["filters"]) {
   try {
@@ -1196,6 +1220,7 @@ export function InvoicesBoard({
   const [programmeFilter, setProgrammeFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState<"" | DisplayRow["group"] | "pending">(initialGroupFilter ?? "");
   const [missingInfoFilter, setMissingInfoFilter] = useState(false);
+  const [anomalyFilter, setAnomalyFilter] = useState(false);
   const [producerFilter, setProducerFilter] = useState("");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("");
   const [managerFilter, setManagerFilter] = useState("");
@@ -1314,17 +1339,60 @@ export function InvoicesBoard({
     setVisibleColumns(normalized.length > 0 ? normalized : [...DEFAULT_VISIBLE_COLUMNS]);
     setSavedFilters(loadFromStorage<SavedFilter[]>("invoice_saved_filters", []));
     setRecentFilters(loadFromStorage<SavedFilter["filters"][]>(RECENT_FILTERS_KEY, []));
-  }, []);
+    const filterState = loadFilterState();
+    if (filterState) {
+      if (filterState.search != null) setSearch(String(filterState.search));
+      if (filterState.departmentFilter != null) setDepartmentFilter(String(filterState.departmentFilter));
+      if (filterState.programmeFilter != null) setProgrammeFilter(String(filterState.programmeFilter));
+      if (!initialGroupFilter && filterState.groupFilter != null) setGroupFilter(String(filterState.groupFilter) as "" | DisplayRow["group"] | "pending");
+      if (filterState.missingInfoFilter != null) setMissingInfoFilter(Boolean(filterState.missingInfoFilter));
+      if (filterState.anomalyFilter != null) setAnomalyFilter(Boolean(filterState.anomalyFilter));
+      if (filterState.producerFilter != null) setProducerFilter(String(filterState.producerFilter));
+      if (filterState.paymentTypeFilter != null) setPaymentTypeFilter(String(filterState.paymentTypeFilter));
+      if (filterState.managerFilter != null) setManagerFilter(String(filterState.managerFilter));
+      if (filterState.tagFilter != null) setTagFilter(String(filterState.tagFilter));
+      if (filterState.dateFrom != null) setDateFrom(String(filterState.dateFrom));
+      if (filterState.dateTo != null) setDateTo(String(filterState.dateTo));
+      if (filterState.sortField != null) setSortField(String(filterState.sortField) as typeof sortField);
+      if (filterState.sortDir != null) setSortDir(String(filterState.sortDir) as typeof sortDir);
+    }
+  }, [initialGroupFilter]);
+
+  // Persist filter state to sessionStorage when filters change
+  React.useEffect(() => {
+    if (!hydrated) return;
+    const hasAny = search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || anomalyFilter || producerFilter || paymentTypeFilter || managerFilter || tagFilter || dateFrom || dateTo || sortField;
+    if (hasAny) {
+      saveFilterState({
+        search,
+        departmentFilter,
+        programmeFilter,
+        groupFilter: groupFilter || "",
+        missingInfoFilter,
+        anomalyFilter,
+        producerFilter,
+        paymentTypeFilter,
+        managerFilter,
+        tagFilter,
+        dateFrom,
+        dateTo,
+        sortField: sortField || "",
+        sortDir,
+      });
+    } else {
+      clearFilterState();
+    }
+  }, [hydrated, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField, sortDir]);
 
   // Push to recently used filters when any filter changes
   React.useEffect(() => {
     if (!hydrated) return;
-    const hasAny = search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo;
+    const hasAny = search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || anomalyFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo;
     if (!hasAny) return;
-    const f = { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField: sortField || "", sortDir };
+    const f: SavedFilter["filters"] = { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField: sortField || "", sortDir };
     pushRecentFilter(f);
     setRecentFilters(loadFromStorage<SavedFilter["filters"][]>(RECENT_FILTERS_KEY, []));
-  }, [search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir, hydrated]);
+  }, [search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField, sortDir, hydrated]);
 
   const rows = useMemo(() => {
     return invoices.map((inv) => {
@@ -1472,6 +1540,7 @@ export function InvoicesBoard({
     const q = search.trim().toLowerCase();
     let result = rowsWithAnomalies.filter((r) => {
       if (missingInfoFilter && !r.hasMissingInfo) return false;
+      if (anomalyFilter && (!r.anomalyFlags || r.anomalyFlags.length === 0)) return false;
       if (departmentFilter && r.department !== departmentFilter) return false;
       if (programmeFilter && r.programme !== programmeFilter) return false;
       if (groupFilter) {
@@ -1516,7 +1585,7 @@ export function InvoicesBoard({
     }
 
     return result;
-  }, [rowsWithAnomalies, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [rowsWithAnomalies, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField, sortDir]);
 
   const groupsForFilter: (DisplayRow["group"] | "pending")[] = [
     "pending",
@@ -2010,44 +2079,48 @@ export function InvoicesBoard({
     if (!filterName.trim()) return;
     const f: SavedFilter = {
       name: filterName.trim(),
-      filters: { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField: sortField || "", sortDir },
+      filters: { search, departmentFilter, programmeFilter, groupFilter: groupFilter || "", missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField: sortField || "", sortDir },
     };
     const next = [...savedFilters, f];
     setSavedFilters(next);
     localStorage.setItem("invoice_saved_filters", JSON.stringify(next));
     setFilterName("");
     setShowSaveFilter(false);
-  }, [filterName, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir, savedFilters]);
+  }, [filterName, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField, sortDir, savedFilters]);
 
   const applySavedFilter = useCallback((f: SavedFilter) => {
     setSearch(f.filters.search);
     setDepartmentFilter(f.filters.departmentFilter);
     setProgrammeFilter(f.filters.programmeFilter);
-    setGroupFilter(f.filters.groupFilter as typeof groupFilter);
+    setGroupFilter((f.filters.groupFilter || "") as "" | DisplayRow["group"] | "pending");
     setMissingInfoFilter(f.filters.missingInfoFilter ?? false);
-    setProducerFilter(f.filters.producerFilter);
-    setPaymentTypeFilter(f.filters.paymentTypeFilter);
-    setManagerFilter(f.filters.managerFilter);
-    setDateFrom(f.filters.dateFrom);
-    setDateTo(f.filters.dateTo);
-    setSortField(f.filters.sortField as typeof sortField);
-    setSortDir(f.filters.sortDir as typeof sortDir);
+    setAnomalyFilter(f.filters.anomalyFilter ?? false);
+    setProducerFilter(f.filters.producerFilter ?? "");
+    setPaymentTypeFilter(f.filters.paymentTypeFilter ?? "");
+    setManagerFilter(f.filters.managerFilter ?? "");
+    setTagFilter(f.filters.tagFilter ?? "");
+    setDateFrom(f.filters.dateFrom ?? "");
+    setDateTo(f.filters.dateTo ?? "");
+    setSortField((f.filters.sortField || "") as typeof sortField);
+    setSortDir((f.filters.sortDir || "desc") as typeof sortDir);
     setCurrentPage(0);
   }, []);
 
   const applyRecentFilter = useCallback((f: SavedFilter["filters"]) => {
-    setSearch(f.search);
-    setDepartmentFilter(f.departmentFilter);
-    setProgrammeFilter(f.programmeFilter as typeof groupFilter);
-    setGroupFilter(f.groupFilter as typeof groupFilter);
-    setMissingInfoFilter((f as { missingInfoFilter?: boolean }).missingInfoFilter ?? false);
-    setProducerFilter(f.producerFilter);
-    setPaymentTypeFilter(f.paymentTypeFilter);
-    setManagerFilter(f.managerFilter);
-    setDateFrom(f.dateFrom);
-    setDateTo(f.dateTo);
-    setSortField(f.sortField as typeof sortField);
-    setSortDir(f.sortDir as typeof sortDir);
+    setSearch(f.search ?? "");
+    setDepartmentFilter(f.departmentFilter ?? "");
+    setProgrammeFilter(f.programmeFilter ?? "");
+    setGroupFilter((f.groupFilter ?? "") as "" | DisplayRow["group"] | "pending");
+    setMissingInfoFilter(f.missingInfoFilter ?? false);
+    setAnomalyFilter(f.anomalyFilter ?? false);
+    setProducerFilter(f.producerFilter ?? "");
+    setPaymentTypeFilter(f.paymentTypeFilter ?? "");
+    setManagerFilter(f.managerFilter ?? "");
+    setTagFilter(f.tagFilter ?? "");
+    setDateFrom(f.dateFrom ?? "");
+    setDateTo(f.dateTo ?? "");
+    setSortField((f.sortField ?? "") as typeof sortField);
+    setSortDir((f.sortDir ?? "desc") as typeof sortDir);
     setCurrentPage(0);
   }, []);
 
@@ -2731,7 +2804,9 @@ export function InvoicesBoard({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Recent:</span>
           {recentFilters.slice(0, 5).map((f, i) => {
-            const label = [f.search, f.departmentFilter, f.programmeFilter, f.groupFilter].filter(Boolean).slice(0, 2).join(" · ") || "Filters";
+            const parts = [f.search, f.departmentFilter, f.programmeFilter, f.groupFilter];
+            if (f.anomalyFilter) parts.push("Anomalies");
+            const label = parts.filter(Boolean).slice(0, 3).join(" · ") || "Filters";
             return (
               <button
                 key={i}
@@ -2759,6 +2834,10 @@ export function InvoicesBoard({
           <label className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400 cursor-pointer">
             <input type="checkbox" checked={missingInfoFilter} onChange={(e) => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
             Missing info
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400 cursor-pointer" title="Unusual amount, future date, or very old date">
+            <input type="checkbox" checked={anomalyFilter} onChange={(e) => setAnomalyFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
+            Anomalies only
           </label>
           <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value as "" | DisplayRow["group"] | "pending")} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             <option value="">Status</option>
@@ -2861,20 +2940,21 @@ export function InvoicesBoard({
               ★
             </button>
           )}
-          {(search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo || sortField) && (
+          {(search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || anomalyFilter || producerFilter || paymentTypeFilter || managerFilter || tagFilter || dateFrom || dateTo || sortField) && (
             <button
               onClick={() => {
                 setSearch(""); setDepartmentFilter(""); setProgrammeFilter(""); setGroupFilter("");
-                setMissingInfoFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter(""); setTagFilter("");
+                setMissingInfoFilter(false); setAnomalyFilter(false); setProducerFilter(""); setPaymentTypeFilter(""); setManagerFilter(""); setTagFilter("");
                 setDateFrom(""); setDateTo(""); setSortField("");
+                clearFilterState();
               }}
               className="rounded-lg bg-gray-100 px-2 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-200"
             >
-              ✕
+              Clear filters
             </button>
           )}
         </div>
-        {(search || departmentFilter || programmeFilter || groupFilter || producerFilter || paymentTypeFilter || managerFilter || dateFrom || dateTo || sortField) && (
+        {(search || departmentFilter || programmeFilter || groupFilter || missingInfoFilter || anomalyFilter || producerFilter || paymentTypeFilter || managerFilter || tagFilter || dateFrom || dateTo || sortField) && (
           <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-100 px-3 py-2">
             <span className="text-xs text-gray-500 mr-1">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
             {search && (
@@ -2887,6 +2967,12 @@ export function InvoicesBoard({
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                 Missing info
                 <button onClick={() => setMissingInfoFilter(false)} className="ml-0.5 hover:text-amber-900">✕</button>
+              </span>
+            )}
+            {anomalyFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                Anomalies only
+                <button onClick={() => setAnomalyFilter(false)} className="ml-0.5 hover:text-amber-900">✕</button>
               </span>
             )}
             {groupFilter && (
@@ -2980,6 +3066,8 @@ export function InvoicesBoard({
                 setDepartmentFilter("");
                 setProgrammeFilter("");
                 setGroupFilter("");
+                setMissingInfoFilter(false);
+                setAnomalyFilter(false);
                 setProducerFilter("");
                 setPaymentTypeFilter("");
                 setManagerFilter("");
@@ -2987,6 +3075,7 @@ export function InvoicesBoard({
                 setDateFrom("");
                 setDateTo("");
                 setSortField("");
+                clearFilterState();
               }}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >

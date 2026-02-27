@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,54 @@ function fromAliases(meta: Record<string, string>, aliases: string[], fb = "—"
   return fb;
 }
 
+function parseProducerFromServiceDesc(serviceDescription: string | null): string | null {
+  if (!serviceDescription) return null;
+  for (const line of serviceDescription.split("\n")) {
+    const l = line.trim();
+    if (l.toLowerCase().startsWith("producer:")) {
+      const val = l.slice(l.indexOf(":") + 1).trim();
+      return val || null;
+    }
+  }
+  return null;
+}
+
+function canUserSeeGuestInvoice(
+  inv: { submitter_user_id: string; department_id: string | null; program_id: string | null; service_description?: string | null; invoice_workflows: WfShape[] | WfShape | null },
+  userId: string,
+  role: string,
+  userFullName: string | null
+): boolean {
+  if (role === "admin" || role === "viewer" || role === "operations") return true;
+  if (inv.submitter_user_id === userId) return true;
+  if (userFullName) {
+    const producer = parseProducerFromServiceDesc(inv.service_description ?? null);
+    if (producer && producer.trim().toLowerCase() === userFullName.trim().toLowerCase()) return true;
+  }
+  const wf = unwrap(inv.invoice_workflows);
+  if (role === "manager") return wf?.manager_user_id === userId;
+  if (role === "finance") return ["ready_for_payment", "paid", "archived"].includes(wf?.status ?? "");
+  return false;
+}
+
+function canUserSeeFreelancerInvoice(
+  inv: { submitter_user_id: string; department_id: string | null; program_id: string | null; invoice_workflows: WfShape[] | WfShape | null },
+  userId: string,
+  role: string,
+  isOperationsRoomMember: boolean
+): boolean {
+  if (role === "admin" || role === "viewer" || role === "operations") return true;
+  if (isOperationsRoomMember) return true;
+  if (inv.submitter_user_id === userId) return true;
+  const wf = unwrap(inv.invoice_workflows);
+  if (role === "manager") return wf?.manager_user_id === userId;
+  if (role === "finance") return ["ready_for_payment", "paid", "archived"].includes(wf?.status ?? "");
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const { session, profile } = await requireAuth();
     const body = await req.json();
     const { type, year, month, quarter, invoiceType, dateFrom, dateTo } = body as {
       type: "monthly" | "quarterly" | "department" | "custom";
@@ -50,8 +97,15 @@ export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
     const invType = invoiceType ?? "all";
 
+    const { data: orMembers } = await supabase
+      .from("operations_room_members")
+      .select("user_id")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    const isOperationsRoomMember = !!orMembers || profile.role === "operations";
+
     let query = supabase.from("invoices").select(`
-      id, created_at, department_id, submitter_user_id, invoice_type, service_description,
+      id, created_at, department_id, program_id, submitter_user_id, invoice_type, service_description,
       invoice_workflows(status, rejection_reason, manager_user_id, paid_date, created_at, updated_at),
       invoice_extracted_fields(gross_amount),
       freelancer_invoice_fields(contractor_name, service_description, service_days_count, service_rate_per_day, additional_cost, booked_by, service_month)
@@ -60,7 +114,15 @@ export async function POST(req: NextRequest) {
     if (invType !== "all") query = query.eq("invoice_type", invType);
 
     const { data: invoicesRaw } = await query;
-    const allInvoices = invoicesRaw ?? [];
+    const rawInvoices = invoicesRaw ?? [];
+
+    const allInvoices = rawInvoices.filter((inv) => {
+      const isGuest = inv.invoice_type === "guest" || inv.invoice_type === "salary";
+      const isFl = inv.invoice_type === "freelancer";
+      if (isGuest) return canUserSeeGuestInvoice(inv as never, session.user.id, profile.role, profile.full_name ?? null);
+      if (isFl) return canUserSeeFreelancerInvoice(inv as never, session.user.id, profile.role, isOperationsRoomMember);
+      return true;
+    });
 
     const { data: departments } = await supabase.from("departments").select("id,name");
     const deptMap = Object.fromEntries((departments ?? []).map((d: { id: string; name: string }) => [d.id, d.name]));
@@ -232,6 +294,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(report);
   } catch (err) {
+    if ((err as { digest?: string })?.digest === "NEXT_REDIRECT") throw err;
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

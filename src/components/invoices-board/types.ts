@@ -89,9 +89,11 @@ export type SavedFilter = {
     programmeFilter: string;
     groupFilter: string;
     missingInfoFilter: boolean;
+    anomalyFilter: boolean;
     producerFilter: string;
     paymentTypeFilter: string;
     managerFilter: string;
+    tagFilter: string;
     dateFrom: string;
     dateTo: string;
     sortField: string;
