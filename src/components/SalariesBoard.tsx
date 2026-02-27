@@ -1156,7 +1156,7 @@ export function SalariesBoard({
       )}
       {/* Bulk action bar - Fixed at bottom */}
       {selectedIds.size > 0 && canEdit && (
-        <div className="fixed top-16 left-1/2 z-50 flex -translate-x-1/2 flex-wrap items-center gap-3 rounded-2xl border-2 border-indigo-600 bg-indigo-50 px-4 py-3 shadow-xl dark:border-indigo-500 dark:bg-indigo-950/60" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed bottom-6 left-1/2 z-[9999] flex -translate-x-1/2 flex-wrap items-center gap-3 rounded-2xl border-2 border-indigo-600 bg-indigo-50 px-4 py-3 shadow-2xl dark:border-indigo-500 dark:bg-indigo-950/60" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-indigo-800 dark:text-indigo-200">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">{selectedIds.size}</span>
             Salary selected
