@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 const SHORTCUTS = [
-  { keys: ["?"], action: "Show this help" },
+  { keys: ["?", "Shift+/"], action: "Show this help (or click footer link)" },
   { keys: ["Esc"], action: "Close modal / Cancel" },
   { keys: ["g", "d"], action: "Go to Dashboard" },
   { keys: ["g", "i"], action: "Go to Guest Invoices" },
@@ -20,10 +20,16 @@ export function KeyboardShortcuts() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const openHelp = () => setShowHelp((s) => !s);
+    const handleOpenShortcuts = () => openHelp();
+
+    window.addEventListener("openKeyboardShortcuts", handleOpenShortcuts);
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "?") {
+      const isHelpKey = e.key === "?" || (e.key === "/" && e.shiftKey);
+      if (isHelpKey) {
         e.preventDefault();
-        setShowHelp((s) => !s);
+        openHelp();
         lastKeyRef.current = null;
         return;
       }
@@ -66,6 +72,7 @@ export function KeyboardShortcuts() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.removeEventListener("openKeyboardShortcuts", handleOpenShortcuts);
       window.removeEventListener("keydown", handleKeyDown);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
@@ -83,7 +90,7 @@ export function KeyboardShortcuts() {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Keyboard shortcuts</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Press ? to toggle this help</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Press ? or Shift+/ to toggle, or click the footer link</p>
         <ul className="mt-4 space-y-2">
           {SHORTCUTS.map((s, i) => (
             <li key={i} className="flex items-center justify-between gap-4 text-sm">

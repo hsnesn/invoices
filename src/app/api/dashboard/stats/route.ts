@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-type WfShape = { status: string };
+type WfShape = { status: string; manager_user_id?: string | null };
 
 function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
@@ -11,18 +12,71 @@ function unwrap<T>(v: T[] | T | null | undefined): T | null {
   return v;
 }
 
+function parseProducerFromServiceDesc(serviceDescription: string | null): string | null {
+  if (!serviceDescription) return null;
+  for (const line of serviceDescription.split("\n")) {
+    const l = line.trim();
+    if (l.toLowerCase().startsWith("producer:")) {
+      const val = l.slice(l.indexOf(":") + 1).trim();
+      return val || null;
+    }
+  }
+  return null;
+}
+
+function canUserSeeGuestInvoice(
+  inv: { submitter_user_id: string; department_id: string | null; program_id: string | null; service_description?: string | null; invoice_workflows: WfShape[] | WfShape | null },
+  userId: string,
+  role: string,
+  userFullName: string | null
+): boolean {
+  if (role === "admin" || role === "viewer" || role === "operations") return true;
+  if (inv.submitter_user_id === userId) return true;
+  if (userFullName) {
+    const producer = parseProducerFromServiceDesc(inv.service_description ?? null);
+    if (producer && producer.trim().toLowerCase() === userFullName.trim().toLowerCase()) return true;
+  }
+  const wf = unwrap(inv.invoice_workflows);
+  if (role === "manager") return wf?.manager_user_id === userId;
+  if (role === "finance") return ["ready_for_payment", "paid", "archived"].includes(wf?.status ?? "");
+  return false;
+}
+
+function canUserSeeFreelancerInvoice(
+  inv: { submitter_user_id: string; department_id: string | null; program_id: string | null; invoice_workflows: WfShape[] | WfShape | null },
+  userId: string,
+  role: string,
+  isOperationsRoomMember: boolean
+): boolean {
+  if (role === "admin" || role === "viewer" || role === "operations") return true;
+  if (isOperationsRoomMember) return true;
+  if (inv.submitter_user_id === userId) return true;
+  const wf = unwrap(inv.invoice_workflows);
+  if (role === "manager") return wf?.manager_user_id === userId;
+  if (role === "finance") return ["ready_for_payment", "paid", "archived"].includes(wf?.status ?? "");
+  return false;
+}
+
 export async function GET() {
   try {
+    const { session, profile } = await requireAuth();
     const supabase = createAdminClient();
 
-    const { data: guestInvoices } = await supabase
+    const { data: orMembers } = await supabase
+      .from("operations_room_members")
+      .select("user_id")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    const isOperationsRoomMember = !!orMembers || profile.role === "operations";
+
+    const { data: guestInvoicesRaw } = await supabase
       .from("invoices")
-      .select("id, created_at, invoice_workflows(status)")
+      .select("id, created_at, submitter_user_id, department_id, program_id, service_description, invoice_workflows(status, manager_user_id)")
       .in("invoice_type", ["guest", "salary"]);
 
-    const { data: flInvoices } = await supabase
+    const { data: flInvoicesRaw } = await supabase
       .from("invoices")
-      .select("id, created_at, invoice_workflows(status)")
+      .select("id, created_at, submitter_user_id, department_id, program_id, invoice_workflows(status, manager_user_id)")
       .eq("invoice_type", "freelancer")
       .limit(10000);
 
@@ -31,7 +85,14 @@ export async function GET() {
       .select("id, created_at, invoice_workflows(status)")
       .eq("invoice_type", "other");
 
-    const guest = (guestInvoices ?? []).reduce(
+    const guestInvoices = (guestInvoicesRaw ?? []).filter((inv) =>
+      canUserSeeGuestInvoice(inv as never, session.user.id, profile.role, profile.full_name ?? null)
+    );
+    const flInvoices = (flInvoicesRaw ?? []).filter((inv) =>
+      canUserSeeFreelancerInvoice(inv as never, session.user.id, profile.role, isOperationsRoomMember)
+    );
+
+    const guest = guestInvoices.reduce(
       (acc, inv) => {
         const wf = unwrap(inv.invoice_workflows as WfShape[] | WfShape | null);
         const s = wf?.status ?? "submitted";
@@ -73,13 +134,13 @@ export async function GET() {
       const start = new Date(y, m - 1, 1);
       const end = new Date(y, m, 0, 23, 59, 59);
       const label = start.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
-      const guestCount = (guestInvoices ?? []).filter((inv) => {
+      const guestCount = guestInvoices.filter((inv) => {
         const created = (inv as { created_at?: string }).created_at;
         if (!created) return false;
         const dt = new Date(created);
         return dt >= start && dt <= end;
       }).length;
-      const flCount = (flInvoices ?? []).filter((inv) => {
+      const flCount = flInvoices.filter((inv) => {
         const created = (inv as { created_at?: string }).created_at;
         if (!created) return false;
         const dt = new Date(created);
@@ -109,6 +170,7 @@ export async function GET() {
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );
   } catch (err) {
+    if ((err as { digest?: string })?.digest === "NEXT_REDIRECT") throw err;
     console.error("Dashboard stats error:", err);
     return NextResponse.json(
       {
