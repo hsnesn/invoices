@@ -63,7 +63,6 @@ export async function POST(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(500);
 
-    const guestKey = guestName.toLowerCase().trim();
     const appearances: { topic: string; date: string; programme: string; department: string; amount: string; invoice_id: string }[] = [];
     type InvItem = NonNullable<typeof invoices>[number];
     const pending: { inv: InvItem; meta: Record<string, string>; gen: { guest_name?: string | null; title?: string | null; appearances?: { topic: string; date: string; amount: number }[] } | null; title: string | null; topic: string | null; tx1: string | null; deptId: string | null; progId: string | null; amount: string }[] = [];
