@@ -41,6 +41,8 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [assessment, setAssessment] = useState<string | null>(null);
   const [appearances, setAppearances] = useState<Appearance[]>([]);
   const [filterBy, setFilterBy] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("name");
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -230,23 +232,46 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
     setAppearances([]);
   };
 
-  const filtered = contacts.filter((c) => {
-    const q = search.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      c.guest_name.toLowerCase().includes(q) ||
-      (c.title?.toLowerCase().includes(q) ?? false) ||
-      (c.phone?.includes(q) ?? false) ||
-      (c.email?.toLowerCase().includes(q) ?? false);
-    if (!matchesSearch) return false;
-    if (filterBy === "all") return true;
-    if (filterBy === "has_phone") return !!(c.phone || c.ai_contact_info?.phone);
-    if (filterBy === "has_email") return !!(c.email || c.ai_contact_info?.email);
-    if (filterBy === "has_ai") return !!c.ai_contact_info;
-    if (filterBy === "missing_phone") return !c.phone && !c.ai_contact_info?.phone;
-    if (filterBy === "missing_email") return !c.email && !c.ai_contact_info?.email;
-    return true;
-  });
+  const now = new Date();
+  const dateCutoff = (days: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - days);
+    return d.getTime();
+  };
+  const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+
+  const filtered = contacts
+    .filter((c) => {
+      const q = search.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        c.guest_name.toLowerCase().includes(q) ||
+        (c.title?.toLowerCase().includes(q) ?? false) ||
+        (c.phone?.includes(q) ?? false) ||
+        (c.email?.toLowerCase().includes(q) ?? false);
+      if (!matchesSearch) return false;
+      if (filterBy === "has_phone") return !!(c.phone || c.ai_contact_info?.phone);
+      if (filterBy === "has_email") return !!(c.email || c.ai_contact_info?.email);
+      if (filterBy === "has_ai") return !!c.ai_contact_info;
+      if (filterBy === "missing_phone") return !c.phone && !c.ai_contact_info?.phone;
+      if (filterBy === "missing_email") return !c.email && !c.ai_contact_info?.email;
+      if (dateFilter !== "all" && c.created_at) {
+        const t = new Date(c.created_at).getTime();
+        if (dateFilter === "7") return t >= dateCutoff(7);
+        if (dateFilter === "30") return t >= dateCutoff(30);
+        if (dateFilter === "90") return t >= dateCutoff(90);
+        if (dateFilter === "year") return t >= startOfYear;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "date") {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
+      }
+      return a.guest_name.localeCompare(b.guest_name);
+    });
 
   const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null }) => {
     setSaving(true);
@@ -310,6 +335,25 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
     }
   };
 
+  const exportCsv = () => {
+    const headers = ["Guest Name", "Title", "Phone", "Email", "Invoice date", "Invoice"];
+    const rows = filtered.map((c) => [
+      c.guest_name,
+      c.title ?? "",
+      c.phone ?? c.ai_contact_info?.phone ?? "",
+      c.email ?? c.ai_contact_info?.email ?? "",
+      c.created_at ? new Date(c.created_at).toISOString().slice(0, 10) : "",
+      c.invoice_id ? `${window.location.origin}/invoices/${c.invoice_id}` : "",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `guest-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const deleteContact = async (id: string) => {
     if (!confirm("Remove this contact from the list?")) return;
     try {
@@ -364,6 +408,27 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           <option value="missing_phone">Missing phone</option>
           <option value="missing_email">Missing email</option>
         </select>
+        <select
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          aria-label="Filter by invoice date"
+        >
+          <option value="all">All dates</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="year">This year</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          aria-label="Sort by"
+        >
+          <option value="name">Sort by name</option>
+          <option value="date">Sort by date (newest)</option>
+        </select>
         {isAdmin && (
           <>
             <button
@@ -416,6 +481,14 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
             </button>
           </>
         )}
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={filtered.length === 0}
+          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
+        >
+          Export CSV
+        </button>
         {extractMessage && (
           <span className="text-sm text-gray-600 dark:text-gray-400">{extractMessage}</span>
         )}
@@ -423,6 +496,11 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           <span className="text-sm text-gray-600 dark:text-gray-400">{bulkMessage}</span>
         )}
       </div>
+
+      <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+        Showing {filtered.length} of {contacts.length} contacts
+        {(filterBy !== "all" || dateFilter !== "all") && " (filtered)"}
+      </p>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-auto">
@@ -441,6 +519,9 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
               )}
               <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Guest Name
+              </th>
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                Invoice date
               </th>
               <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 Title
@@ -470,7 +551,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={isAdmin ? 9 : 7} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colSpan={isAdmin ? 10 : 8} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   {contacts.length === 0
                     ? "No guest data found yet. Data appears from invoices (guest name, title, phone, email when available)."
                     : "No matches for your search."}
@@ -492,6 +573,9 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                   )}
                   <td className="max-w-[140px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
                     <span className="block truncate" title={c.guest_name}>{c.guest_name}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
+                    {c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
                   </td>
                   <td className="max-w-[200px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
                     <span className="block truncate" title={c.title || undefined}>{c.title || "—"}</span>
