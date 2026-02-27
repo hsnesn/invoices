@@ -17,6 +17,7 @@ type Contact = {
   department_name?: string | null;
   program_name?: string | null;
   ai_contact_info?: AiContactInfo;
+  ai_assessment?: string | null;
   guest_contact_id?: string;
   is_favorite?: boolean;
   tags?: string[];
@@ -29,6 +30,21 @@ type Appearance = {
   department: string;
   amount: string;
   invoice_id: string;
+};
+
+const COLUMN_IDS = ["guest_name", "last_appearance", "department", "programme", "title", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
+const COLUMN_LABELS: Record<string, string> = {
+  guest_name: "Guest Name",
+  last_appearance: "Last appearance",
+  department: "Dept",
+  programme: "Programme",
+  title: "Title",
+  phone: "Phone",
+  email: "Email",
+  invoice: "Invoice",
+  ai_found: "AI Found",
+  ai_assessment: "AI Assessment",
+  actions: "Actions",
 };
 
 export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]; isAdmin?: boolean }) {
@@ -56,7 +72,18 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [bulkEmailModal, setBulkEmailModal] = useState(false);
+  const [columnsModal, setColumnsModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(COLUMN_IDS));
+
+  const toggleColumn = (id: string) => {
+    setVisibleColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const PAGE_SIZE = 25;
 
@@ -196,7 +223,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
     }
   };
 
-  const openGuestAssessment = async (guestName: string) => {
+  const openGuestAssessment = async (guestName: string, _cachedAssessment?: string | null) => {
     setSelectedGuest(guestName);
     setAssessment(null);
     setAppearances([]);
@@ -405,23 +432,35 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
     }
   };
 
-  const exportCsv = () => {
-    const headers = ["Guest Name", "Title", "Phone", "Email", "Invoice date", "Invoice"];
-    const rows = filtered.map((c) => [
-      c.guest_name,
-      c.title ?? "",
-      c.phone ?? c.ai_contact_info?.phone ?? "",
-      c.email ?? c.ai_contact_info?.email ?? "",
-      c.created_at ? new Date(c.created_at).toISOString().slice(0, 10) : "",
-      c.invoice_id ? `${window.location.origin}/invoices/${c.invoice_id}` : "",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `guest-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  const exportExcel = async () => {
+    const colOrder = COLUMN_IDS.filter((id) => id !== "actions" && visibleColumns.has(id));
+    const headerMap: Record<string, (c: Contact) => string> = {
+      guest_name: (c) => c.guest_name,
+      last_appearance: (c) => (c.last_appearance_date || c.created_at) ? new Date(c.last_appearance_date || c.created_at).toISOString().slice(0, 10) : "",
+      department: (c) => c.department_name ?? "",
+      programme: (c) => c.program_name ?? "",
+      title: (c) => c.title ?? "",
+      phone: (c) => c.phone ?? c.ai_contact_info?.phone ?? "",
+      email: (c) => c.email ?? c.ai_contact_info?.email ?? "",
+      invoice: (c) => c.invoice_id ? `${window.location.origin}/invoices/${c.invoice_id}` : "",
+      ai_found: (c) => {
+        if (!c.ai_contact_info) return "";
+        const parts: string[] = [];
+        if (c.ai_contact_info.phone) parts.push(`Phone: ${c.ai_contact_info.phone}`);
+        if (c.ai_contact_info.email) parts.push(`Email: ${c.ai_contact_info.email}`);
+        if (c.ai_contact_info.social_media?.length) parts.push(`Social: ${c.ai_contact_info.social_media.join(", ")}`);
+        return parts.join("; ");
+      },
+      ai_assessment: (c) => c.ai_assessment ?? "",
+    };
+    const headers = colOrder.map((id) => COLUMN_LABELS[id] ?? id);
+    const rows = filtered.map((c) => colOrder.map((id) => headerMap[id]?.(c) ?? ""));
+    const XLSX = await import("xlsx");
+    const data = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Guest Contacts");
+    XLSX.writeFile(wb, `guest-contacts-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const deleteContact = async (id: string) => {
@@ -612,11 +651,18 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
         )}
         <button
           type="button"
-          onClick={exportCsv}
+          onClick={() => setColumnsModal(true)}
+          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          Columns
+        </button>
+        <button
+          type="button"
+          onClick={exportExcel}
           disabled={filtered.length === 0}
           className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
         >
-          Export CSV
+          Export Excel
         </button>
         {extractMessage && (
           <span className="text-sm text-gray-600 dark:text-gray-400">{extractMessage}</span>
@@ -680,47 +726,45 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                   />
                 </th>
               )}
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Guest Name
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Last appearance
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Dept
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Programme
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Title
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Phone
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Email
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                Invoice
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                AI Found
-              </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                AI Assessment
-              </th>
-              {isAdmin && (
-                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                  Actions
-                </th>
+              {visibleColumns.has("guest_name") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Guest Name</th>
+              )}
+              {visibleColumns.has("last_appearance") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Last appearance</th>
+              )}
+              {visibleColumns.has("department") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Dept</th>
+              )}
+              {visibleColumns.has("programme") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Programme</th>
+              )}
+              {visibleColumns.has("title") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Title</th>
+              )}
+              {visibleColumns.has("phone") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Phone</th>
+              )}
+              {visibleColumns.has("email") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Email</th>
+              )}
+              {visibleColumns.has("invoice") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Invoice</th>
+              )}
+              {visibleColumns.has("ai_found") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">AI Found</th>
+              )}
+              {visibleColumns.has("ai_assessment") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">AI Assessment</th>
+              )}
+              {isAdmin && visibleColumns.has("actions") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Actions</th>
               )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={isAdmin ? 12 : 10} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colSpan={(isAdmin ? 1 : 0) + COLUMN_IDS.filter((id) => (id === "actions" ? isAdmin : true) && visibleColumns.has(id)).length} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   {contacts.length === 0
                     ? "No guest data found yet. Data appears from invoices (guest name, title, phone, email when available)."
                     : "No matches for your search."}
@@ -740,62 +784,79 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       />
                     </td>
                   )}
-                  <td className="max-w-[140px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
-                    <span className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleFavorite(c)}
-                        className="shrink-0 text-amber-500 hover:text-amber-600"
-                        title={c.is_favorite ? "Remove from favorites" : "Add to favorites"}
-                      >
-                        {c.is_favorite ? "★" : "☆"}
-                      </button>
-                      <span className="block truncate" title={c.guest_name}>{c.guest_name}</span>
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
-                    {(c.last_appearance_date || c.created_at) ? new Date(c.last_appearance_date || c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                  </td>
-                  <td className="max-w-[100px] px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400 truncate" title={c.department_name ?? undefined}>
-                    {c.department_name || "—"}
-                  </td>
-                  <td className="max-w-[100px] px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400 truncate" title={c.program_name ?? undefined}>
-                    {c.program_name || "—"}
-                  </td>
-                  <td className="max-w-[200px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
-                    <span className="block truncate" title={c.title || undefined}>{c.title || "—"}</span>
-                  </td>
-                  <td className="max-w-[120px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
-                    {c.phone ? (
-                      <a href={`tel:${c.phone}`} title={c.phone} className="block truncate text-sky-600 hover:underline dark:text-sky-400">
-                        {c.phone}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="max-w-[160px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
-                    {c.email ? (
-                      <a href={`mailto:${c.email}`} title={c.email} className="block truncate text-sky-600 hover:underline dark:text-sky-400">
-                        {c.email}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2 align-top text-sm">
-                    {c.invoice_id ? (
-                      <Link
-                        href={`/invoices/${c.invoice_id}`}
-                        className="text-sky-600 hover:underline dark:text-sky-400"
-                      >
-                        View
-                      </Link>
-                    ) : (
-                      <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
-                    )}
-                  </td>
-                  <td className="max-w-[220px] px-3 py-2 align-top text-sm">
+                  {visibleColumns.has("guest_name") && (
+                    <td className="max-w-[140px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
+                      <span className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(c)}
+                          className="shrink-0 text-amber-500 hover:text-amber-600"
+                          title={c.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          {c.is_favorite ? "★" : "☆"}
+                        </button>
+                        <span className="block truncate" title={c.guest_name}>{c.guest_name}</span>
+                      </span>
+                    </td>
+                  )}
+                  {visibleColumns.has("last_appearance") && (
+                    <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
+                      {(c.last_appearance_date || c.created_at) ? new Date(c.last_appearance_date || c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    </td>
+                  )}
+                  {visibleColumns.has("department") && (
+                    <td className="max-w-[100px] px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400 truncate" title={c.department_name ?? undefined}>
+                      {c.department_name || "—"}
+                    </td>
+                  )}
+                  {visibleColumns.has("programme") && (
+                    <td className="max-w-[100px] px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400 truncate" title={c.program_name ?? undefined}>
+                      {c.program_name || "—"}
+                    </td>
+                  )}
+                  {visibleColumns.has("title") && (
+                    <td className="max-w-[200px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
+                      <span className="block truncate" title={c.title || undefined}>{c.title || "—"}</span>
+                    </td>
+                  )}
+                  {visibleColumns.has("phone") && (
+                    <td className="max-w-[120px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
+                      {c.phone ? (
+                        <a href={`tel:${c.phone}`} title={c.phone} className="block truncate text-sky-600 hover:underline dark:text-sky-400">
+                          {c.phone}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  )}
+                  {visibleColumns.has("email") && (
+                    <td className="max-w-[160px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
+                      {c.email ? (
+                        <a href={`mailto:${c.email}`} title={c.email} className="block truncate text-sky-600 hover:underline dark:text-sky-400">
+                          {c.email}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  )}
+                  {visibleColumns.has("invoice") && (
+                    <td className="px-3 py-2 align-top text-sm">
+                      {c.invoice_id ? (
+                        <Link
+                          href={`/invoices/${c.invoice_id}`}
+                          className="text-sky-600 hover:underline dark:text-sky-400"
+                        >
+                          View
+                        </Link>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
+                      )}
+                    </td>
+                  )}
+                  {visibleColumns.has("ai_found") && (
+                    <td className="max-w-[220px] px-3 py-2 align-top text-sm">
                     {c.ai_contact_info ? (
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         {c.ai_contact_info.phone && (
@@ -850,17 +911,20 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                         {searchingGuest === c.guest_name ? "Searching..." : "Search web"}
                       </button>
                     )}
-                  </td>
-                  <td className="px-3 py-2 align-top text-sm">
-                    <button
-                      type="button"
-                      onClick={() => openGuestAssessment(c.guest_name)}
-                      className="rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
-                    >
-                      View AI Assessment
-                    </button>
-                  </td>
-                  {isAdmin && (
+                    </td>
+                  )}
+                  {visibleColumns.has("ai_assessment") && (
+                    <td className="px-3 py-2 align-top text-sm">
+                      <button
+                        type="button"
+                        onClick={() => openGuestAssessment(c.guest_name)}
+                        className="rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+                      >
+                        View AI Assessment
+                      </button>
+                    </td>
+                  )}
+                  {isAdmin && visibleColumns.has("actions") && (
                     <td className="whitespace-nowrap px-3 py-2 align-top text-sm">
                       <div className="flex flex-wrap gap-1">
                         <button
@@ -1041,6 +1105,35 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           onClose={() => setBulkEmailModal(false)}
           onSent={() => { setBulkEmailModal(false); window.location.reload(); }}
         />
+      )}
+
+      {columnsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setColumnsModal(false)}>
+          <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Columns</h2>
+            <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">Toggle columns to show or hide. Export uses visible columns only.</p>
+            <div className="space-y-2">
+              {COLUMN_IDS.filter((id) => id !== "actions" || isAdmin).map((id) => (
+                <label key={id} className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.has(id)}
+                    onChange={() => toggleColumn(id)}
+                    className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{COLUMN_LABELS[id] ?? id}</span>
+                </label>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setColumnsModal(false)}
+              className="mt-4 w-full rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+            >
+              Done
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

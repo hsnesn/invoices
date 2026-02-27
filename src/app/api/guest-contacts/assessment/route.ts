@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const guestKey = guestName.toLowerCase().trim();
     const { data: invoices } = await supabase
       .from("invoices")
       .select(`
@@ -151,7 +152,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
     const appearancesPayload = appearances.map((a) => ({
       date: a.date,
       topic: a.topic,
@@ -160,6 +160,23 @@ export async function POST(request: NextRequest) {
       amount: a.amount,
       invoice_id: a.invoice_id,
     }));
+
+    const { data: cached } = await supabase
+      .from("guest_contacts")
+      .select("id, ai_assessment")
+      .eq("guest_name_key", guestKey)
+      .maybeSingle();
+
+    const cachedAssessment = (cached as { ai_assessment?: string | null } | null)?.ai_assessment;
+    if (cachedAssessment?.trim()) {
+      return NextResponse.json({
+        assessment: cachedAssessment,
+        appearances: appearancesPayload,
+        cached: true,
+      });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json({
@@ -260,6 +277,32 @@ Provide a concise assessment following the format described.`;
           "AI assessment unavailable: Cannot reach OpenAI API. Try: 1) OPENAI_BASE_URL if using a proxy. 2) Different Vercel region. 3) Check OpenAI status page.";
       } else {
         assessment = `AI assessment temporarily unavailable: ${msg}`;
+      }
+    }
+
+    if (assessment && !assessment.startsWith("AI assessment")) {
+      const { data: gcRow } = await supabase
+        .from("guest_contacts")
+        .select("id")
+        .eq("guest_name_key", guestKey)
+        .maybeSingle();
+
+      if (gcRow?.id) {
+        await supabase
+          .from("guest_contacts")
+          .update({
+            ai_assessment: assessment,
+            ai_assessed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", gcRow.id);
+      } else {
+        await supabase.from("guest_contacts").insert({
+          guest_name: guestName,
+          ai_assessment: assessment,
+          ai_assessed_at: new Date().toISOString(),
+          source: "ai_assessment",
+        });
       }
     }
 

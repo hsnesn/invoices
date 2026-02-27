@@ -20,7 +20,7 @@ export default async function GuestContactsPage() {
       .neq("invoice_type", "freelancer")
       .neq("invoice_type", "guest_contact_scan")
       .order("created_at", { ascending: false }),
-    supabase.from("guest_contacts").select("id, guest_name, phone, email, title, ai_contact_info, ai_searched_at, updated_at, is_favorite, tags").order("guest_name"),
+    supabase.from("guest_contacts").select("id, guest_name, phone, email, title, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags").order("guest_name"),
     supabase.from("departments").select("id, name"),
     supabase.from("programs").select("id, name, department_id"),
   ]);
@@ -63,6 +63,7 @@ export default async function GuestContactsPage() {
     department_name: string | null;
     program_name: string | null;
     ai_contact_info: AiContactInfo;
+    ai_assessment: string | null;
     guest_contact_id?: string;
     is_favorite?: boolean;
     tags?: string[];
@@ -118,12 +119,16 @@ export default async function GuestContactsPage() {
       department_name,
       program_name,
       ai_contact_info: null,
+      ai_assessment: null,
     });
   }
 
   const seen = new Map<string, Row>();
+  function normalizeKey(s: string): string {
+    return s.toLowerCase().trim().replace(/\s+/g, " ");
+  }
   for (const r of rows) {
-    const key = r.guest_name.toLowerCase().trim();
+    const key = normalizeKey(r.guest_name);
     const existing = seen.get(key);
     if (!existing) {
       seen.set(key, { ...r });
@@ -150,25 +155,28 @@ export default async function GuestContactsPage() {
   }
 
   function findMatchingKey(gcKey: string): string | undefined {
-    if (seen.has(gcKey)) return gcKey;
-    const gcParts = gcKey.split(/\s+/).filter(Boolean);
-    const gcFirstLast = gcParts.length >= 2 ? `${gcParts[0]} ${gcParts[gcParts.length - 1]}` : gcKey;
+    const n = normalizeKey(gcKey);
+    if (seen.has(n)) return n;
+    const gcParts = n.split(/\s+/).filter(Boolean);
+    const gcFirstLast = gcParts.length >= 2 ? `${gcParts[0]} ${gcParts[gcParts.length - 1]}` : n;
     for (const seenKey of Array.from(seen.keys())) {
-      const seenParts = seenKey.split(/\s+/).filter(Boolean);
-      const seenFirstLast = seenParts.length >= 2 ? `${seenParts[0]} ${seenParts[seenParts.length - 1]}` : seenKey;
-      if (gcFirstLast === seenFirstLast || gcKey.includes(seenKey) || seenKey.includes(gcKey)) return seenKey;
+      const seenNorm = normalizeKey(seenKey);
+      const seenParts = seenNorm.split(/\s+/).filter(Boolean);
+      const seenFirstLast = seenParts.length >= 2 ? `${seenParts[0]} ${seenParts[seenParts.length - 1]}` : seenNorm;
+      if (gcFirstLast === seenFirstLast || n.includes(seenNorm) || seenNorm.includes(n)) return seenKey;
     }
     return undefined;
   }
 
   for (const gc of guestContactsRows ?? []) {
-    const key = (gc.guest_name ?? "").toLowerCase().trim();
+    const key = normalizeKey(gc.guest_name ?? "");
     if (!key) continue;
     const gcId = (gc as { id?: string }).id ?? null;
-    const gcData = gc as { ai_contact_info?: AiContactInfo; is_favorite?: boolean; tags?: string[] };
+    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[] };
     const matchKey = findMatchingKey(key);
     const existing = matchKey ? seen.get(matchKey) : undefined;
     const aiInfo = gcData.ai_contact_info ?? null;
+    const aiAssessment = gcData.ai_assessment ?? null;
     const merged: Row = {
       guest_name: gc.guest_name ?? "",
       title: existing?.title ?? gc.title ?? null,
@@ -180,6 +188,7 @@ export default async function GuestContactsPage() {
       department_name: existing?.department_name ?? null,
       program_name: existing?.program_name ?? null,
       ai_contact_info: aiInfo ?? (existing?.ai_contact_info ?? null),
+      ai_assessment: aiAssessment ?? (existing?.ai_assessment ?? null),
       guest_contact_id: gcId ?? existing?.guest_contact_id ?? undefined,
       is_favorite: gcData.is_favorite ?? existing?.is_favorite ?? false,
       tags: (gcData.tags?.length ? gcData.tags : existing?.tags) ?? [],

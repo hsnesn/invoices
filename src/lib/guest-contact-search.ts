@@ -39,7 +39,40 @@ export async function runGuestContactSearch(guestName: string): Promise<void> {
     .map((o) => `Title: ${o.title ?? ""}\nLink: ${o.link ?? ""}\nSnippet: ${o.snippet ?? ""}`)
     .join("\n---\n");
 
-  if (!text.trim()) return;
+  const supabase = createAdminClient();
+  const key = name.toLowerCase().trim();
+  const { data: existing } = await supabase
+    .from("guest_contacts")
+    .select("id, ai_contact_info, ai_searched_at")
+    .eq("guest_name_key", key)
+    .maybeSingle();
+
+  const hasUsefulAiData = (info: unknown): boolean => {
+    if (!info || typeof info !== "object") return false;
+    const o = info as { phone?: unknown; email?: unknown; social_media?: unknown[] };
+    return !!(o.phone || o.email || (Array.isArray(o.social_media) && o.social_media.length > 0));
+  };
+  if (existing?.id && hasUsefulAiData((existing as { ai_contact_info?: unknown }).ai_contact_info)) {
+    return;
+  }
+
+  if (!text.trim()) {
+    if (existing) {
+      await supabase.from("guest_contacts").update({
+        ai_contact_info: { phone: null, email: null, social_media: [] },
+        ai_searched_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      await supabase.from("guest_contacts").insert({
+        guest_name: name,
+        ai_contact_info: { phone: null, email: null, social_media: [] },
+        ai_searched_at: new Date().toISOString(),
+        source: "ai_search",
+      });
+    }
+    return;
+  }
 
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/$/, "");
@@ -90,14 +123,6 @@ ${text.slice(0, 8000)}`,
     email: extracted?.email ?? null,
     social_media: extracted?.social_media ?? [],
   };
-
-  const supabase = createAdminClient();
-  const key = name.toLowerCase().trim();
-  const { data: existing } = await supabase
-    .from("guest_contacts")
-    .select("id")
-    .eq("guest_name_key", key)
-    .maybeSingle();
 
   if (existing) {
     await supabase
