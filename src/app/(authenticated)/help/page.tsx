@@ -23,9 +23,27 @@ export default async function HelpPage() {
         </p>
       </div>
 
+      <section id="about" className="mb-10 scroll-mt-24 rounded-xl border border-sky-200 bg-sky-50/50 p-6 dark:border-sky-800 dark:bg-sky-950/30">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">About This System</h2>
+        <p className="mt-2 text-gray-700 dark:text-gray-300">
+          <strong>Invoice Approval</strong> is a central system for managing guest, contractor, and other invoices at TRT World UK. It was built to:
+        </p>
+        <ol className="mt-3 list-inside list-decimal space-y-2 text-gray-700 dark:text-gray-300">
+          <li><strong>Streamline approval workflows</strong> — Submitters upload invoices; managers approve or reject; finance marks them paid. Each step is tracked and auditable.</li>
+          <li><strong>Reduce manual work</strong> — AI extracts key fields (beneficiary, amount, invoice number, date) from uploaded PDFs and documents, so you spend less time typing.</li>
+          <li><strong>Keep everything in one place</strong> — Guest invoices, contractor invoices, other invoices, and salaries are managed in a single system instead of spreadsheets and email.</li>
+          <li><strong>Improve visibility</strong> — Dashboards and reports show pending items, spending by department, and monthly trends so you can see what needs attention.</li>
+          <li><strong>Support different roles</strong> — Submitters, managers, finance, and admins each see only what they need and can perform only the actions allowed for their role.</li>
+        </ol>
+        <p className="mt-4 text-sm italic text-gray-600 dark:text-gray-400">
+          This system was developed by <strong>Hasan Esen</strong>.
+        </p>
+      </section>
+
       <nav className="mb-10 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
         <h2 className="mb-3 font-semibold text-gray-900 dark:text-white">Table of contents</h2>
         <ol className="list-inside list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
+          <li><a href="#about" className="hover:text-sky-600 dark:hover:text-sky-400">About This System</a></li>
           <li><a href="#intro" className="hover:text-sky-600 dark:hover:text-sky-400">Introduction</a></li>
           <li><a href="#roles" className="hover:text-sky-600 dark:hover:text-sky-400">User roles</a></li>
           <li><a href="#dashboard" className="hover:text-sky-600 dark:hover:text-sky-400">Dashboard</a></li>
