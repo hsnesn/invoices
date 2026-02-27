@@ -28,10 +28,12 @@ export async function runGuestContactSearch(guestName: string): Promise<void> {
 
   const searchResult = await searchWeb(`${name} contact email phone`);
   const socialResult = await searchWeb(`${name} Twitter LinkedIn Instagram`);
+  const linkedInResult = await searchWeb(`${name} LinkedIn profile`);
 
   const combined: SerperOrganic[] = [
     ...(searchResult?.organic ?? []),
     ...(socialResult?.organic ?? []),
+    ...(linkedInResult?.organic ?? []),
   ];
   const unique = Array.from(new Map(combined.map((o) => [o.link ?? o.title ?? "", o])).values());
   const text = unique
@@ -43,16 +45,18 @@ export async function runGuestContactSearch(guestName: string): Promise<void> {
   const key = name.toLowerCase().trim();
   const { data: existing } = await supabase
     .from("guest_contacts")
-    .select("id, ai_contact_info, ai_searched_at")
+    .select("id, ai_contact_info, ai_searched_at, title, organization, bio, photo_url")
     .eq("guest_name_key", key)
     .maybeSingle();
 
+  const ex = existing as { id?: string; ai_contact_info?: unknown; title?: string | null; organization?: string | null; bio?: string | null; photo_url?: string | null } | null;
   const hasUsefulAiData = (info: unknown): boolean => {
     if (!info || typeof info !== "object") return false;
     const o = info as { phone?: unknown; email?: unknown; social_media?: unknown[] };
     return !!(o.phone || o.email || (Array.isArray(o.social_media) && o.social_media.length > 0));
   };
-  if (existing?.id && hasUsefulAiData((existing as { ai_contact_info?: unknown }).ai_contact_info)) {
+  const hasEnrichment = ex?.title || ex?.organization || ex?.bio || ex?.photo_url;
+  if (ex?.id && hasUsefulAiData(ex.ai_contact_info) && hasEnrichment) {
     return;
   }
 
@@ -77,11 +81,21 @@ export async function runGuestContactSearch(guestName: string): Promise<void> {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/$/, "");
 
-  let extracted: { phone?: string; email?: string; social_media?: string[]; confidence?: number } = {};
+  type Extracted = {
+    phone?: string;
+    email?: string;
+    social_media?: string[];
+    confidence?: number;
+    title?: string | null;
+    organization?: string | null;
+    bio?: string | null;
+    photo_url?: string | null;
+  };
+  let extracted: Extracted = {};
   if (apiKey) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20_000);
+      const timeoutId = setTimeout(() => controller.abort(), 25_000);
       const res = await fetch(`${baseUrl}/v1/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -90,17 +104,21 @@ export async function runGuestContactSearch(guestName: string): Promise<void> {
           messages: [
             {
               role: "user",
-              content: `Extract contact info for "${name}" from these search results. Return JSON only:
-{"phone": "number or null", "email": "address or null", "social_media": ["url1", "url2"], "confidence": 0-100}
-- confidence: 0-100, how confident you are that this info belongs to this person (100=very sure, 0=guess)
-- Only include URLs that look like Twitter/X, LinkedIn, Instagram, Facebook profiles. No other sites.
-- If nothing found, use null for phone/email, [] for social_media, and low confidence.
+              content: `Extract contact and profile info for "${name}" from these search results. Return JSON only:
+{"phone": "number or null", "email": "address or null", "social_media": ["url1", "url2"], "confidence": 0-100, "title": "job title or null", "organization": "company/institution or null", "bio": "short bio 1-2 sentences or null", "photo_url": "profile image URL or null"}
+- confidence: 0-100, how confident you are that this info belongs to this person.
+- social_media: only Twitter/X, LinkedIn, Instagram, Facebook profile URLs.
+- title: current job title (e.g. "Political Analyst", "Journalist").
+- organization: employer or institution (e.g. "Reuters", "BBC").
+- bio: 1-2 sentence professional bio.
+- photo_url: direct image URL for profile photo (must be a valid image URL ending in .jpg, .png, etc).
+- If nothing found for a field, use null.
 
 SEARCH RESULTS:
-${text.slice(0, 8000)}`,
+${text.slice(0, 10000)}`,
             },
           ],
-          max_tokens: 500,
+          max_tokens: 700,
         }),
         signal: controller.signal,
       });
@@ -110,11 +128,17 @@ ${text.slice(0, 8000)}`,
       if (raw) {
         const parsed = JSON.parse(raw.replace(/```json?\s*|\s*```/g, "").trim()) as Record<string, unknown>;
         const conf = typeof parsed.confidence === "number" ? Math.min(100, Math.max(0, parsed.confidence)) : undefined;
+        const str = (v: unknown): string | undefined =>
+          typeof v === "string" && v.trim() && v !== "null" ? v.trim() : undefined;
         extracted = {
-          phone: typeof parsed.phone === "string" && parsed.phone !== "null" ? parsed.phone : undefined,
-          email: typeof parsed.email === "string" && parsed.email !== "null" ? parsed.email : undefined,
+          phone: str(parsed.phone),
+          email: str(parsed.email),
           social_media: Array.isArray(parsed.social_media) ? parsed.social_media.filter((u): u is string => typeof u === "string") : undefined,
           confidence: conf,
+          title: str(parsed.title) ?? null,
+          organization: str(parsed.organization) ?? null,
+          bio: str(parsed.bio) ?? null,
+          photo_url: str(parsed.photo_url) ?? null,
         };
       }
     } catch {
@@ -129,21 +153,29 @@ ${text.slice(0, 8000)}`,
     ...(typeof extracted?.confidence === "number" && { confidence: extracted.confidence }),
   };
 
-  if (existing) {
-    await supabase
-      .from("guest_contacts")
-      .update({
-        ai_contact_info: aiFound,
-        ai_searched_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
+  const updatePayload: Record<string, unknown> = {
+    ai_contact_info: aiFound,
+    ai_searched_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (extracted?.title != null && !ex?.title) updatePayload.title = extracted.title;
+  if (extracted?.organization != null && !ex?.organization) updatePayload.organization = extracted.organization;
+  if (extracted?.bio != null && !ex?.bio) updatePayload.bio = extracted.bio;
+  if (extracted?.photo_url != null && !ex?.photo_url) updatePayload.photo_url = extracted.photo_url;
+
+  if (ex?.id) {
+    await supabase.from("guest_contacts").update(updatePayload).eq("id", ex.id);
   } else {
-    await supabase.from("guest_contacts").insert({
+    const insertPayload: Record<string, unknown> = {
       guest_name: name,
       ai_contact_info: aiFound,
       ai_searched_at: new Date().toISOString(),
       source: "ai_search",
-    });
+    };
+    if (extracted?.title) insertPayload.title = extracted.title;
+    if (extracted?.organization) insertPayload.organization = extracted.organization;
+    if (extracted?.bio) insertPayload.bio = extracted.bio;
+    if (extracted?.photo_url) insertPayload.photo_url = extracted.photo_url;
+    await supabase.from("guest_contacts").insert(insertPayload);
   }
 }

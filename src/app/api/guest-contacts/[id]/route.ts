@@ -24,6 +24,8 @@ export async function PATCH(
       phone?: string | null;
       email?: string | null;
       title?: string | null;
+      organization?: string | null;
+      bio?: string | null;
       is_favorite?: boolean;
       tags?: string[];
       affiliated_orgs?: string[];
@@ -57,6 +59,8 @@ export async function PATCH(
         updates.title_category = null;
       }
     }
+    if (body.organization !== undefined) updates.organization = body.organization?.trim() || null;
+    if (body.bio !== undefined) updates.bio = body.bio?.trim() || null;
     if (body.is_favorite !== undefined) updates.is_favorite = body.is_favorite;
     if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => typeof t === "string") : [];
     if (body.affiliated_orgs !== undefined) updates.affiliated_orgs = Array.isArray(body.affiliated_orgs) ? body.affiliated_orgs.filter((t): t is string => typeof t === "string") : [];

@@ -35,8 +35,12 @@ type Contact = {
   invoice_id: string | null;
   created_at: string;
   last_appearance_date?: string;
+  appearance_count?: number;
   department_name?: string | null;
   program_name?: string | null;
+  organization?: string | null;
+  bio?: string | null;
+  photo_url?: string | null;
   ai_contact_info?: AiContactInfo;
   ai_assessment?: string | null;
   guest_contact_id?: string;
@@ -56,14 +60,15 @@ type Appearance = {
   invoice_id: string;
 };
 
-const COLUMN_IDS = ["guest_name", "last_appearance", "department", "programme", "title", "title_category", "topic", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
+const COLUMN_IDS = ["guest_name", "last_appearance", "usage", "department", "programme", "title", "organization", "topic", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
 const COLUMN_LABELS: Record<string, string> = {
   guest_name: "Guest Name",
   last_appearance: "Last appearance",
+  usage: "Usage",
   department: "Dept",
   programme: "Programme",
   title: "Title",
-  title_category: "Title category",
+  organization: "Organization",
   topic: "Topic",
   phone: "Phone",
   email: "Email",
@@ -537,7 +542,7 @@ export function GuestContactsClient({
     }
   };
 
-  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => {
+  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; organization?: string | null; bio?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => {
     setSaving(true);
     try {
       if (editContact?.guest_contact_id) {
@@ -606,10 +611,11 @@ export function GuestContactsClient({
     const headerMap: Record<string, (c: Contact) => string> = {
       guest_name: (c) => c.guest_name,
       last_appearance: (c) => formatDate(c.last_appearance_date || c.created_at || null),
+      usage: (c) => String(c.appearance_count ?? 0),
       department: (c) => c.department_name ?? "",
       programme: (c) => c.program_name ?? "",
       title: (c) => c.title ?? "",
-      title_category: (c) => c.title_category ?? "",
+      organization: (c) => c.organization ?? "",
       topic: (c) => c.topic_category ?? c.topic ?? "",
       phone: (c) => c.phone ?? c.ai_contact_info?.phone ?? "",
       email: (c) => c.email ?? c.ai_contact_info?.email ?? "",
@@ -739,6 +745,7 @@ export function GuestContactsClient({
         >
           <option value="name">Sort by name</option>
           <option value="date">Sort by date (newest)</option>
+          <option value="usage">Sort by usage (most used)</option>
         </select>
         {departments.length > 0 && (
           <select
@@ -1086,6 +1093,9 @@ export function GuestContactsClient({
               {visibleColumns.has("last_appearance") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Last appearance</th>
               )}
+              {visibleColumns.has("usage") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Usage</th>
+              )}
               {visibleColumns.has("department") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Dept</th>
               )}
@@ -1094,6 +1104,9 @@ export function GuestContactsClient({
               )}
               {visibleColumns.has("title") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Title</th>
+              )}
+              {visibleColumns.has("organization") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Organization</th>
               )}
               {visibleColumns.has("title_category") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Title category</th>
@@ -1145,8 +1158,8 @@ export function GuestContactsClient({
                     </td>
                   )}
                   {visibleColumns.has("guest_name") && (
-                    <td className="max-w-[140px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
-                      <span className="flex items-center gap-1">
+                    <td className="max-w-[180px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
+                      <span className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => toggleFavorite(c)}
@@ -1155,6 +1168,13 @@ export function GuestContactsClient({
                         >
                           {c.is_favorite ? "★" : "☆"}
                         </button>
+                        {c.photo_url ? (
+                          <img src={c.photo_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                            {(c.guest_name || "?")[0].toUpperCase()}
+                          </span>
+                        )}
                         <span className="block truncate" title={c.guest_name}>{c.guest_name}</span>
                       </span>
                     </td>
@@ -1162,6 +1182,15 @@ export function GuestContactsClient({
                   {visibleColumns.has("last_appearance") && (
                     <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
                       {(c.last_appearance_date || c.created_at) ? new Date(c.last_appearance_date || c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    </td>
+                  )}
+                  {visibleColumns.has("usage") && (
+                    <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
+                      {(c.appearance_count ?? 0) > 0 ? (
+                        <span title={`${c.appearance_count} appearance(s)`}>{c.appearance_count}</span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500" title="Never used">—</span>
+                      )}
                     </td>
                   )}
                   {visibleColumns.has("department") && (
@@ -1177,6 +1206,11 @@ export function GuestContactsClient({
                   {visibleColumns.has("title") && (
                     <td className="max-w-[200px] px-3 py-2 align-top text-sm text-gray-600 dark:text-gray-300">
                       <span className="block truncate" title={c.title || undefined}>{c.title || "—"}</span>
+                    </td>
+                  )}
+                  {visibleColumns.has("organization") && (
+                    <td className="max-w-[140px] px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
+                      <span className="block truncate" title={c.organization || undefined}>{c.organization || "—"}</span>
                     </td>
                   )}
                   {visibleColumns.has("title_category") && (
@@ -1336,13 +1370,23 @@ export function GuestContactsClient({
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
                     <button type="button" onClick={() => toggleFavorite(c)} className="shrink-0 text-amber-500 hover:text-amber-600">
                       {c.is_favorite ? "★" : "☆"}
                     </button>
-                    <span className="font-medium text-gray-900 dark:text-white">{c.guest_name}</span>
+                    {c.photo_url ? (
+                      <img src={c.photo_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-200 text-sm font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                        {(c.guest_name || "?")[0].toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <span className="font-medium text-gray-900 dark:text-white">{c.guest_name}</span>
+                      {c.title && <p className="truncate text-sm text-gray-500 dark:text-gray-400">{c.title}</p>}
+                      {c.organization && <p className="truncate text-xs text-gray-400 dark:text-gray-500">{c.organization}</p>}
+                    </div>
                   </div>
-                  {c.title && <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">{c.title}</p>}
                   {(c.topic || c.topic_category) && <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-gray-500">{c.topic_category || c.topic}</p>}
                 </div>
                 {isAdmin && (
@@ -1364,9 +1408,13 @@ export function GuestContactsClient({
                 {(c.department_name || c.program_name) && (
                   <p className="text-xs text-gray-500">{[c.department_name, c.program_name].filter(Boolean).join(" • ")}</p>
                 )}
-                {(c.last_appearance_date || c.created_at) && (
+                {((c.appearance_count ?? 0) > 0 || c.last_appearance_date || c.created_at) && (
                   <p className="text-xs text-gray-500">
-                    Last: {new Date(c.last_appearance_date || c.created_at).toLocaleDateString()}
+                    {(c.appearance_count ?? 0) > 0 && <span>{c.appearance_count} appearance(s)</span>}
+                    {(c.appearance_count ?? 0) > 0 && (c.last_appearance_date || c.created_at) && " • "}
+                    {(c.last_appearance_date || c.created_at) && (
+                      <span>Last: {new Date(c.last_appearance_date || c.created_at).toLocaleDateString()}</span>
+                    )}
                   </p>
                 )}
               </div>
@@ -1466,6 +1514,8 @@ export function GuestContactsClient({
             phone: editContact.phone,
             email: editContact.email,
             title: editContact.title,
+            organization: editContact.organization ?? "",
+            bio: editContact.bio ?? "",
             tags: editContact.tags,
             affiliated_orgs: editContact.affiliated_orgs ?? [],
             prohibited_topics: editContact.prohibited_topics ?? [],
@@ -1678,8 +1728,8 @@ function ContactFormModal({
   showConflictOfInterest,
 }: {
   modalTitle: string;
-  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string };
-  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => void;
+  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null; organization?: string; bio?: string; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string };
+  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; organization?: string | null; bio?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => void;
   onClose: () => void;
   saving: boolean;
   showConflictOfInterest?: boolean;
@@ -1688,6 +1738,8 @@ function ContactFormModal({
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [email, setEmail] = useState(initial.email ?? "");
   const [title, setTitle] = useState(initial.title ?? "");
+  const [organization, setOrganization] = useState(initial.organization ?? "");
+  const [bio, setBio] = useState(initial.bio ?? "");
   const [tagsStr, setTagsStr] = useState((initial.tags ?? []).join(", "));
   const [affiliatedOrgsStr, setAffiliatedOrgsStr] = useState((initial.affiliated_orgs ?? []).join(", "));
   const [prohibitedTopicsStr, setProhibitedTopicsStr] = useState((initial.prohibited_topics ?? []).join(", "));
@@ -1708,6 +1760,8 @@ function ContactFormModal({
       phone: phone.trim() || null,
       email: email.trim() || null,
       title: title.trim() || null,
+      organization: organization.trim() || null,
+      bio: bio.trim() || null,
       tags: tags.length > 0 ? tags : undefined,
       ...(showConflictOfInterest && {
         affiliated_orgs: affiliatedOrgs.length > 0 ? affiliatedOrgs : undefined,
@@ -1766,6 +1820,33 @@ function ContactFormModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Political Analyst"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="organization" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Organization
+            </label>
+            <input
+              id="organization"
+              type="text"
+              value={organization}
+              onChange={(e) => setOrganization(e.target.value)}
+              placeholder="e.g. Reuters, BBC"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="bio" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Bio
+            </label>
+            <textarea
+              id="bio"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              rows={2}
+              placeholder="Short professional bio"
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             />
           </div>

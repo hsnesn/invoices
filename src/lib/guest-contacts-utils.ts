@@ -8,6 +8,7 @@ export type ContactForFilter = {
   email: string | null;
   last_appearance_date?: string;
   created_at: string;
+  appearance_count?: number;
   department_name?: string | null;
   program_name?: string | null;
   ai_contact_info?: { phone?: string | null; email?: string | null } | null;
@@ -102,6 +103,11 @@ export function filterAndSortContacts<T extends ContactForFilter>(
         const ta = (a.last_appearance_date || a.created_at) ? new Date(a.last_appearance_date || a.created_at).getTime() : 0;
         const tb = (b.last_appearance_date || b.created_at) ? new Date(b.last_appearance_date || b.created_at).getTime() : 0;
         return tb - ta;
+      }
+      if (sortBy === "usage") {
+        const ca = a.appearance_count ?? 0;
+        const cb = b.appearance_count ?? 0;
+        if (cb !== ca) return cb - ca;
       }
       return a.guest_name.localeCompare(b.guest_name);
     });

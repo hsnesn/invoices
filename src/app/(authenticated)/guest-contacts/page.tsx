@@ -98,8 +98,12 @@ export default async function GuestContactsPage({
     invoice_id: string | null;
     created_at: string;
     last_appearance_date: string;
+    appearance_count: number;
     department_name: string | null;
     program_name: string | null;
+    organization: string | null;
+    bio: string | null;
+    photo_url: string | null;
     ai_contact_info: AiContactInfo;
     ai_assessment: string | null;
     guest_contact_id?: string;
@@ -161,8 +165,12 @@ export default async function GuestContactsPage({
       invoice_id: inv.id,
       created_at: inv.created_at,
       last_appearance_date: inv.created_at,
+      appearance_count: 1,
       department_name,
       program_name,
+      organization: null,
+      bio: null,
+      photo_url: null,
       ai_contact_info: null,
       ai_assessment: null,
     });
@@ -180,10 +188,12 @@ export default async function GuestContactsPage({
     } else {
       const existingDate = new Date(existing.last_appearance_date).getTime();
       const rDate = new Date(r.last_appearance_date).getTime();
+      const count = (existing.appearance_count ?? 0) + 1;
       if (rDate > existingDate) {
         seen.set(key, {
           ...existing,
           last_appearance_date: r.last_appearance_date,
+          appearance_count: count,
           department_name: r.department_name ?? existing.department_name,
           program_name: r.program_name ?? existing.program_name,
           topic: r.topic ?? existing.topic,
@@ -194,6 +204,7 @@ export default async function GuestContactsPage({
       } else {
         seen.set(key, {
           ...existing,
+          appearance_count: count,
           department_name: existing.department_name ?? r.department_name,
           program_name: existing.program_name ?? r.program_name,
           topic: existing.topic ?? r.topic,
@@ -221,7 +232,7 @@ export default async function GuestContactsPage({
     const key = normalizeKey(gc.guest_name ?? "");
     if (!key) continue;
     const gcId = (gc as { id?: string }).id ?? null;
-    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[]; title_category?: string | null; topic_category?: string | null; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null };
+    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[]; title_category?: string | null; topic_category?: string | null; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null; organization?: string | null; bio?: string | null; photo_url?: string | null };
     const matchKey = findMatchingKey(key);
     const existing = matchKey ? seen.get(matchKey) : undefined;
     const aiInfo = gcData.ai_contact_info ?? null;
@@ -237,8 +248,12 @@ export default async function GuestContactsPage({
       invoice_id: (existing?.invoice_id as string) || null,
       created_at: existing?.created_at ?? gc.updated_at ?? "",
       last_appearance_date: existing?.last_appearance_date ?? gc.updated_at ?? "",
+      appearance_count: existing?.appearance_count ?? 0,
       department_name: existing?.department_name ?? null,
       program_name: existing?.program_name ?? null,
+      organization: gcData.organization ?? existing?.organization ?? null,
+      bio: gcData.bio ?? existing?.bio ?? null,
+      photo_url: gcData.photo_url ?? existing?.photo_url ?? null,
       ai_contact_info: aiInfo ?? (existing?.ai_contact_info ?? null),
       ai_assessment: aiAssessment ?? (existing?.ai_assessment ?? null),
       guest_contact_id: gcId ?? existing?.guest_contact_id ?? undefined,
@@ -249,13 +264,14 @@ export default async function GuestContactsPage({
       conflict_of_interest_notes: gcData.conflict_of_interest_notes ?? existing?.conflict_of_interest_notes ?? null,
     };
     if (!existing) {
-      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined, title_category: gcData.title_category ?? null, topic_category: gcData.topic_category ?? null });
+      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined, title_category: gcData.title_category ?? null, topic_category: gcData.topic_category ?? null, appearance_count: 0 });
     } else {
       const updateKey = matchKey ?? key;
       seen.set(updateKey, {
         ...merged,
         guest_name: existing.guest_name,
         last_appearance_date: existing.last_appearance_date,
+        appearance_count: existing.appearance_count,
         department_name: existing.department_name,
         program_name: existing.program_name,
       });
