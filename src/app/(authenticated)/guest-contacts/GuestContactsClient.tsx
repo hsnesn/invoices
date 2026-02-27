@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { toUserFriendlyError } from "@/lib/error-messages";
 
+type AiContactInfo = { phone?: string | null; email?: string | null; social_media?: string[] } | null;
+
 type Contact = {
   guest_name: string;
   title: string | null;
@@ -11,6 +13,7 @@ type Contact = {
   email: string | null;
   invoice_id: string | null;
   created_at: string;
+  ai_contact_info?: AiContactInfo;
 };
 
 type Appearance = {
@@ -28,6 +31,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
   const [extractMessage, setExtractMessage] = useState<string | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [searchingGuest, setSearchingGuest] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedGuest, setSelectedGuest] = useState<string | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
@@ -59,8 +63,8 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       return;
     }
     const files = Array.from(input.files);
-    if (files.length > 100) {
-      setBulkMessage("Maximum 100 files per upload.");
+    if (files.length > 10) {
+      setBulkMessage("Maximum 10 files per upload (to avoid timeout).");
       return;
     }
     setBulkUploading(true);
@@ -68,11 +72,23 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
     try {
       const formData = new FormData();
       for (const f of files) formData.append("files", f);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120_000);
       const res = await fetch("/api/admin/bulk-upload-guest-contacts", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
+        credentials: "same-origin",
       });
-      const data = await res.json();
+      clearTimeout(timeoutId);
+      const text = await res.text();
+      let data: { message?: string; total?: number; contactsAdded?: number; error?: string };
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        setBulkMessage(res.ok ? "Invalid response" : `Error ${res.status}: ${text.slice(0, 200)}`);
+        return;
+      }
       if (res.ok) {
         setBulkMessage(data.message ?? `Processed ${data.total} files. ${data.contactsAdded} contacts added.`);
         input.value = "";
@@ -80,10 +96,33 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
       } else {
         setBulkMessage(data.error ?? "Bulk upload failed");
       }
-    } catch {
-      setBulkMessage("Request failed");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Request failed";
+      setBulkMessage(msg.includes("abort") ? "Request timed out. Try fewer files (max 10)." : msg);
     } finally {
       setBulkUploading(false);
+    }
+  };
+
+  const runAiSearch = async (guestName: string) => {
+    setSearchingGuest(guestName);
+    try {
+      const res = await fetch("/api/guest-contacts/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guest_name: guestName }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        alert(data.error ?? "Search failed");
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setSearchingGuest(null);
     }
   };
 
@@ -197,7 +236,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                 onClick={() => fileInputRef.current?.click()}
                 className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
-                Select files (max 100)
+                Select files (max 10)
               </button>
             </>
             <button
@@ -238,6 +277,9 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                 Invoice
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                AI Found
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                 AI Assessment
               </th>
             </tr>
@@ -245,7 +287,7 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   {contacts.length === 0
                     ? "No guest data found yet. Data appears from invoices (guest name, title, phone, email when available)."
                     : "No matches for your search."}
@@ -288,6 +330,62 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
                       </Link>
                     ) : (
                       <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {c.ai_contact_info ? (
+                      <div className="space-y-1">
+                        {c.ai_contact_info.phone && (
+                          <div className="flex items-center gap-1">
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                              AI
+                            </span>
+                            <a href={`tel:${c.ai_contact_info.phone}`} className="text-sky-600 hover:underline dark:text-sky-400">
+                              {c.ai_contact_info.phone}
+                            </a>
+                          </div>
+                        )}
+                        {c.ai_contact_info.email && (
+                          <div className="flex items-center gap-1">
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                              AI
+                            </span>
+                            <a href={`mailto:${c.ai_contact_info.email}`} className="text-sky-600 hover:underline dark:text-sky-400">
+                              {c.ai_contact_info.email}
+                            </a>
+                          </div>
+                        )}
+                        {c.ai_contact_info.social_media?.map((url) => (
+                          <div key={url} className="flex items-center gap-1">
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                              AI
+                            </span>
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[120px] text-sky-600 hover:underline dark:text-sky-400">
+                              {url}
+                            </a>
+                          </div>
+                        ))}
+                        {!c.ai_contact_info.phone && !c.ai_contact_info.email && (!c.ai_contact_info.social_media?.length) && (
+                          <span className="text-gray-400 text-xs">No AI results</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => runAiSearch(c.guest_name)}
+                          disabled={!!searchingGuest}
+                          className="mt-1 block text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 disabled:opacity-50"
+                        >
+                          {searchingGuest === c.guest_name ? "Searching..." : "Search again"}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => runAiSearch(c.guest_name)}
+                        disabled={!!searchingGuest}
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        {searchingGuest === c.guest_name ? "Searching..." : "Search web"}
+                      </button>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">

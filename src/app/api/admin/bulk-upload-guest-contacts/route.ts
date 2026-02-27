@@ -3,8 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 
+export const maxDuration = 120;
+
 const BUCKET = "invoices";
-const MAX_FILES = 100;
+const MAX_FILES = 10;
 const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
 
 function safeFileStem(name: string): string {
