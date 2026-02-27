@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { Nav } from "@/components/Nav";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 
 export default async function AuthenticatedLayout({
   children,
@@ -10,6 +11,7 @@ export default async function AuthenticatedLayout({
   const { profile } = await requireAuth();
   return (
     <div className="flex min-h-screen flex-col bg-gray-100 dark:bg-slate-950">
+      <KeyboardShortcuts />
       <Nav profile={profile} />
       <main className="flex-1 p-4 sm:p-6 min-w-0 w-full max-w-full overflow-x-hidden overflow-y-auto">
         <Breadcrumb />

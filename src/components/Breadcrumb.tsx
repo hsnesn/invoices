@@ -12,6 +12,7 @@ const LABELS: Record<string, string> = {
   admin: "Admin",
   setup: "Setup",
   reports: "Reports",
+  "audit-log": "Audit Log",
   users: "User Management",
 };
 

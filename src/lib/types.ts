@@ -18,6 +18,7 @@ export const ALL_PAGES = [
   { key: "salaries", label: "Salaries" },
   { key: "setup", label: "Setup" },
   { key: "reports", label: "Reports" },
+  { key: "audit_log", label: "Audit Log" },
   { key: "guest_contacts", label: "Guest Contacts" },
   { key: "messages", label: "Messages" },
   { key: "user_management", label: "User Management" },
@@ -35,6 +36,7 @@ export interface Profile {
   allowed_pages: PageKey[] | null;
   is_active: boolean;
   receive_invoice_emails?: boolean;
+  preferred_theme?: "light" | "dark" | null;
   created_at: string;
   updated_at: string;
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "@/components/ThemeProvider";
 
 type ProfileData = {
   id: string;
@@ -13,6 +14,7 @@ type ProfileData = {
   department_name: string | null;
   is_active: boolean;
   receive_invoice_emails: boolean;
+  preferred_theme?: "light" | "dark" | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -28,6 +30,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const themeContext = useTheme();
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -300,6 +303,22 @@ export default function ProfilePage() {
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             When off, invoice status emails (approval, rejection, etc.) are not sent. Booking form emails are always sent.
           </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Theme</label>
+          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            Choose light or dark mode. Saved to your preference across devices.
+          </p>
+          {themeContext && (
+            <button
+              type="button"
+              onClick={themeContext.toggleTheme}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              Switch to {themeContext.theme === "light" ? "dark" : "light"} mode
+            </button>
+          )}
         </div>
       </div>
     </div>

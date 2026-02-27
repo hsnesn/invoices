@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 
 type Theme = "light" | "dark";
 
@@ -15,6 +15,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem("invoice_theme") as Theme | null;
     if (stored === "dark" || stored === "light") setTheme(stored);
     else setTheme("dark");
+    // Sync from profile (per-user preference) when authenticated
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const pref = d?.preferred_theme;
+        if (pref === "light" || pref === "dark") {
+          setTheme(pref);
+          localStorage.setItem("invoice_theme", pref);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -29,7 +40,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [theme, mounted]);
 
-  const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
+  const toggleTheme = useCallback(() => {
+    setTheme((t) => {
+      const next = t === "light" ? "dark" : "light";
+      void fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferred_theme: next }),
+      }).catch(() => {});
+      return next;
+    });
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>

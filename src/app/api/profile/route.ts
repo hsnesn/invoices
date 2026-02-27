@@ -22,6 +22,8 @@ export async function GET() {
 
     const avatarUrl = (profile as { avatar_url?: string | null }).avatar_url ?? null;
 
+    const preferredTheme = (profile as { preferred_theme?: string | null }).preferred_theme ?? null;
+
     return NextResponse.json({
       id: profile.id,
       full_name: fullName,
@@ -32,6 +34,7 @@ export async function GET() {
       department_name: departmentName,
       is_active: profile.is_active,
       receive_invoice_emails: receiveInvoiceEmails,
+      preferred_theme: preferredTheme === "light" || preferredTheme === "dark" ? preferredTheme : null,
       created_at: profile.created_at,
       updated_at: profile.updated_at,
     });
@@ -44,7 +47,7 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   try {
     const { session, profile } = await requireAuth();
-    const body = (await request.json()) as { full_name?: string; receive_invoice_emails?: boolean };
+    const body = (await request.json()) as { full_name?: string; receive_invoice_emails?: boolean; preferred_theme?: "light" | "dark" | null };
 
     const supabase = createAdminClient();
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -61,6 +64,10 @@ export async function PATCH(request: NextRequest) {
       updates.receive_invoice_emails = !!body.receive_invoice_emails;
     }
 
+    if (body.preferred_theme !== undefined) {
+      updates.preferred_theme = body.preferred_theme === "light" || body.preferred_theme === "dark" ? body.preferred_theme : null;
+    }
+
     if (Object.keys(updates).length <= 1) {
       return NextResponse.json({ error: "No updates provided" }, { status: 400 });
     }
@@ -71,10 +78,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const prevProfile = profile as { receive_invoice_emails?: boolean; preferred_theme?: string | null };
     return NextResponse.json({
       success: true,
       full_name: updates.full_name ?? profile.full_name,
-      receive_invoice_emails: updates.receive_invoice_emails ?? (profile as { receive_invoice_emails?: boolean }).receive_invoice_emails !== false,
+      receive_invoice_emails: updates.receive_invoice_emails ?? prevProfile.receive_invoice_emails !== false,
+      preferred_theme: updates.preferred_theme ?? prevProfile.preferred_theme ?? null,
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

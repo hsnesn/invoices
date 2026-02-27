@@ -2113,6 +2113,25 @@ export function InvoicesBoard({
     }
   }, []);
 
+  const csvEscape = (v: unknown) => {
+    if (v == null) return "";
+    const s = String(v);
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const exportToCsv = useCallback((data: DisplayRow[]) => {
+    const headers = ["Guest Name", "Title", "Producer", "Payment Type", "Department", "Programme", "Topic", "TX Date 1", "TX Date 2", "TX Date 3", "Invoice Date", "Account Name", "Amount", "INV Number", "Sort Code", "Account Number", "Dept EP", "Payment Date", "Status", "Rejection Reason"];
+    const rows = data.map((r) => [r.guest, r.title, r.producer, r.paymentType, r.department, r.programme, r.topic, r.tx1, r.tx2, r.tx3, r.invoiceDate, r.accountName, r.amount, r.invNumber, r.sortCode, r.accountNumber, r.lineManager, r.paymentDate, r.status, r.rejectionReason || ""]);
+    const csv = [headers.map(csvEscape).join(","), ...rows.map((row) => row.map(csvEscape).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoices-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
   const exportToExcel = useCallback(async (data: DisplayRow[]) => {
     const XLSX = await import("xlsx");
     const rows = data.map((r) => ({
@@ -2332,9 +2351,12 @@ export function InvoicesBoard({
           )}
           {(currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
             <>
+          <button onClick={() => exportToCsv(rows.filter((r) => selectedIds.has(r.id)))} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950/50">
+            CSV
+          </button>
           <button onClick={() => void exportToExcel(rows.filter((r) => selectedIds.has(r.id)))} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
-            Excel Export
+            Excel
           </button>
           <button onClick={() => setShowMoveModal(true)} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
