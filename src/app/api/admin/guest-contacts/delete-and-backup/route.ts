@@ -16,10 +16,10 @@ export async function POST() {
 
     const { data: rows } = await supabase
       .from("guest_contacts")
-      .select("guest_name, phone, email, title, title_category, topic, topic_category, organization, bio, photo_url, primary_program, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, is_favorite, tags, affiliated_orgs, prohibited_topics, conflict_of_interest_notes, source");
+      .select("id, guest_name, phone, email, title, title_category, topic, topic_category, organization, bio, photo_url, primary_program, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, is_favorite, tags, affiliated_orgs, prohibited_topics, conflict_of_interest_notes, source");
 
     const snapshot = (rows ?? []).map((r) => {
-      const { ...rest } = r as Record<string, unknown>;
+      const { id: _id, ...rest } = r as Record<string, unknown>;
       return rest;
     });
 
@@ -32,10 +32,16 @@ export async function POST() {
       return NextResponse.json({ error: backupError.message }, { status: 500 });
     }
 
-    const { error: deleteError } = await supabase.from("guest_contacts").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    const ids = (rows ?? []).map((r) => (r as { id?: string }).id).filter((id): id is string => !!id);
+    if (ids.length > 0) {
+      const BATCH = 100;
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batch = ids.slice(i, i + BATCH);
+        const { error: deleteError } = await supabase.from("guest_contacts").delete().in("id", batch);
+        if (deleteError) {
+          return NextResponse.json({ error: deleteError.message }, { status: 500 });
+        }
+      }
     }
 
     return NextResponse.json({

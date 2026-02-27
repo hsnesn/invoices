@@ -36,9 +36,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Replace current list: delete all, then insert from backup
-    const { error: deleteError } = await supabase.from("guest_contacts").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    const { data: existing } = await supabase.from("guest_contacts").select("id");
+    const ids = (existing ?? []).map((r) => (r as { id: string }).id);
+    if (ids.length > 0) {
+      const BATCH = 100;
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batch = ids.slice(i, i + BATCH);
+        const { error: deleteError } = await supabase.from("guest_contacts").delete().in("id", batch);
+        if (deleteError) {
+          return NextResponse.json({ error: deleteError.message }, { status: 500 });
+        }
+      }
     }
 
     const rows = snapshot.map((r) => ({
