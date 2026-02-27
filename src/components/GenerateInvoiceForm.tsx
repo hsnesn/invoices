@@ -42,7 +42,7 @@ export function GenerateInvoiceForm() {
   );
 
   const [invNo, setInvNo] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(today);
+  const [invoiceDate, setInvoiceDate] = useState("");
   const [currency, setCurrency] = useState<"GBP" | "EUR" | "USD">("GBP");
   const [guestName, setGuestName] = useState("");
   const [guestAddress, setGuestAddress] = useState("");
@@ -62,9 +62,9 @@ export function GenerateInvoiceForm() {
   const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [producerLoaded, setProducerLoaded] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateMessage, setTemplateMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const templatesFetcher = (url: string) =>
@@ -78,7 +78,7 @@ export function GenerateInvoiceForm() {
     templatesFetcher
   );
 
-  const loadTemplate = (t: GuestTemplate) => {
+  const loadTemplate = (t: GuestTemplate, startEdit = false) => {
     setTitle(t.title ?? "");
     setGuestName(t.guest_name ?? "");
     setGuestAddress(t.guest_address ?? "");
@@ -92,14 +92,69 @@ export function GenerateInvoiceForm() {
     setPaypal(t.paypal ?? "");
     if (t.department_id) setDepartmentId(t.department_id);
     if (t.program_id) setProgramId(t.program_id);
+    setSaveTemplateName(t.name);
+    setEditingTemplateId(startEdit ? t.id : null);
+    setTemplateMessage(null);
   };
 
   const deleteTemplate = async (id: string) => {
     try {
       const res = await fetch(`/api/guest-invoice-templates/${id}`, { method: "DELETE" });
-      if (res.ok) mutateTemplates();
+      if (res.ok) {
+        mutateTemplates();
+        if (editingTemplateId === id) {
+          setEditingTemplateId(null);
+          setSaveTemplateName("");
+        }
+      }
     } catch {
       setTemplateMessage({ type: "error", text: "Failed to delete template" });
+    }
+  };
+
+  const updateTemplate = async () => {
+    if (!editingTemplateId) return;
+    const name = saveTemplateName.trim();
+    if (!name) {
+      setTemplateMessage({ type: "error", text: "Template name is required" });
+      return;
+    }
+    setSavingTemplate(true);
+    setTemplateMessage(null);
+    try {
+      const res = await fetch(`/api/guest-invoice-templates/${editingTemplateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          title,
+          guest_name: guestName,
+          guest_address: guestAddress,
+          guest_phone: guestPhone,
+          guest_email: guestEmail,
+          account_name: accountName,
+          bank_name: bankName,
+          account_number: accountNumber,
+          sort_code: sortCode,
+          bank_address: bankAddress,
+          paypal,
+          department_id: departmentId || undefined,
+          program_id: programId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        mutateTemplates();
+        setEditingTemplateId(null);
+        setSaveTemplateName("");
+        setTemplateMessage({ type: "success", text: "Template updated" });
+      } else {
+        setTemplateMessage({ type: "error", text: data.error ?? "Failed to update template" });
+      }
+    } catch {
+      setTemplateMessage({ type: "error", text: "Connection error" });
+    } finally {
+      setSavingTemplate(false);
     }
   };
 
@@ -136,6 +191,7 @@ export function GenerateInvoiceForm() {
       if (res.ok) {
         mutateTemplates();
         setSaveTemplateName("");
+        setEditingTemplateId(null);
         setTemplateMessage({ type: "success", text: "Template saved" });
       } else {
         setTemplateMessage({ type: "error", text: data.error ?? "Failed to save template" });
@@ -147,18 +203,7 @@ export function GenerateInvoiceForm() {
     }
   };
 
-  useEffect(() => {
-    fetch("/api/profile")
-      .then(async (r) => {
-        if (!r.ok) return;
-        const data = await r.json();
-        if (data?.full_name && !producerLoaded) {
-          setProducer(data.full_name);
-          setProducerLoaded(true);
-        }
-      })
-      .catch(console.error);
-  }, [producerLoaded]);
+  // Producer is not auto-filled; user must enter/select explicitly
 
   useEffect(() => {
     if (departmentId) {
@@ -185,6 +230,7 @@ export function GenerateInvoiceForm() {
     e.preventDefault();
     setError("");
     if (!invNo.trim()) { setError("INV NO is required"); return; }
+    if (!invoiceDate) { setError("Invoice date is required"); return; }
     if (!guestName.trim()) { setError("Guest name is required"); return; }
     if (!title.trim() || !producer.trim()) { setError("Title and Producer are required for list display"); return; }
     if (!departmentId) { setError("Department is required"); return; }
@@ -268,7 +314,7 @@ export function GenerateInvoiceForm() {
               const id = e.target.value;
               if (id) {
                 const t = templates.find((x) => x.id === id);
-                if (t) loadTemplate(t);
+                if (t) loadTemplate(t, false);
                 e.target.value = "";
               }
             }}
@@ -288,14 +334,34 @@ export function GenerateInvoiceForm() {
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               aria-label="Template name for save"
             />
-            <button
-              type="button"
-              onClick={saveAsTemplate}
-              disabled={savingTemplate || !saveTemplateName.trim()}
-              className="rounded-lg bg-slate-600 px-3 py-2 text-sm font-medium text-white hover:bg-slate-500 disabled:opacity-50"
-            >
-              {savingTemplate ? "Saving..." : "Save as template"}
-            </button>
+            {editingTemplateId ? (
+              <>
+                <button
+                  type="button"
+                  onClick={updateTemplate}
+                  disabled={savingTemplate || !saveTemplateName.trim()}
+                  className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                >
+                  {savingTemplate ? "Updating..." : "Update template"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditingTemplateId(null); setSaveTemplateName(""); setTemplateMessage(null); }}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={saveAsTemplate}
+                disabled={savingTemplate || !saveTemplateName.trim()}
+                className="rounded-lg bg-slate-600 px-3 py-2 text-sm font-medium text-white hover:bg-slate-500 disabled:opacity-50"
+              >
+                {savingTemplate ? "Saving..." : "Save as template"}
+              </button>
+            )}
           </div>
         </div>
         {templateMessage && (
@@ -308,7 +374,7 @@ export function GenerateInvoiceForm() {
             {templates.map((t) => (
               <span
                 key={t.id}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 text-xs text-slate-700 dark:bg-slate-600 dark:text-slate-200"
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200 ${editingTemplateId === t.id ? "ring-2 ring-sky-500 bg-sky-100 dark:bg-sky-900/40" : "bg-slate-200 dark:bg-slate-600"}`}
               >
                 <button
                   type="button"
@@ -319,9 +385,19 @@ export function GenerateInvoiceForm() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => loadTemplate(t, true)}
+                  className="rounded p-0.5 text-slate-500 hover:bg-slate-300 hover:text-sky-600 dark:hover:bg-slate-500 dark:hover:text-sky-400"
+                  aria-label={`Edit template ${t.name}`}
+                  title="Edit"
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
                   onClick={() => deleteTemplate(t.id)}
-                  className="ml-0.5 rounded p-0.5 text-slate-500 hover:bg-slate-300 hover:text-red-600 dark:hover:bg-slate-500 dark:hover:text-red-400"
+                  className="rounded p-0.5 text-slate-500 hover:bg-slate-300 hover:text-red-600 dark:hover:bg-slate-500 dark:hover:text-red-400"
                   aria-label={`Delete template ${t.name}`}
+                  title="Delete"
                 >
                   ×
                 </button>
