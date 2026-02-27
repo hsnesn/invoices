@@ -120,11 +120,13 @@ export function OtherInvoicesBoard({
   currentRole,
   currentUserId,
   canUpload,
+  initialExpandedId,
 }: {
   invoices: ApiRow[];
   currentRole: string;
   currentUserId?: string;
   canUpload: boolean;
+  initialExpandedId?: string;
 }) {
   const router = useRouter();
 
@@ -182,7 +184,7 @@ export function OtherInvoicesBoard({
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(initialExpandedId ?? null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [timelineData, setTimelineData] = useState<{ id: string; event_type: string; created_at: string; actor_name?: string; from_status?: string; to_status?: string; payload?: unknown }[]>([]);
 

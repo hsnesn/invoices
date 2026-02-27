@@ -40,7 +40,12 @@ function canUserSeeInvoice(
   return false;
 }
 
-export default async function FreelancerInvoicesPage() {
+export default async function FreelancerInvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ expand?: string }>;
+}) {
+  const { expand: expandId } = await searchParams;
   const { session, profile } = await requireAuth();
   const supabase = createAdminClient();
 
@@ -100,6 +105,7 @@ export default async function FreelancerInvoicesPage() {
       currentRole={profile.role}
       currentUserId={session.user.id}
       isOperationsRoomMember={isOperationsRoomMember}
+      initialExpandedId={expandId ?? undefined}
     />
   );
 }

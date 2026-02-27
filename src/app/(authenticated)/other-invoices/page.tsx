@@ -11,8 +11,13 @@ function canAccessOtherInvoices(role: string, allowedPages: string[] | null): bo
   return false;
 }
 
-export default async function OtherInvoicesPage() {
+export default async function OtherInvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ expand?: string }>;
+}) {
   const { session, profile } = await requireAuth();
+  const { expand: expandId } = await searchParams;
 
   if (!canAccessOtherInvoices(profile.role, profile.allowed_pages ?? null)) {
     return (
@@ -72,6 +77,7 @@ export default async function OtherInvoicesPage() {
       currentRole={profile.role}
       currentUserId={session.user.id}
       canUpload={canUpload}
+      initialExpandedId={expandId ?? undefined}
     />
   );
 }

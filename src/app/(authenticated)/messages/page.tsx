@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+import { invoiceListUrl } from "@/lib/invoice-list-url";
+import { parseMentions } from "@/lib/mention-utils";
 
 type Message = {
   id: string;
@@ -14,6 +17,10 @@ type Message = {
   read_at: string | null;
   invoice_id: string | null;
   invoice_display: string | null;
+  invoice_type?: string | null;
+  parent_message_id?: string | null;
+  attachment_path?: string | null;
+  attachment_name?: string | null;
   sender_name: string;
   recipient_name: string;
   is_from_me: boolean;
@@ -40,20 +47,28 @@ export default function MessagesPage() {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recipientSearch, setRecipientSearch] = useState("");
   const [showRecipientPicker, setShowRecipientPicker] = useState(false);
-  const [invoiceSearch, setInvoiceSearch] = useState<{ id: string; invoice_number: string; beneficiary: string }[]>([]);
+  const [invoiceSearch, setInvoiceSearch] = useState<{ id: string; invoice_number: string; beneficiary: string; invoice_type?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
-  const [invoiceRef, setInvoiceRef] = useState<{ id: string; invoice_number: string } | null>(
+  const [invoiceRef, setInvoiceRef] = useState<{ id: string; invoice_number: string; invoice_type?: string } | null>(
     invoiceIdFromUrl ? { id: invoiceIdFromUrl, invoice_number: "…" } : null
   );
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
+  const [messageSearch, setMessageSearch] = useState("");
+  const [typingPeer, setTypingPeer] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ id: string; content: string } | null>(null);
+  const [attachment, setAttachment] = useState<{ path: string; name: string } | null>(null);
+  const [muted, setMuted] = useState(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchAllMessages = useCallback(async () => {
+  const fetchAllMessages = useCallback(async (searchQ?: string) => {
     try {
-      const res = await fetch("/api/messages?folder=all");
+      const params = new URLSearchParams({ folder: "all" });
+      if (searchQ?.trim()) params.set("q", searchQ.trim());
+      const res = await fetch(`/api/messages?${params.toString()}`);
       if (res.ok) {
         const data = (await res.json()) as Message[];
         const list = Array.isArray(data) ? data : [];
@@ -136,9 +151,9 @@ export default function MessagesPage() {
   }, []);
 
   useEffect(() => {
-    fetchAllMessages();
+    fetchAllMessages(messageSearch);
     fetchRecipients();
-  }, [fetchAllMessages, fetchRecipients]);
+  }, [fetchAllMessages, fetchRecipients, messageSearch]);
 
   useEffect(() => {
     if (invoiceIdFromUrl) {
@@ -148,7 +163,7 @@ export default function MessagesPage() {
           const inv = Array.isArray(data) && data[0] ? data[0] : null;
           setInvoiceRef(
             inv
-              ? { id: inv.id, invoice_number: inv.invoice_number }
+              ? { id: inv.id, invoice_number: inv.invoice_number, invoice_type: inv.invoice_type }
               : { id: invoiceIdFromUrl, invoice_number: "…" }
           );
         })
@@ -171,9 +186,9 @@ export default function MessagesPage() {
     if (selectedUserId) {
       fetchConversation(selectedUserId);
     } else {
-      fetchAllMessages();
+      fetchAllMessages(messageSearch);
     }
-  }, [selectedUserId, fetchConversation, fetchAllMessages]);
+  }, [selectedUserId, fetchConversation, fetchAllMessages, messageSearch]);
 
   useEffect(() => {
     const t = setTimeout(() => fetchInvoiceSearch(invoiceSearchQuery), 300);
@@ -181,11 +196,127 @@ export default function MessagesPage() {
   }, [invoiceSearchQuery, fetchInvoiceSearch]);
 
   useEffect(() => {
-    pollIntervalRef.current = setInterval(fetchAllMessages, 15000);
+    const fn = () => fetchAllMessages(messageSearch);
+    pollIntervalRef.current = setInterval(fn, 15000);
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [fetchAllMessages]);
+  }, [fetchAllMessages, messageSearch]);
+
+  /* Supabase Realtime: refetch when messages change */
+  useEffect(() => {
+    let disposed = false;
+    let sub: { unsubscribe: () => void } | null = null;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId || disposed) return;
+
+        const onMessageChange = () => {
+          if (disposed) return;
+          fetchAllMessages(messageSearch);
+          if (selectedUserId) fetchConversation(selectedUserId);
+        };
+
+        sub = supabase
+          .channel("messages-rt")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "messages" },
+            (payload) => {
+              const rec = (payload.new ?? payload.old) as Record<string, unknown> | null;
+              if (!rec) return;
+              const sid = rec.sender_id as string | undefined;
+              const rid = rec.recipient_id as string | undefined;
+              if (sid === userId || rid === userId) onMessageChange();
+            }
+          )
+          .subscribe();
+      } catch {
+        /* realtime not critical */
+      }
+    })();
+    return () => {
+      disposed = true;
+      sub?.unsubscribe();
+    };
+  }, [fetchAllMessages, fetchConversation, messageSearch, selectedUserId]);
+
+  /* Typing indicator via Supabase presence */
+  const typingChannelRef = useRef<{ track: (state: object) => Promise<void>; unsubscribe: () => void } | null>(null);
+  useEffect(() => {
+    if (!selectedUserId) {
+      setTypingPeer(false);
+      typingChannelRef.current?.unsubscribe();
+      typingChannelRef.current = null;
+      return;
+    }
+    let disposed = false;
+    let myUserId: string | null = null;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        myUserId = session?.user?.id ?? null;
+        if (!myUserId || disposed) return;
+
+        const channelName = `typing:${[myUserId, selectedUserId].sort().join("-")}`;
+        const ch = supabase.channel(channelName);
+
+        ch.on("presence", { event: "sync" }, () => {
+          if (disposed) return;
+          const state = ch.presenceState() as Record<string, Array<{ user_id?: string; typing?: boolean }>>;
+          const all = Object.values(state).flat() as { user_id?: string; typing?: boolean }[];
+          const others = all.filter((p) => p?.user_id !== myUserId && p?.typing === true);
+          setTypingPeer(others.length > 0);
+        }).subscribe(async (status) => {
+          if (status === "SUBSCRIBED") {
+            await ch.track({ user_id: myUserId, typing: false });
+            typingChannelRef.current = {
+              track: async (s) => { await ch.track(s); },
+              unsubscribe: () => ch.unsubscribe(),
+            };
+          }
+        });
+      } catch {
+        /* presence not critical */
+      }
+    })();
+    return () => {
+      disposed = true;
+      typingChannelRef.current?.unsubscribe();
+      typingChannelRef.current = null;
+    };
+  }, [selectedUserId]);
+
+  const sendTypingPresence = useCallback((typing: boolean) => {
+    (async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId || !selectedUserId) return;
+      await typingChannelRef.current?.track({ user_id: userId, typing });
+    })();
+  }, [selectedUserId]);
+
+  const fetchMuted = useCallback(async (peerId: string) => {
+    try {
+      const res = await fetch(`/api/messages/mute?peer_id=${encodeURIComponent(peerId)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { muted?: boolean };
+        setMuted(!!data.muted);
+      }
+    } catch {
+      setMuted(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedUserId) fetchMuted(selectedUserId);
+    else setMuted(false);
+  }, [selectedUserId, fetchMuted]);
 
   const sendMessage = async () => {
     const to = selectedUserId;
@@ -194,6 +325,7 @@ export default function MessagesPage() {
       return;
     }
     setSending(true);
+    sendTypingPresence(false);
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
@@ -202,14 +334,19 @@ export default function MessagesPage() {
           recipient_id: to,
           content: content.trim(),
           invoice_id: invoiceRef?.id ?? null,
+          parent_message_id: replyTo?.id ?? null,
+          attachment_path: attachment?.path ?? null,
+          attachment_name: attachment?.name ?? null,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (res.ok) {
         setContent("");
         setInvoiceRef(null);
+        setReplyTo(null);
+        setAttachment(null);
         fetchConversation(to);
-        fetchAllMessages();
+        fetchAllMessages(messageSearch);
       } else {
         toast.error(data.error ?? "Failed to send");
       }
@@ -220,10 +357,24 @@ export default function MessagesPage() {
     }
   };
 
+  const toggleMute = async () => {
+    if (!selectedUserId) return;
+    try {
+      const method = muted ? "DELETE" : "POST";
+      const res = await fetch(`/api/messages/mute?peer_id=${encodeURIComponent(selectedUserId)}`, { method });
+      if (res.ok) {
+        setMuted(!muted);
+        toast.success(muted ? "Conversation unmuted" : "Conversation muted");
+      }
+    } catch {
+      toast.error("Failed to update mute");
+    }
+  };
+
   const markAsRead = async (id: string) => {
     try {
       await fetch(`/api/messages/${id}/read`, { method: "PATCH" });
-      fetchAllMessages();
+      fetchAllMessages(messageSearch);
       if (selectedUserId) fetchConversation(selectedUserId);
     } catch {
       /* ignore */
@@ -268,8 +419,12 @@ export default function MessagesPage() {
 
   return (
     <div className="flex h-[calc(100vh-6rem)] gap-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
-      {/* Left: conversation list */}
-      <div className="flex w-72 shrink-0 flex-col border-r border-gray-200 dark:border-gray-700">
+      {/* Left: conversation list - hidden on mobile when chat is open */}
+      <div
+        className={`flex w-72 shrink-0 flex-col border-r border-gray-200 dark:border-gray-700 ${
+          selectedUserId ? "hidden md:flex" : "flex"
+        }`}
+      >
         <div className="flex items-center justify-between border-b border-gray-200 p-3 dark:border-gray-700">
           <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Messages</h1>
           <div className="flex gap-2">
@@ -286,6 +441,15 @@ export default function MessagesPage() {
               Dashboard
             </Link>
           </div>
+        </div>
+        <div className="border-b border-gray-200 px-3 pb-2 dark:border-gray-700">
+          <input
+            type="text"
+            placeholder="Search messages..."
+            value={messageSearch}
+            onChange={(e) => setMessageSearch(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
@@ -364,17 +528,41 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      {/* Right: chat area */}
-      <div className="flex flex-1 flex-col min-w-0">
+      {/* Right: chat area - full width on mobile when open */}
+      <div className={`flex flex-1 flex-col min-w-0 ${!selectedUserId ? "hidden md:flex" : "flex"}`}>
         {selectedUserId ? (
           <>
-            <div className="flex items-center border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-              <h2 className="font-medium text-gray-900 dark:text-white">{otherName}</h2>
+            <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+              <button
+                onClick={() => setSelectedUserId(null)}
+                className="md:hidden rounded-lg p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                aria-label="Back to conversations"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <h2 className="flex-1 font-medium text-gray-900 dark:text-white">{otherName}</h2>
+              <button
+                onClick={toggleMute}
+                title={muted ? "Unmute" : "Mute"}
+                className={`rounded-lg p-1.5 text-sm ${muted ? "text-amber-600 dark:text-amber-400" : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"}`}
+              >
+                {muted ? "Unmute" : "Mute"}
+              </button>
             </div>
+            {typingPeer && (
+              <p className="border-b border-gray-100 px-4 py-1 text-xs italic text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                {otherName} is typing…
+              </p>
+            )}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {sortedThread.map((msg) => {
                 if (msg.recipient_id !== selectedUserId && msg.sender_id !== selectedUserId) return null;
                 const isMe = msg.is_from_me;
+                const parentMsg = msg.parent_message_id
+                  ? sortedThread.find((m) => m.id === msg.parent_message_id)
+                  : null;
                 return (
                   <div
                     key={msg.id}
@@ -388,20 +576,63 @@ export default function MessagesPage() {
                       }`}
                     >
                       {msg.invoice_id && (
-                        <a
-                          href={`/invoices/${msg.invoice_id}`}
+                        <Link
+                          href={invoiceListUrl(msg.invoice_id, msg.invoice_type ?? null)}
                           className="mb-1 block text-xs font-medium underline opacity-90"
                         >
                           Re: Invoice {msg.invoice_display ?? msg.invoice_id.slice(0, 8)}
+                        </Link>
+                      )}
+                      {parentMsg && (
+                        <p className="mb-1 border-l-2 border-current/40 pl-2 text-xs opacity-80">
+                          {parentMsg.sender_name}: {parentMsg.content.slice(0, 60)}
+                          {parentMsg.content.length > 60 ? "…" : ""}
+                        </p>
+                      )}
+                      <p className="whitespace-pre-wrap break-words">
+                        {parseMentions(msg.content).map((seg, i) =>
+                          seg.type === "mention" ? (
+                            <span key={i} className="rounded bg-black/20 px-0.5 font-medium">
+                              @{seg.text}
+                            </span>
+                          ) : (
+                            <span key={i}>{seg.text}</span>
+                          )
+                        )}
+                      </p>
+                      {msg.attachment_path && msg.attachment_name && (
+                        <a
+                          href="#"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            const r = await fetch(`/api/messages/attachment-url?path=${encodeURIComponent(msg.attachment_path!)}`);
+                            const d = await r.json();
+                            if (d?.url) window.open(d.url);
+                          }}
+                          className="mt-1 block text-xs font-medium underline opacity-90"
+                        >
+                          📎 {msg.attachment_name}
                         </a>
                       )}
-                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                      <p className={`mt-1 text-[10px] ${isMe ? "text-sky-100" : "text-gray-500 dark:text-gray-400"}`}>
-                        {new Date(msg.created_at).toLocaleString("en-GB", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <button
+                          onClick={() => setReplyTo({ id: msg.id, content: msg.content.slice(0, 80) })}
+                          className="text-[10px] opacity-70 hover:opacity-100"
+                        >
+                          Reply
+                        </button>
+                        <p className={`text-[10px] ${isMe ? "text-sky-100" : "text-gray-500 dark:text-gray-400"}`}>
+                          {new Date(msg.created_at).toLocaleString("en-GB", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
+                          {isMe && msg.read_at && (
+                            <span className="ml-1.5 opacity-90">
+                              · Read {new Date(msg.read_at).toLocaleString("en-GB", { timeStyle: "short" })}
+                            </span>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 );
@@ -409,17 +640,39 @@ export default function MessagesPage() {
             </div>
             <div className="border-t border-gray-200 p-4 dark:border-gray-700">
               <div className="space-y-2">
+                {replyTo && (
+                  <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm dark:bg-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">Replying: {replyTo.content.slice(0, 50)}…</span>
+                    <button
+                      onClick={() => setReplyTo(null)}
+                      className="ml-auto text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                {attachment && (
+                  <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm dark:bg-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">📎 {attachment.name}</span>
+                    <button
+                      onClick={() => setAttachment(null)}
+                      className="ml-auto text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
                 {invoiceRef && (
                   <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm dark:bg-sky-950/30">
                     <span className="text-sky-700 dark:text-sky-300">
                       Re: Invoice {invoiceRef.invoice_number}
                     </span>
-                    <a
-                      href={`/invoices/${invoiceRef.id}`}
+                    <Link
+                      href={invoiceListUrl(invoiceRef.id, invoiceRef.invoice_type ?? null)}
                       className="text-sky-600 underline hover:text-sky-500 dark:text-sky-400"
                     >
                       View
-                    </a>
+                    </Link>
                     <button
                       onClick={() => setInvoiceRef(null)}
                       className="ml-auto text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -443,7 +696,7 @@ export default function MessagesPage() {
                           <button
                             key={inv.id}
                             onClick={() => {
-                              setInvoiceRef({ id: inv.id, invoice_number: inv.invoice_number });
+                              setInvoiceRef({ id: inv.id, invoice_number: inv.invoice_number, invoice_type: inv.invoice_type });
                               setInvoiceSearch([]);
                               setInvoiceSearchQuery("");
                             }}
@@ -457,9 +710,40 @@ export default function MessagesPage() {
                   </div>
                 )}
                 <div className="flex gap-2">
+                  <label className="flex cursor-pointer items-center rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800">
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,image/*"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        e.target.value = "";
+                        try {
+                          const fd = new FormData();
+                          fd.append("file", f);
+                          const res = await fetch("/api/messages/upload-attachment", { method: "POST", body: fd });
+                          const data = (await res.json()) as { attachment_path?: string; attachment_name?: string };
+                          if (res.ok && data.attachment_path) {
+                            setAttachment({ path: data.attachment_path, name: data.attachment_name ?? f.name });
+                          } else {
+                            toast.error((data as { error?: string }).error ?? "Upload failed");
+                          }
+                        } catch {
+                          toast.error("Upload failed");
+                        }
+                      }}
+                    />
+                    📎
+                  </label>
                   <textarea
                     value={content}
-                    onChange={(e) => setContent(e.target.value)}
+                    onChange={(e) => {
+                      setContent(e.target.value);
+                      sendTypingPresence(true);
+                      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                      typingTimeoutRef.current = setTimeout(() => sendTypingPresence(false), 2000);
+                    }}
                     placeholder="Type a message..."
                     rows={2}
                     className="flex-1 resize-none rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"

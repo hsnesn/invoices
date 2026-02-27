@@ -1,0 +1,3 @@
+-- Message attachments bucket (create via API if needed; this documents the schema)
+-- Storage path: {user_id}/{message_id}-{filename} or {user_id}/{uuid}-{filename}
+-- RLS: users can upload to their own folder; download via signed URL or public if configured

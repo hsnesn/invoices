@@ -145,6 +145,7 @@ function daysSince(d: string) { return Math.floor((Date.now() - new Date(d).getT
 
 export function FreelancerBoard({
   invoices, departmentPairs, profilePairs, managerProfilePairs, currentRole, currentUserId, isOperationsRoomMember = false,
+  initialExpandedId,
 }: {
   invoices: FreelancerInvoiceRow[];
   departmentPairs: [string, string][];
@@ -153,6 +154,7 @@ export function FreelancerBoard({
   currentRole: string;
   currentUserId: string;
   isOperationsRoomMember?: boolean;
+  initialExpandedId?: string;
 }) {
   const router = useRouter();
   const deptMap = useMemo(() => Object.fromEntries(departmentPairs), [departmentPairs]);
@@ -306,7 +308,7 @@ export function FreelancerBoard({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [editModalRow, setEditModalRow] = useState<DisplayRow | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(initialExpandedId ?? null);
   const [timelineData, setTimelineData] = useState<TimelineEvent[]>([]);
   const [notesData, setNotesData] = useState<NoteItem[]>([]);
   const [newNote, setNewNote] = useState("");
@@ -344,6 +346,26 @@ export function FreelancerBoard({
   const toggleGroup = useCallback((key: string) => { setCollapsedGroups(p => { const n = new Set(p); if (n.has(key)) n.delete(key); else n.add(key); return n; }); }, []);
 
   const [filesData, setFilesData] = useState<{ storage_path: string; file_name: string }[]>([]);
+  const initialExpandDoneRef = useRef(false);
+  useEffect(() => {
+    if (!initialExpandedId || initialExpandDoneRef.current) return;
+    const hasRow = invoices.some((inv) => inv.id === initialExpandedId);
+    if (!hasRow) return;
+    initialExpandDoneRef.current = true;
+    setDetailLoading(true);
+    setTimelineData([]);
+    setFilesData([]);
+    setNotesData([]);
+    Promise.all([
+      fetch(`/api/invoices/${initialExpandedId}/timeline`),
+      fetch(`/api/invoices/${initialExpandedId}/files`),
+      fetch(`/api/invoices/${initialExpandedId}/notes`),
+    ]).then(([tlR, flR, ntR]) => {
+      if (tlR.ok) tlR.json().then(setTimelineData);
+      if (flR.ok) flR.json().then(setFilesData);
+      if (ntR.ok) ntR.json().then(setNotesData);
+    }).finally(() => setDetailLoading(false));
+  }, [initialExpandedId, invoices]);
   const toggleExpandRow = useCallback(async (id: string) => {
     if (expandedRowId === id) { setExpandedRowId(null); return; }
     setExpandedRowId(id); setDetailLoading(true); setTimelineData([]); setFilesData([]); setNotesData([]);

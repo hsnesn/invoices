@@ -32,8 +32,8 @@ function playNotificationSound() {
 }
 
 /**
- * Polls for unread messages and plays notification sound when count increases.
- * Runs on all authenticated pages (in Nav) so sound plays even when Messages page is closed.
+ * Polls for unread messages. When count increases: plays sound and shows browser notification.
+ * Runs on all authenticated pages (in Nav).
  */
 export function MessageNotificationSound() {
   const lastUnreadRef = useRef(-1);
@@ -41,18 +41,34 @@ export function MessageNotificationSound() {
   useEffect(() => {
     const poll = async () => {
       try {
-        const res = await fetch("/api/dashboard/my-tasks", { cache: "no-store" });
+        const res = await fetch("/api/messages/unread?list=true", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { messagesUnread?: number };
-        const unread = data.messagesUnread ?? 0;
-        if (lastUnreadRef.current >= 0 && unread > lastUnreadRef.current) {
-          playNotificationSound();
-        }
+        const data = (await res.json()) as { unread?: number; messages?: { sender_name: string; content: string }[] };
+        const unread = data.unread ?? 0;
+        const prev = lastUnreadRef.current;
         lastUnreadRef.current = unread;
+
+        if (prev >= 0 && unread > prev) {
+          playNotificationSound();
+          const msg = data.messages?.[0];
+          const title = msg?.sender_name ?? "New message";
+          const body = msg?.content?.slice(0, 60) ?? "You have a new message";
+          if (
+            typeof Notification !== "undefined" &&
+            Notification.permission === "granted" &&
+            document.hidden
+          ) {
+            new Notification("Clari: " + title, { body, tag: "clari-msg", requireInteraction: false });
+          }
+        }
       } catch {
         /* ignore */
       }
     };
+
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
 
     void poll();
     const interval = setInterval(poll, 15000);

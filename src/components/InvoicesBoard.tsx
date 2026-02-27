@@ -1097,6 +1097,7 @@ export function InvoicesBoard({
   currentRole,
   currentUserId,
   isOperationsRoomMember = false,
+  initialExpandedId,
 }: {
   invoices: InvoiceRow[];
   departmentPairs: [string, string][];
@@ -1107,6 +1108,7 @@ export function InvoicesBoard({
   currentRole: string;
   currentUserId: string;
   isOperationsRoomMember?: boolean;
+  initialExpandedId?: string;
 }) {
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
@@ -1179,7 +1181,7 @@ export function InvoicesBoard({
 
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(0);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(initialExpandedId ?? null);
   const [timelineData, setTimelineData] = useState<TimelineEvent[]>([]);
   const [notesData, setNotesData] = useState<NoteItem[]>([]);
   const [newNote, setNewNote] = useState("");
@@ -1768,6 +1770,26 @@ export function InvoicesBoard({
 
   // Row expand - load timeline, files & notes
   const [filesData, setFilesData] = useState<{ storage_path: string; file_name: string }[]>([]);
+  const initialExpandDoneRef = useRef(false);
+  useEffect(() => {
+    if (!initialExpandedId || initialExpandDoneRef.current) return;
+    const hasRow = invoices.some((inv) => inv.id === initialExpandedId);
+    if (!hasRow) return;
+    initialExpandDoneRef.current = true;
+    setDetailLoading(true);
+    setTimelineData([]);
+    setFilesData([]);
+    setNotesData([]);
+    Promise.all([
+      fetch(`/api/invoices/${initialExpandedId}/timeline`),
+      fetch(`/api/invoices/${initialExpandedId}/files`),
+      fetch(`/api/invoices/${initialExpandedId}/notes`),
+    ]).then(([tlRes, flRes, ntRes]) => {
+      if (tlRes.ok) tlRes.json().then(setTimelineData);
+      if (flRes.ok) flRes.json().then(setFilesData);
+      if (ntRes.ok) ntRes.json().then(setNotesData);
+    }).finally(() => setDetailLoading(false));
+  }, [initialExpandedId, invoices]);
   const toggleExpandRow = useCallback(async (id: string) => {
     if (expandedRowId === id) {
       setExpandedRowId(null);

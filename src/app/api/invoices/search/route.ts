@@ -25,19 +25,26 @@ export async function GET(request: NextRequest) {
         return NextResponse.json([], { status: 200 });
       }
       const { data: inv } = await supabase
+        .from("invoices")
+        .select("id, invoice_type")
+        .eq("id", byId)
+        .single();
+      const { data: ext } = await supabase
         .from("invoice_extracted_fields")
         .select("invoice_number, beneficiary_name")
         .eq("invoice_id", byId)
         .single();
-      const invoiceNumber = (inv?.invoice_number as string) ?? String(byId).slice(0, 8);
-      const beneficiary = (inv?.beneficiary_name as string) ?? "—";
-      return NextResponse.json([{ id: byId, invoice_number: invoiceNumber, beneficiary }]);
+      const invoiceNumber = (ext?.invoice_number as string) ?? String(byId).slice(0, 8);
+      const beneficiary = (ext?.beneficiary_name as string) ?? "—";
+      const invoiceType = (inv as { invoice_type?: string } | null)?.invoice_type ?? "guest";
+      return NextResponse.json([{ id: byId, invoice_number: invoiceNumber, beneficiary, invoice_type: invoiceType }]);
     }
 
     let query = supabase
       .from("invoices")
       .select(`
         id,
+        invoice_type,
         service_description,
         created_at,
         invoice_extracted_fields(invoice_number, beneficiary_name)
@@ -49,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    const results: { id: string; invoice_number: string; beneficiary: string }[] = [];
+    const results: { id: string; invoice_number: string; beneficiary: string; invoice_type: string }[] = [];
     for (const inv of rows ?? []) {
       const canAccess = await canAccessInvoice(supabase, inv.id, session.user.id, profile);
       if (!canAccess) continue;
@@ -59,11 +66,12 @@ export async function GET(request: NextRequest) {
         : inv.invoice_extracted_fields;
       const invoiceNumber = (ext?.invoice_number as string) ?? String(inv.id).slice(0, 8);
       const beneficiary = (ext?.beneficiary_name as string) ?? "—";
+      const invoiceType = (inv as { invoice_type?: string }).invoice_type ?? "guest";
 
       const display = `${invoiceNumber} ${beneficiary}`.toLowerCase();
       if (q && !display.includes(q)) continue;
 
-      results.push({ id: inv.id, invoice_number: invoiceNumber, beneficiary });
+      results.push({ id: inv.id, invoice_number: invoiceNumber, beneficiary, invoice_type: invoiceType });
       if (results.length >= limit) break;
     }
 
