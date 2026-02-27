@@ -39,9 +39,10 @@ export async function GET(request: NextRequest) {
           supabase.from("messages").select(cols).eq("sender_id", conversationWith).eq("recipient_id", userId).order("created_at", { ascending: true }).limit(200),
         ]);
       }
+      type MsgRow = { id: string; sender_id: string; recipient_id: string; content: string; created_at: string; read_at: string | null; invoice_id: string | null };
       const merged = [
-        ...(r1.data ?? []),
-        ...(r2.data ?? []),
+        ...((r1.data ?? []) as unknown as MsgRow[]),
+        ...((r2.data ?? []) as unknown as MsgRow[]),
       ].sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -117,16 +118,20 @@ export async function GET(request: NextRequest) {
       query = query.ilike("content", `%${searchQ}%`);
     }
 
-    let { data: rows, error } = await query;
+    let rows: Array<{ id: string; sender_id: string; recipient_id: string; content: string; created_at: string; read_at: string | null; invoice_id: string | null }> | null;
+    let error: { message?: string } | null;
+    const result = await query;
+    rows = result.data as typeof rows;
+    error = result.error;
 
     if (error && (error as { message?: string }).message?.includes("column")) {
-      query = supabase.from("messages").select(msgColsBase).limit(200)
+      let retryQuery = supabase.from("messages").select(msgColsBase).limit(200)
         .order("created_at", { ascending: false });
-      if (folder === "inbox") query = query.eq("recipient_id", userId);
-      else if (folder === "sent") query = query.eq("sender_id", userId);
-      else query = query.or(`recipient_id.eq.${userId},sender_id.eq.${userId}`);
-      if (searchQ) query = query.ilike("content", `%${searchQ}%`);
-      const retry = await query;
+      if (folder === "inbox") retryQuery = retryQuery.eq("recipient_id", userId);
+      else if (folder === "sent") retryQuery = retryQuery.eq("sender_id", userId);
+      else retryQuery = retryQuery.or(`recipient_id.eq.${userId},sender_id.eq.${userId}`);
+      if (searchQ) retryQuery = retryQuery.ilike("content", `%${searchQ}%`);
+      const retry = await retryQuery;
       rows = retry.data;
       error = retry.error;
     }
