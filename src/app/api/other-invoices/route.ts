@@ -11,7 +11,11 @@ export async function GET(request: NextRequest) {
   try {
     const { session, profile } = await requireAuth();
     const role = profile.role;
-    if (role !== "admin" && role !== "finance" && role !== "operations" && role !== "viewer") {
+    if (role === "admin" || role === "finance" || role === "operations") {
+      // allowed
+    } else if (role === "viewer" && profile.allowed_pages?.includes("other_invoices")) {
+      // allowed
+    } else {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -32,7 +36,7 @@ export async function GET(request: NextRequest) {
         created_at,
         storage_path,
         invoice_workflows(status, paid_date, payment_reference),
-        invoice_extracted_fields(beneficiary_name, invoice_number, invoice_date, gross_amount, extracted_currency, net_amount, vat_amount),
+        invoice_extracted_fields(beneficiary_name, invoice_number, invoice_date, gross_amount, extracted_currency, net_amount, vat_amount, account_number, sort_code),
         invoice_files(storage_path, file_name)
       `)
       .eq("invoice_type", "other")

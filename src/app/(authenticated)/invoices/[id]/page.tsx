@@ -29,6 +29,13 @@ export default async function InvoicePage({
 
   if (!invoice) notFound();
 
+  const invoiceType = (invoice as { invoice_type?: string }).invoice_type;
+  const isOtherInvoice = invoiceType === "other";
+  const canAccessOther =
+    isOtherInvoice &&
+    (["admin", "finance", "operations"].includes(profile.role) ||
+      (profile.role === "viewer" && profile.allowed_pages?.includes("other_invoices")));
+
   const wfCheck = Array.isArray(invoice.invoice_workflows)
     ? invoice.invoice_workflows[0]
     : invoice.invoice_workflows;
@@ -53,7 +60,7 @@ export default async function InvoicePage({
     return false;
   })();
 
-  if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !isProducer) {
+  if (!isOwner && !isAssigned && !isAdmin && !isOperations && !isFinance && !isProducer && !canAccessOther) {
     notFound();
   }
 

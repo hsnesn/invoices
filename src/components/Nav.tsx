@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { useTheme } from "@/components/ThemeProvider";
+import { NotificationDropdown } from "@/components/NotificationDropdown";
 
 export function Nav({ profile }: { profile: Profile }) {
   const router = useRouter();
@@ -42,6 +43,7 @@ export function Nav({ profile }: { profile: Profile }) {
             )}
           </button>
         )}
+        <NotificationDropdown profile={profile} />
         <Link
           href="/help"
           className="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"

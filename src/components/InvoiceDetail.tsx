@@ -201,6 +201,8 @@ export function InvoiceDetail({
     profile.role === "manager" &&
     status === "pending_manager" &&
     (extracted?.manager_confirmed === true || confirmBank);
+  const invoiceType = (invoice.invoice_type as string) ?? "";
+  const isOtherInvoice = invoiceType === "other";
   const serviceDescription = (invoice.service_description as string) || "";
   const producerMatch = serviceDescription
     .split("\n")
@@ -236,15 +238,17 @@ export function InvoiceDetail({
               </dd>
             </div>
             <div>
-              <dt className="text-slate-400">Service description</dt>
+              <dt className="text-slate-400">{isOtherInvoice ? "Purpose (what for)" : "Service description"}</dt>
               <dd className="text-slate-200">
                 {(invoice.service_description as string) || "—"}
               </dd>
             </div>
+            {!isOtherInvoice && (
             <div>
               <dt className="text-slate-400">Producer</dt>
               <dd className="text-slate-200">{producer || "—"}</dd>
             </div>
+            )}
             <div>
               <dt className="text-slate-400">Service dates</dt>
               <dd className="text-slate-200">

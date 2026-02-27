@@ -95,8 +95,12 @@ export async function requirePageAccess(pageKey: PageKey) {
     if (profile.allowed_pages?.includes("guest_contacts")) return { session, profile };
     redirect("/dashboard");
   }
-  if (profile.role === "viewer" && ["guest_invoices", "freelancer_invoices", "other_invoices", "reports"].includes(pageKey)) return { session, profile };
-  if (pageKey === "other_invoices" && ["admin", "finance", "operations"].includes(profile.role)) return { session, profile };
+  if (profile.role === "viewer" && ["guest_invoices", "freelancer_invoices", "reports"].includes(pageKey)) return { session, profile };
+  if (pageKey === "other_invoices") {
+    if (["admin", "finance", "operations"].includes(profile.role)) return { session, profile };
+    if (profile.role === "viewer" && profile.allowed_pages?.includes("other_invoices")) return { session, profile };
+    redirect("/dashboard");
+  }
   const pages = profile.allowed_pages;
   if (!pages || pages.length === 0) return { session, profile };
   if (pages.includes(pageKey)) return { session, profile };

@@ -40,7 +40,7 @@ export async function GET(
       supabaseAdmin,
       invoiceId,
       session.user.id,
-      { role: profile.role, department_id: profile.department_id, program_ids: profile.program_ids, full_name: profile.full_name ?? null }
+      { role: profile.role, department_id: profile.department_id, program_ids: profile.program_ids, full_name: profile.full_name ?? null, allowed_pages: profile.allowed_pages ?? undefined }
     );
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -10,7 +10,7 @@ type Row = {
   created_at: string;
   storage_path?: string | null;
   invoice_workflows: { status?: string; paid_date?: string | null; payment_reference?: string | null }[] | { status?: string; paid_date?: string | null; payment_reference?: string | null };
-  invoice_extracted_fields: { beneficiary_name?: string | null; invoice_number?: string | null; invoice_date?: string | null; gross_amount?: number | null; extracted_currency?: string | null }[] | { beneficiary_name?: string | null; invoice_number?: string | null; invoice_date?: string | null; gross_amount?: number | null; extracted_currency?: string | null } | null;
+  invoice_extracted_fields: { beneficiary_name?: string | null; invoice_number?: string | null; invoice_date?: string | null; gross_amount?: number | null; extracted_currency?: string | null; account_number?: string | null; sort_code?: string | null }[] | { beneficiary_name?: string | null; invoice_number?: string | null; invoice_date?: string | null; gross_amount?: number | null; extracted_currency?: string | null; account_number?: string | null; sort_code?: string | null } | null;
   invoice_files?: { storage_path: string; file_name: string }[] | null;
 };
 
@@ -150,6 +150,51 @@ export default function OtherInvoicesPage() {
   };
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deletingId, setDeletingId] = useState<string | "bulk" | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this invoice? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Deleted");
+        fetchList();
+      } else {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error ?? "Delete failed");
+      }
+    } catch {
+      toast.error("Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} invoice(s)? This cannot be undone.`)) return;
+    setDeletingId("bulk");
+    try {
+      let ok = 0;
+      let fail = 0;
+      for (const id of ids) {
+        const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+        if (res.ok) ok++;
+        else fail++;
+      }
+      if (ok > 0) toast.success(`${ok} deleted`);
+      if (fail > 0) toast.error(`${fail} failed`);
+      setSelectedIds(new Set());
+      fetchList();
+    } catch {
+      toast.error("Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const readyIds = rows
     .filter((r) => {
       const wf = unwrap(r.invoice_workflows);
@@ -184,7 +229,7 @@ export default function OtherInvoicesPage() {
       </div>
 
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        Upload any invoice (PDF, DOCX, XLSX, etc.). AI extracts beneficiary, amount, date. Mark as paid when done.
+        Upload any invoice (PDF, DOCX, XLSX, etc.). AI extracts beneficiary, amount, date, invoice number, bank details. View, mark as paid, or delete.
       </p>
 
       {/* Filters */}
@@ -241,17 +286,26 @@ export default function OtherInvoicesPage() {
       </div>
 
       {/* Bulk actions */}
-      {selectedReady.length > 0 && (
-        <div className="rounded-lg border-2 border-emerald-500 bg-emerald-50 px-4 py-3 dark:bg-emerald-950/30 dark:border-emerald-600">
-          <span className="font-medium text-emerald-800 dark:text-emerald-200">
-            {selectedReady.length} selected (ready for payment)
+      {selectedIds.size > 0 && (
+        <div className="rounded-lg border-2 border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900/50">
+          <span className="font-medium text-gray-800 dark:text-gray-200">
+            {selectedIds.size} selected
           </span>
+          {selectedReady.length > 0 && (
+            <button
+              onClick={() => bulkMarkPaid(selectedReady)}
+              disabled={actionId === "bulk"}
+              className="ml-4 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Mark as paid
+            </button>
+          )}
           <button
-            onClick={() => bulkMarkPaid(selectedReady)}
-            disabled={actionId === "bulk"}
-            className="ml-4 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            onClick={() => void bulkDelete()}
+            disabled={deletingId === "bulk"}
+            className="ml-3 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
           >
-            Mark as paid
+            Delete
           </button>
         </div>
       )}
@@ -278,7 +332,10 @@ export default function OtherInvoicesPage() {
                     />
                   </th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Invoice / File</th>
+                  <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Invoice #</th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Beneficiary</th>
+                  <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Purpose</th>
+                  <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Bank details</th>
                   <th className="px-4 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Amount</th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Date</th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Status</th>
@@ -288,35 +345,37 @@ export default function OtherInvoicesPage() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {rows.map((r) => {
                   const wf = unwrap(r.invoice_workflows) as { status?: string; paid_date?: string | null } | null;
-                  const ext = unwrap(r.invoice_extracted_fields) as { beneficiary_name?: string | null; invoice_number?: string | null; invoice_date?: string | null; gross_amount?: number | null; extracted_currency?: string | null } | null;
+                  const ext = unwrap(r.invoice_extracted_fields) as { beneficiary_name?: string | null; invoice_number?: string | null; invoice_date?: string | null; gross_amount?: number | null; extracted_currency?: string | null; account_number?: string | null; sort_code?: string | null } | null;
                   const files = r.invoice_files ?? [];
                   const fileName = Array.isArray(files) && files[0] ? (files[0] as { file_name: string }).file_name : "—";
                   const status = wf?.status ?? "—";
                   const isReady = status === "ready_for_payment";
+                  const bankDetails = [ext?.sort_code, ext?.account_number].filter(Boolean).join(" / ") || "—";
                   return (
                     <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                       <td className="px-4 py-2">
-                        {isReady && (
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(r.id)}
-                            onChange={() => {
-                              setSelectedIds((prev) => {
-                                const n = new Set(prev);
-                                if (n.has(r.id)) n.delete(r.id);
-                                else n.add(r.id);
-                                return n;
-                              });
-                            }}
-                          />
-                        )}
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => {
+                            setSelectedIds((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(r.id)) n.delete(r.id);
+                              else n.add(r.id);
+                              return n;
+                            });
+                          }}
+                        />
                       </td>
                       <td className="px-4 py-2">
-                        <Link href={`/invoices/${r.id}`} className="text-sky-600 hover:underline dark:text-sky-400">
-                          {ext?.invoice_number || fileName}
+                        <Link href={`/invoices/${r.id}`} className="text-sky-600 hover:underline dark:text-sky-400" title="View invoice">
+                          {fileName}
                         </Link>
                       </td>
+                      <td className="px-4 py-2 font-mono text-xs">{ext?.invoice_number ?? "—"}</td>
                       <td className="px-4 py-2">{ext?.beneficiary_name ?? "—"}</td>
+                      <td className="px-4 py-2 max-w-[180px] truncate text-gray-600 dark:text-gray-400" title={r.service_description ?? undefined}>{r.service_description ?? "—"}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{bankDetails}</td>
                       <td className="px-4 py-2 text-right font-medium">{fmtAmount(ext?.gross_amount, ext?.extracted_currency)}</td>
                       <td className="px-4 py-2">{ext?.invoice_date ?? "—"}</td>
                       <td className="px-4 py-2">
@@ -332,7 +391,7 @@ export default function OtherInvoicesPage() {
                           {status === "paid" ? "Paid" : status === "ready_for_payment" ? "Pending" : status}
                         </span>
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-4 py-2 flex flex-wrap items-center gap-2">
                         {isReady && (
                           <button
                             onClick={() => markPaid(r.id)}
@@ -342,6 +401,14 @@ export default function OtherInvoicesPage() {
                             Mark paid
                           </button>
                         )}
+                        <button
+                          onClick={() => void handleDelete(r.id)}
+                          disabled={deletingId === r.id}
+                          className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                          title="Delete"
+                        >
+                          Delete
+                        </button>
                         {status === "paid" && wf?.paid_date && (
                           <span className="text-xs text-gray-500">Paid {wf.paid_date}</span>
                         )}

@@ -29,12 +29,12 @@ export async function canAccessInvoice(
   supabase: SupabaseAdmin,
   invoiceId: string,
   userId: string,
-  overrideProfile?: { role: string; department_id: string | null; program_ids: string[] | null; full_name?: string | null }
+  overrideProfile?: { role: string; department_id: string | null; program_ids: string[] | null; full_name?: string | null; allowed_pages?: string[] | null }
 ): Promise<boolean> {
   const profile = overrideProfile ?? await (async () => {
     const { data } = await supabase
       .from("profiles")
-      .select("role, department_id, program_ids, full_name")
+      .select("role, department_id, program_ids, full_name, allowed_pages")
       .eq("id", userId)
       .eq("is_active", true)
       .single();
@@ -42,7 +42,13 @@ export async function canAccessInvoice(
   })();
 
   if (!profile) return false;
-  if (profile.role === "admin" || profile.role === "operations" || profile.role === "viewer") return true;
+  if (profile.role === "admin" || profile.role === "operations") return true;
+  if (profile.role === "viewer") {
+    const { data: inv } = await supabase.from("invoices").select("invoice_type").eq("id", invoiceId).single();
+    const isOther = (inv as { invoice_type?: string } | null)?.invoice_type === "other";
+    if (isOther && !(profile.allowed_pages ?? []).includes("other_invoices")) return false;
+    return true;
+  }
 
   const { data: invoice } = await supabase
     .from("invoices")

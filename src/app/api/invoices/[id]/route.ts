@@ -371,7 +371,7 @@ export async function DELETE(
 
     const { data: invoice } = await supabase
       .from("invoices")
-      .select("id, storage_path, submitter_user_id")
+      .select("id, storage_path, submitter_user_id, invoice_type")
       .eq("id", invoiceId)
       .single();
 
@@ -380,7 +380,10 @@ export async function DELETE(
     }
 
     const isAdmin = profile.role === "admin";
+    const isFinance = profile.role === "finance";
+    const isOperations = profile.role === "operations";
     const isSubmitter = invoice.submitter_user_id === session.user.id;
+    const isOtherInvoice = (invoice as { invoice_type?: string }).invoice_type === "other";
     const { data: wf } = await supabase
       .from("invoice_workflows")
       .select("status")
@@ -390,6 +393,7 @@ export async function DELETE(
 
     const canDelete =
       isAdmin ||
+      (isOtherInvoice && (isFinance || isOperations)) ||
       (isSubmitter && PENDING_STATUSES_FOR_SUBMITTER_DELETE.includes(status));
 
     if (!canDelete) {

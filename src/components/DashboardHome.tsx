@@ -174,7 +174,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.viewerHidden && isViewer) return false;
     if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
-    if (isViewer) return ["guest_invoices", "freelancer_invoices", "other_invoices", "reports"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (isViewer) return ["guest_invoices", "freelancer_invoices", "reports"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
     if (isOperations) return ["guest_invoices", "freelancer_invoices", "other_invoices", "reports", "salaries", "setup"].includes(p.pageKey);
     if (profile.role === "finance") return ["guest_invoices", "freelancer_invoices", "other_invoices", "reports", "salaries"].includes(p.pageKey);
     if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));
