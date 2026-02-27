@@ -112,6 +112,7 @@ export default async function GuestContactsPage({
     affiliated_orgs?: string[];
     prohibited_topics?: string[];
     conflict_of_interest_notes?: string | null;
+    last_invited_at?: string | null;
   };
   const rows: Row[] = [];
 
@@ -232,7 +233,7 @@ export default async function GuestContactsPage({
     const key = normalizeKey(gc.guest_name ?? "");
     if (!key) continue;
     const gcId = (gc as { id?: string }).id ?? null;
-    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[]; title_category?: string | null; topic_category?: string | null; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null; organization?: string | null; bio?: string | null; photo_url?: string | null };
+    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[]; title_category?: string | null; topic_category?: string | null; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null; organization?: string | null; bio?: string | null; photo_url?: string | null; last_invited_at?: string | null };
     const matchKey = findMatchingKey(key);
     const existing = matchKey ? seen.get(matchKey) : undefined;
     const aiInfo = gcData.ai_contact_info ?? null;
@@ -262,6 +263,7 @@ export default async function GuestContactsPage({
       affiliated_orgs: gcData.affiliated_orgs ?? existing?.affiliated_orgs ?? [],
       prohibited_topics: gcData.prohibited_topics ?? existing?.prohibited_topics ?? [],
       conflict_of_interest_notes: gcData.conflict_of_interest_notes ?? existing?.conflict_of_interest_notes ?? null,
+      last_invited_at: gcData.last_invited_at ?? existing?.last_invited_at ?? null,
     };
     if (!existing) {
       seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined, title_category: gcData.title_category ?? null, topic_category: gcData.topic_category ?? null, appearance_count: 0 });

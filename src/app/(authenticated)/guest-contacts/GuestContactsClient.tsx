@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { toUserFriendlyError } from "@/lib/error-messages";
 import { toast } from "sonner";
 import { PHONE_COUNTRIES, DEFAULT_PHONE_COUNTRY, inferPhoneCountry } from "@/lib/phone-country-codes";
+import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
 
 type FilterParams = {
   search?: string;
@@ -50,6 +51,7 @@ type Contact = {
   affiliated_orgs?: string[];
   prohibited_topics?: string[];
   conflict_of_interest_notes?: string | null;
+  last_invited_at?: string | null;
 };
 
 type Appearance = {
@@ -61,10 +63,11 @@ type Appearance = {
   invoice_id: string;
 };
 
-const COLUMN_IDS = ["guest_name", "last_appearance", "usage", "department", "programme", "title", "organization", "topic", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
+const COLUMN_IDS = ["guest_name", "last_appearance", "last_invited", "usage", "department", "programme", "title", "organization", "topic", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
 const COLUMN_LABELS: Record<string, string> = {
   guest_name: "Guest Name",
   last_appearance: "Last appearance",
+  last_invited: "Last invited",
   usage: "Usage",
   department: "Dept",
   programme: "Programme",
@@ -722,6 +725,7 @@ export function GuestContactsClient({
     const headerMap: Record<string, (c: Contact) => string> = {
       guest_name: (c) => c.guest_name,
       last_appearance: (c) => formatDate(c.last_appearance_date || c.created_at || null),
+      last_invited: (c) => formatDate(c.last_invited_at || null),
       usage: (c) => String(c.appearance_count ?? 0),
       department: (c) => c.department_name ?? "",
       programme: (c) => c.program_name ?? "",
@@ -1252,6 +1256,9 @@ export function GuestContactsClient({
               {visibleColumns.has("last_appearance") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Last appearance</th>
               )}
+              {visibleColumns.has("last_invited") && (
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Last invited</th>
+              )}
               {visibleColumns.has("usage") && (
                 <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Usage</th>
               )}
@@ -1341,6 +1348,11 @@ export function GuestContactsClient({
                   {visibleColumns.has("last_appearance") && (
                     <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
                       {(c.last_appearance_date || c.created_at) ? new Date(c.last_appearance_date || c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    </td>
+                  )}
+                  {visibleColumns.has("last_invited") && (
+                    <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">
+                      {c.last_invited_at ? new Date(c.last_invited_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
                     </td>
                   )}
                   {visibleColumns.has("usage") && (
@@ -1567,12 +1579,15 @@ export function GuestContactsClient({
                 {(c.department_name || c.program_name) && (
                   <p className="text-xs text-gray-500">{[c.department_name, c.program_name].filter(Boolean).join(" • ")}</p>
                 )}
-                {((c.appearance_count ?? 0) > 0 || c.last_appearance_date || c.created_at) && (
+                {((c.appearance_count ?? 0) > 0 || c.last_appearance_date || c.created_at || c.last_invited_at) && (
                   <p className="text-xs text-gray-500">
                     {(c.appearance_count ?? 0) > 0 && <span>{c.appearance_count} appearance(s)</span>}
                     {(c.appearance_count ?? 0) > 0 && (c.last_appearance_date || c.created_at) && " • "}
                     {(c.last_appearance_date || c.created_at) && (
                       <span>Last: {new Date(c.last_appearance_date || c.created_at).toLocaleDateString()}</span>
+                    )}
+                    {c.last_invited_at && (
+                      <span> • Invited: {new Date(c.last_invited_at).toLocaleDateString()}</span>
                     )}
                   </p>
                 )}
@@ -1702,6 +1717,7 @@ export function GuestContactsClient({
         <BulkEmailModal
           contacts={filteredContacts.filter((c) => selectedGuests.has(c.guest_name))}
           programs={programs}
+          topics={topics}
           onClose={() => setBulkEmailModal(false)}
           onSent={() => { setBulkEmailModal(false); window.location.reload(); }}
         />
@@ -1868,7 +1884,7 @@ function MergeModal({
 type Producer = { id: string; full_name: string; email: string | null };
 type Program = { id: string; name: string };
 
-function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: { contacts: Contact[]; programs: string[]; onClose: () => void; onSent: () => void }) {
+function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, onClose, onSent }: { contacts: Contact[]; programs: string[]; topics: string[]; onClose: () => void; onSent: () => void }) {
   const [mode, setMode] = useState<"invite" | "custom">("invite");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -1881,8 +1897,25 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
   const [recordTime, setRecordTime] = useState("");
   const [format, setFormat] = useState<"remote" | "studio">("remote");
   const [studioAddress, setStudioAddress] = useState("TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ");
+  const [includeProgramDescription, setIncludeProgramDescription] = useState(false);
+  const [attachCalendar, setAttachCalendar] = useState(true);
+  const [bccProducer, setBccProducer] = useState(true);
+  const [customGreetings, setCustomGreetings] = useState<Record<string, string>>({});
+  const [showPreview, setShowPreview] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [sending, setSending] = useState(false);
   const withEmail = contacts.filter((c) => c.email || c.ai_contact_info?.email);
+
+  const INVITE_TEMPLATES_KEY = "guest-invite-templates";
+  const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; programName: string; topic: string; format: string; studioAddress: string }>>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const s = localStorage.getItem(INVITE_TEMPLATES_KEY);
+      return s ? JSON.parse(s) : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     if (mode !== "invite") return;
@@ -1910,8 +1943,15 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
 
   const selectedProducer = producers.find((p) => p.id === producerId);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const recentlyInvited = withEmail.filter((c) => {
+    const invited = c.last_invited_at;
+    if (!invited) return false;
+    const days = (Date.now() - new Date(invited).getTime()) / (24 * 60 * 60 * 1000);
+    return days < 7;
+  });
+
+  const handleSend = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (withEmail.length === 0) {
       toast.error("No selected contacts have email addresses");
       return;
@@ -1928,12 +1968,17 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
         use_template: true,
         producer_name: selectedProducer.full_name,
         producer_email: selectedProducer.email,
+        producer_user_id: selectedProducer.id,
         program_name: programName.trim() || "our program",
         topic: topic.trim() || "the scheduled topic",
         record_date: recordDate.trim() || "TBD",
         record_time: recordTime.trim() || "TBD",
         format,
         studio_address: format === "studio" ? studioAddress.trim() : "",
+        include_program_description: includeProgramDescription,
+        attach_calendar: attachCalendar,
+        bcc_producer: bccProducer,
+        custom_greetings: Object.keys(customGreetings).length ? customGreetings : undefined,
       });
     } else {
       if (!subject.trim() || !message.trim()) {
@@ -1942,6 +1987,11 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
       }
       Object.assign(payload, { subject: subject.trim(), message: message.trim() });
     }
+    if (mode === "invite" && !showConfirm) {
+      setShowConfirm(true);
+      return;
+    }
+    setShowConfirm(false);
     setSending(true);
     try {
       const res = await fetch("/api/guest-contacts/bulk-email", {
@@ -1967,8 +2017,8 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
   const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800 my-4" onClick={(e) => e.stopPropagation()}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Bulk email</h2>
         <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
           {withEmail.length} of {contacts.length} selected have email. {mode === "invite" ? "Invitation template will personalize each email." : "Email will be sent to each recipient."}
@@ -2007,19 +2057,40 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
                   type="text"
                   value={programName}
                   onChange={(e) => setProgramName(e.target.value)}
-                  placeholder="e.g. News Hour"
+                  placeholder="e.g. Newshour, Roundtable"
                   list="program-list"
                   className={inputCls}
                 />
                 <datalist id="program-list">
-                  {Array.from(new Set([...programs.map((p) => p.name), ...programNames])).map((n) => (
+                  {Array.from(new Set([...programs.map((p) => p.name), ...programNames, ...Object.keys(PROGRAM_DESCRIPTIONS)])).map((n) => (
                     <option key={n} value={n} />
                   ))}
                 </datalist>
+                {programName.trim() && getProgramDescription(programName) && (
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 italic">
+                    {getProgramDescription(programName)}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Topic</label>
-                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Foreign Policy" className={inputCls} />
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="e.g. Foreign Policy, News"
+                  list="topic-list"
+                  className={inputCls}
+                />
+                <datalist id="topic-list">
+                  <option value="News" />
+                  <option value="Foreign Policy" />
+                  <option value="Domestic Politics" />
+                  <option value="Security" />
+                  {topicNames.filter((t) => !["News", "Foreign Policy", "Domestic Politics", "Security"].includes(t)).map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2050,6 +2121,127 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
                   <textarea value={studioAddress} onChange={(e) => setStudioAddress(e.target.value)} placeholder="e.g. 1 Great Cumberland Place, London W1H 7AL" rows={2} className={inputCls} />
                 </div>
               )}
+              <div className="space-y-2">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" checked={includeProgramDescription} onChange={(e) => setIncludeProgramDescription(e.target.checked)} className="h-4 w-4 rounded text-sky-600" />
+                  <span className="text-sm">Include program description in email</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" checked={attachCalendar} onChange={(e) => setAttachCalendar(e.target.checked)} className="h-4 w-4 rounded text-sky-600" />
+                  <span className="text-sm">Attach calendar (.ics) with recording date/time</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" checked={bccProducer} onChange={(e) => setBccProducer(e.target.checked)} className="h-4 w-4 rounded text-sky-600" />
+                  <span className="text-sm">BCC producer (copy of each email)</span>
+                </label>
+              </div>
+              {savedTemplates.length > 0 && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Load template</label>
+                  <select
+                    className={inputCls}
+                    onChange={(e) => {
+                      const t = savedTemplates[Number(e.target.value)];
+                      if (t) {
+                        setProgramName(t.programName);
+                        setTopic(t.topic);
+                        setFormat(t.format as "remote" | "studio");
+                        setStudioAddress(t.studioAddress);
+                      }
+                    }}
+                  >
+                    <option value="">— Select saved template —</option>
+                    {savedTemplates.map((t, i) => (
+                      <option key={i} value={i}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = prompt("Template name (e.g. Roundtable Studio)?");
+                    if (name?.trim()) {
+                      const next = [...savedTemplates, { name: name.trim(), programName, topic, format, studioAddress }];
+                      setSavedTemplates(next);
+                      try {
+                        localStorage.setItem(INVITE_TEMPLATES_KEY, JSON.stringify(next));
+                      } catch {}
+                      toast.success("Template saved");
+                    }
+                  }}
+                  className="rounded-lg border px-3 py-1.5 text-sm"
+                >
+                  Save as template
+                </button>
+              </div>
+              {recentlyInvited.length > 0 && (
+                <p className="text-amber-600 text-sm dark:text-amber-400">
+                  Note: {recentlyInvited.length} guest(s) were invited in the last 7 days.
+                </p>
+              )}
+              <details className="group">
+                <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">Custom greetings (optional)</summary>
+                <div className="mt-2 space-y-1.5 max-h-32 overflow-y-auto">
+                  {withEmail.map((c) => (
+                    <div key={c.guest_name} className="flex items-center gap-2">
+                      <span className="shrink-0 w-24 truncate text-xs text-gray-500">{c.guest_name}</span>
+                      <input
+                        type="text"
+                        value={customGreetings[c.guest_name] ?? ""}
+                        onChange={(e) => setCustomGreetings((prev) => ({ ...prev, [c.guest_name]: e.target.value }))}
+                        placeholder="e.g. Dear Professor Smith"
+                        className="flex-1 rounded border px-2 py-1 text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </details>
+              {showPreview && withEmail[0] && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900">
+                  <p className="mb-2 font-medium">Preview (sample for {withEmail[0].guest_name}):</p>
+                  <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                    {`Subject: TRT World – Invitation to the program: ${programName.trim() || "our program"}
+
+${customGreetings[withEmail[0].guest_name] || (withEmail[0].guest_name.split(/\s+/).length >= 2 ? `Dear Mr./Ms. ${withEmail[0].guest_name.split(/\s+/).pop()}` : `Dear ${withEmail[0].guest_name}`)},
+
+I hope this message finds you well.
+
+I am writing to invite you to participate in ${programName.trim() || "our program"}, which will be broadcast on TRT World and will focus on ${topic.trim() || "the scheduled topic"}.
+
+The recording is scheduled for ${recordDate.trim() || "TBD"} at ${recordTime.trim() || "TBD"}.
+
+${format === "remote" ? "The recording will be conducted remotely via Skype or Zoom." : `The recording will take place in our studio. The address is: ${studioAddress || "—"}`}
+
+We can arrange to pick you up from your preferred location and drop you back after the recording.
+
+Would you be interested in joining us for this program? Please reply to this email to confirm your participation.
+
+Best regards,
+${selectedProducer?.full_name || "Producer"}`}
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowPreview((p) => !p)} className="rounded-lg border px-3 py-1.5 text-sm">
+                  {showPreview ? "Hide preview" : "Preview"}
+                </button>
+              </div>
+              {showConfirm && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                  <p className="mb-2 font-medium text-amber-800 dark:text-amber-200">
+                    Send invitation to {withEmail.length} guest(s)?
+                  </p>
+                  <p className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+                    Each will receive a personalized email. Guests will be saved to the contact list with program topic.
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setShowConfirm(false)} className="rounded-lg border px-4 py-2 text-sm">Back</button>
+                    <button type="button" onClick={() => handleSend()} className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white">Confirm & Send</button>
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Each guest will receive a personalized email with polite greeting, program details, format (remote/studio), pick-up/drop-off offer, and a request to confirm participation. Replies go to the producer.
               </p>
@@ -2068,9 +2260,11 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
           )}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Cancel</button>
-            <button type="submit" disabled={sending || withEmail.length === 0} className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50">
-              {sending ? "Sending..." : "Send"}
-            </button>
+            {!showConfirm && (
+              <button type="submit" disabled={sending || withEmail.length === 0} className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50">
+                {sending ? "Sending..." : "Send"}
+              </button>
+            )}
           </div>
         </form>
       </div>

@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import type { PageKey } from "@/lib/types";
 import { sendEmail } from "@/lib/email";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { generateInviteIcs } from "@/lib/ics-generator";
+import { getProgramDescription } from "@/lib/program-descriptions";
+
+const BATCH_SIZE = 5;
+const BATCH_DELAY_MS = 500;
 
 function escapeHtml(s: string): string {
   return s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Build polite greeting from guest name (e.g. "Dear Mr. Smith" or "Dear John") */
 function politeGreeting(guestName: string): string {
   const name = guestName.trim();
   if (!name) return "Dear Sir or Madam";
@@ -19,7 +24,6 @@ function politeGreeting(guestName: string): string {
   return `Dear ${name}`;
 }
 
-/** Build guest invite template HTML for a single recipient */
 function buildInviteHtml(params: {
   guestName: string;
   producerName: string;
@@ -29,8 +33,10 @@ function buildInviteHtml(params: {
   recordTime: string;
   format: "remote" | "studio";
   studioAddress: string;
+  programDescription?: string | null;
+  customGreeting?: string | null;
 }): string {
-  const greeting = politeGreeting(params.guestName);
+  const greeting = params.customGreeting?.trim() || politeGreeting(params.guestName);
   const safe = {
     greeting: escapeHtml(greeting),
     producerName: escapeHtml(params.producerName),
@@ -39,16 +45,21 @@ function buildInviteHtml(params: {
     recordDate: escapeHtml(params.recordDate),
     recordTime: escapeHtml(params.recordTime),
     studioAddress: escapeHtml(params.studioAddress),
+    programDescription: params.programDescription ? escapeHtml(params.programDescription) : null,
   };
   const formatText =
     params.format === "remote"
       ? "The recording will be conducted remotely via Skype or Zoom."
       : `The recording will take place in our studio. The address is: ${safe.studioAddress || "—"}`;
+  const progDescBlock = safe.programDescription
+    ? `<p><em>${safe.programDescription}</em></p>`
+    : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#333">
 <div style="max-width:600px;margin:0 auto;padding:20px">
 <p>${safe.greeting},</p>
 <p>I hope this message finds you well.</p>
 <p>I am writing to invite you to participate in <strong>${safe.programName}</strong>, which will be broadcast on TRT World and will focus on ${safe.topic}.</p>
+${progDescBlock}
 <p>The recording is scheduled for <strong>${safe.recordDate}</strong> at <strong>${safe.recordTime}</strong>.</p>
 <p>${formatText}</p>
 <p>We can arrange to pick you up from your preferred location and drop you back after the recording.</p>
@@ -57,9 +68,13 @@ function buildInviteHtml(params: {
 </div></body></html>`;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { profile } = await requireAuth();
+    const { session, profile } = await requireAuth();
     const canAccess =
       profile.role === "admin" ||
       (Array.isArray(profile.allowed_pages) && (profile.allowed_pages as PageKey[]).includes("guest_contacts"));
@@ -71,12 +86,17 @@ export async function POST(request: NextRequest) {
       use_template?: boolean;
       producer_name?: string;
       producer_email?: string;
+      producer_user_id?: string;
       program_name?: string;
       topic?: string;
       record_date?: string;
       record_time?: string;
       format?: "remote" | "studio";
       studio_address?: string;
+      include_program_description?: boolean;
+      attach_calendar?: boolean;
+      bcc_producer?: boolean;
+      custom_greetings?: Record<string, string>;
       contacts?: { guest_name: string; email?: string | null }[];
       subject?: string;
       message?: string;
@@ -93,16 +113,26 @@ export async function POST(request: NextRequest) {
     if (body.use_template) {
       const producerName = body.producer_name?.trim() || "The Producer";
       const producerEmail = body.producer_email?.trim();
+      const producerUserId = body.producer_user_id?.trim();
       const programName = body.program_name?.trim() || "our program";
       const topic = body.topic?.trim() || "the scheduled topic";
       const recordDate = body.record_date?.trim() || "TBD";
       const recordTime = body.record_time?.trim() || "TBD";
       const format = body.format === "studio" ? "studio" : "remote";
       const studioAddress = body.studio_address?.trim() || "";
+      const includeProgramDescription = !!body.include_program_description;
+      const attachCalendar = body.attach_calendar !== false && recordDate !== "TBD" && recordTime !== "TBD";
+      const bccProducer = body.bcc_producer !== false && !!producerEmail;
+      const customGreetings = body.custom_greetings ?? {};
 
-      const subjectBase = `Invitation: ${programName}`;
+      const programDescription = includeProgramDescription ? getProgramDescription(programName) : null;
+
+      const subjectBase = `TRT World – Invitation to the program: ${programName}`;
+      const supabase = createAdminClient();
       let sent = 0;
-      for (const c of contacts) {
+
+      for (let i = 0; i < contacts.length; i++) {
+        const c = contacts[i];
         const html = buildInviteHtml({
           guestName: c.guest_name || "Guest",
           producerName,
@@ -112,17 +142,83 @@ export async function POST(request: NextRequest) {
           recordTime,
           format,
           studioAddress,
+          programDescription,
+          customGreeting: customGreetings[c.guest_name],
         });
+
+        const attachments: { filename: string; content: Buffer | string }[] = [];
+        if (attachCalendar) {
+          const ics = generateInviteIcs({ programName, topic, recordDate, recordTime, studioAddress: format === "studio" ? studioAddress : undefined });
+          attachments.push({ filename: "invitation.ics", content: ics });
+        }
+
         const result = await sendEmail({
           to: c.email!,
           subject: subjectBase,
           html,
           replyTo: producerEmail || undefined,
+          bcc: bccProducer ? [producerEmail!] : undefined,
+          attachments: attachments.length ? attachments : undefined,
         });
-        if (result.success) sent++;
+
+        if (result.success) {
+          sent++;
+          const now = new Date().toISOString();
+          const guestName = c.guest_name || "Guest";
+          const guestEmail = c.email!;
+
+          const nameNorm = guestName.toLowerCase().trim().replace(/\s+/g, " ");
+          const { data: existing } = await supabase
+            .from("guest_contacts")
+            .select("id")
+            .eq("guest_name_key", nameNorm)
+            .maybeSingle();
+
+          const updateData = {
+            email: guestEmail,
+            topic: topic,
+            primary_program: programName,
+            last_invited_at: now,
+            updated_at: now,
+            source: "invitation",
+          };
+
+          let contactId: string | null = existing?.id ?? null;
+          if (existing?.id) {
+            await supabase.from("guest_contacts").update(updateData).eq("id", existing.id);
+          } else {
+            const { data: inserted } = await supabase
+              .from("guest_contacts")
+              .insert({ guest_name: guestName, ...updateData })
+              .select("id")
+              .single();
+            contactId = inserted?.id ?? null;
+          }
+
+          await supabase.from("guest_invitations").insert({
+            guest_name: guestName,
+            guest_email: guestEmail,
+            guest_contact_id: contactId,
+            program_name: programName,
+            topic,
+            record_date: recordDate,
+            record_time: recordTime,
+            format,
+            studio_address: format === "studio" ? studioAddress : null,
+            producer_user_id: producerUserId || null,
+            producer_name: producerName,
+            producer_email: producerEmail || null,
+            sent_at: now,
+          });
+        }
+
+        if (i < contacts.length - 1 && (i + 1) % BATCH_SIZE === 0) {
+          await sleep(BATCH_DELAY_MS);
+        }
       }
+
       return NextResponse.json({
-        message: `Invitation sent to ${sent} recipient(s).`,
+        message: `Invitation sent to ${sent} recipient(s). Guests saved to contact list.`,
         count: sent,
       });
     }

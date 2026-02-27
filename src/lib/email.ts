@@ -168,6 +168,8 @@ export async function sendEmail(params: {
   subject: string;
   html: string;
   replyTo?: string | string[];
+  bcc?: string | string[];
+  attachments?: { filename: string; content: Buffer | string }[];
 }) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY not set - skipping email");
@@ -176,13 +178,29 @@ export async function sendEmail(params: {
   const to = Array.isArray(params.to) ? params.to : [params.to];
   const resend = getResend();
   if (!resend) return { success: false, error: "Email not configured" };
-  const { data, error } = await resend.emails.send({
+  const sendParams: {
+    from: string;
+    to: string[];
+    subject: string;
+    html: string;
+    replyTo?: string | string[];
+    bcc?: string | string[];
+    attachments?: { filename: string; content: Buffer }[];
+  } = {
     from: FROM_EMAIL,
     to,
     subject: params.subject,
     html: params.html,
     replyTo: params.replyTo,
-  });
+    bcc: params.bcc,
+  };
+  if (params.attachments?.length) {
+    sendParams.attachments = params.attachments.map((a) => ({
+      filename: a.filename,
+      content: Buffer.isBuffer(a.content) ? a.content : Buffer.from(a.content, "utf-8"),
+    }));
+  }
+  const { data, error } = await resend.emails.send(sendParams);
   if (error) { console.error("Resend error:", error); return { success: false, error }; }
   return { success: true, data };
 }
