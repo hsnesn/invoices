@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { mutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { invoiceListUrl } from "@/lib/invoice-list-url";
 import { parseMentions } from "@/lib/mention-utils";
@@ -376,6 +377,7 @@ export default function MessagesPage() {
       await fetch(`/api/messages/${id}/read`, { method: "PATCH" });
       fetchAllMessages(messageSearch);
       if (selectedUserId) fetchConversation(selectedUserId);
+      void mutate("/api/dashboard/my-tasks");
     } catch {
       /* ignore */
     }
