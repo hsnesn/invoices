@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { toUserFriendlyError } from "@/lib/error-messages";
 
 type Contact = {
   guest_name: string;
@@ -54,20 +55,31 @@ export function GuestContactsClient({ contacts, isAdmin }: { contacts: Contact[]
     setAppearances([]);
     setAssessmentLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
       const res = await fetch("/api/guest-contacts/assessment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guest_name: guestName }),
+        signal: controller.signal,
       });
-      const data = await res.json();
+      clearTimeout(timeoutId);
+      const text = await res.text();
+      let data: { assessment?: string; appearances?: Appearance[]; error?: string };
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        setAssessment(res.ok ? "Invalid response." : `Request failed (${res.status}).`);
+        return;
+      }
       if (res.ok) {
         setAssessment(data.assessment ?? "No assessment available.");
         setAppearances(data.appearances ?? []);
       } else {
         setAssessment(data.error ?? "Failed to load assessment.");
       }
-    } catch {
-      setAssessment("Request failed.");
+    } catch (e) {
+      setAssessment(toUserFriendlyError(e));
     } finally {
       setAssessmentLoading(false);
     }

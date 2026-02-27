@@ -4,6 +4,8 @@ import { requireAuth } from "@/lib/auth";
 import OpenAI from "openai";
 import type { PageKey } from "@/lib/types";
 
+export const maxDuration = 60;
+
 function parseServiceDesc(desc: string | null | undefined): Record<string, string> {
   if (!desc?.trim()) return {};
   const out: Record<string, string> = {};
@@ -62,6 +64,8 @@ export async function POST(request: NextRequest) {
 
     const guestKey = guestName.toLowerCase().trim();
     const appearances: { topic: string; date: string; programme: string; department: string; amount: string; invoice_id: string }[] = [];
+    type InvItem = NonNullable<typeof invoices>[number];
+    const pending: { inv: InvItem; meta: Record<string, string>; gen: { guest_name?: string | null; title?: string | null; appearances?: { topic: string; date: string; amount: number }[] } | null; title: string | null; topic: string | null; tx1: string | null; deptId: string | null; progId: string | null; amount: string }[] = [];
 
     for (const inv of invoices ?? []) {
       const meta = parseServiceDesc(inv.service_description);
@@ -85,36 +89,57 @@ export async function POST(request: NextRequest) {
       const title = gen?.title?.trim() || fromMeta(meta, ["title", "programme title", "program title"]) || null;
       const topic = fromMeta(meta, ["topic", "description", "service description"]) || null;
       const tx1 = fromMeta(meta, ["tx date", "tx date 1", "1. tx date"]) || inv.service_date_from || null;
-      const deptId = inv.department_id;
-      const progId = inv.program_id;
-
-      const { data: dept } = deptId ? await supabase.from("departments").select("name").eq("id", deptId).single() : { data: null };
-      const { data: prog } = progId ? await supabase.from("programs").select("name").eq("id", progId).single() : { data: null };
-
       const gross = ext?.gross_amount ?? (typeof raw.gross_amount === "number" ? raw.gross_amount : null);
       const amount = gross != null ? `£${Number(gross).toLocaleString("en-GB", { minimumFractionDigits: 2 })}` : "—";
 
-      if (gen?.appearances?.length) {
-        for (const a of gen.appearances) {
+      pending.push({
+        inv,
+        meta,
+        gen,
+        title,
+        topic,
+        tx1,
+        deptId: inv.department_id ?? null,
+        progId: inv.program_id ?? null,
+        amount,
+      });
+    }
+
+    const deptIds = Array.from(new Set(pending.map((p) => p.deptId).filter((id): id is string => Boolean(id))));
+    const progIds = Array.from(new Set(pending.map((p) => p.progId).filter((id): id is string => Boolean(id))));
+
+    const { data: depts } = deptIds.length > 0 ? await supabase.from("departments").select("id, name").in("id", deptIds) : { data: [] };
+    const { data: progs } = progIds.length > 0 ? await supabase.from("programs").select("id, name").in("id", progIds) : { data: [] };
+
+    const deptMap = new Map((depts ?? []).map((d) => [d.id, d.name]));
+    const progMap = new Map((progs ?? []).map((p) => [p.id, p.name]));
+
+    for (const p of pending) {
+      const deptName = p.deptId ? deptMap.get(p.deptId) ?? "—" : "—";
+      const progName = p.progId ? progMap.get(p.progId) ?? "—" : "—";
+      const programme = progName !== "—" ? progName : p.title || "—";
+
+      if (p.gen?.appearances?.length) {
+        for (const a of p.gen.appearances) {
           if (a.topic || a.date) {
             appearances.push({
               topic: a.topic || "—",
               date: a.date || "—",
-              programme: prog?.name || title || "—",
-              department: dept?.name || "—",
-              amount: a.amount != null ? `£${Number(a.amount).toFixed(2)}` : amount,
-              invoice_id: inv.id,
+              programme,
+              department: deptName,
+              amount: a.amount != null ? `£${Number(a.amount).toFixed(2)}` : p.amount,
+              invoice_id: p.inv.id,
             });
           }
         }
       } else {
         appearances.push({
-          topic: topic || "—",
-          date: tx1 || inv.service_date_from || inv.created_at?.slice(0, 10) || "—",
-          programme: prog?.name || title || "—",
-          department: dept?.name || "—",
-          amount,
-          invoice_id: inv.id,
+          topic: p.topic || "—",
+          date: p.tx1 || p.inv.service_date_from || p.inv.created_at?.slice(0, 10) || "—",
+          programme,
+          department: deptName,
+          amount: p.amount,
+          invoice_id: p.inv.id,
         });
       }
     }
