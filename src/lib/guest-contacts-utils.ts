@@ -14,11 +14,13 @@ export type ContactForFilter = {
   ai_contact_info?: { phone?: string | null; email?: string | null } | null;
   is_favorite?: boolean;
   tags?: string[];
+  invite_status?: "accepted" | "rejected" | "no_response" | "no_match" | null;
 };
 
 export type FilterParams = {
   search?: string;
   filterBy?: string;
+  inviteFilter?: string;
   dateFilter?: string;
   deptFilter?: string;
   progFilter?: string;
@@ -35,6 +37,7 @@ export function filterAndSortContacts<T extends ContactForFilter>(
   const {
     search = "",
     filterBy = "all",
+    inviteFilter = "all",
     dateFilter = "all",
     deptFilter = "all",
     progFilter = "all",
@@ -71,6 +74,13 @@ export function filterAndSortContacts<T extends ContactForFilter>(
       if (filterBy === "has_ai") return !!c.ai_contact_info;
       if (filterBy === "missing_phone") return !c.phone && !c.ai_contact_info?.phone;
       if (filterBy === "missing_email") return !c.email && !c.ai_contact_info?.email;
+      if (inviteFilter !== "all" && inviteFilter) {
+        const status = c.invite_status;
+        if (inviteFilter === "accepted" && status !== "accepted") return false;
+        if (inviteFilter === "rejected" && status !== "rejected") return false;
+        if (inviteFilter === "no_response" && status !== "no_response") return false;
+        if (inviteFilter === "no_match" && status !== "no_match") return false;
+      }
       if (dateFilter !== "all") {
         const d = c.last_appearance_date || c.created_at;
         if (!d) return false;

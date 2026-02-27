@@ -14,6 +14,7 @@ import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
 type FilterParams = {
   search?: string;
   filterBy?: string;
+  inviteFilter?: string;
   dateFilter?: string;
   deptFilter?: string;
   progFilter?: string;
@@ -53,6 +54,7 @@ type Contact = {
   prohibited_topics?: string[];
   conflict_of_interest_notes?: string | null;
   last_invited_at?: string | null;
+  invite_status?: "accepted" | "rejected" | "no_response" | "no_match";
 };
 
 type Appearance = {
@@ -187,6 +189,7 @@ export function GuestContactsClient({
     const params = new URLSearchParams();
     const search = updates.search ?? filterParams.search ?? "";
     const filterBy = updates.filterBy ?? filterParams.filterBy ?? "all";
+    const inviteFilterVal = updates.inviteFilter ?? filterParams.inviteFilter ?? "all";
     const dateFilter = updates.dateFilter ?? filterParams.dateFilter ?? "all";
     const deptFilter = updates.deptFilter ?? filterParams.deptFilter ?? "all";
     const progFilter = updates.progFilter ?? filterParams.progFilter ?? "all";
@@ -197,6 +200,7 @@ export function GuestContactsClient({
     const pageNum = updates.page ?? page;
     if (search) params.set("search", search);
     if (filterBy !== "all") params.set("filterBy", filterBy);
+    if (inviteFilterVal !== "all") params.set("inviteFilter", inviteFilterVal);
     if (dateFilter !== "all") params.set("dateFilter", dateFilter);
     if (deptFilter !== "all") params.set("deptFilter", deptFilter);
     if (progFilter !== "all") params.set("progFilter", progFilter);
@@ -615,6 +619,7 @@ export function GuestContactsClient({
   };
 
   const filterBy = filterParams.filterBy ?? "all";
+  const inviteFilter = filterParams.inviteFilter ?? "all";
   const dateFilter = filterParams.dateFilter ?? "all";
   const deptFilter = filterParams.deptFilter ?? "all";
   const progFilter = filterParams.progFilter ?? "all";
@@ -753,7 +758,7 @@ export function GuestContactsClient({
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Guest Contacts");
-    const hasFilters = filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all" || favoriteFilter != null || !!(search?.trim());
+    const hasFilters = filterBy !== "all" || inviteFilter !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all" || favoriteFilter != null || !!(search?.trim());
     const baseName = `guest-contacts-${new Date().toISOString().slice(0, 10)}`;
     XLSX.writeFile(wb, hasFilters ? `${baseName}-filtered.xlsx` : `${baseName}.xlsx`, { bookSST: true });
   };
@@ -840,6 +845,18 @@ export function GuestContactsClient({
           <option value="has_ai">Has AI data</option>
           <option value="missing_phone">Missing phone</option>
           <option value="missing_email">Missing email</option>
+        </select>
+        <select
+          value={inviteFilter}
+          onChange={(e) => updateUrl({ inviteFilter: e.target.value, page: 1 })}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          aria-label="Filter by invite status"
+        >
+          <option value="all">All invite status</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+          <option value="no_response">No response</option>
+          <option value="no_match">No match</option>
         </select>
         <select
           value={dateFilter}
@@ -1123,7 +1140,7 @@ export function GuestContactsClient({
         <div className="flex items-center gap-3">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount} contacts
-          {(filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all" || favoriteFilter != null) && " (filtered)"}
+          {(filterBy !== "all" || inviteFilter !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all" || favoriteFilter != null) && " (filtered)"}
           </p>
           {isAdmin && totalCount > 0 && (
             <button
@@ -1311,8 +1328,19 @@ export function GuestContactsClient({
                 </td>
               </tr>
             ) : (
-              contacts.map((c) => (
-                <tr key={c.guest_contact_id ?? `guest-${c.guest_name}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+              contacts.map((c) => {
+                const rowBg =
+                  c.invite_status === "accepted"
+                    ? "bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-950/30"
+                    : c.invite_status === "rejected"
+                      ? "bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/30"
+                      : c.invite_status === "no_response"
+                        ? "bg-orange-50 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/30"
+                        : c.invite_status === "no_match"
+                          ? "bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/30"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-700/50";
+                return (
+                <tr key={c.guest_contact_id ?? `guest-${c.guest_name}`} className={rowBg}>
                   {isAdmin && (
                     <td className="px-2 py-2 align-top">
                       <input
@@ -1528,17 +1556,29 @@ export function GuestContactsClient({
                     </td>
                   )}
                 </tr>
-              ))
+              );
+              })
             )}
           </tbody>
         </table>
       </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {contacts.map((c) => (
+          {contacts.map((c) => {
+            const cardBg =
+              c.invite_status === "accepted"
+                ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                : c.invite_status === "rejected"
+                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
+                  : c.invite_status === "no_response"
+                    ? "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800"
+                    : c.invite_status === "no_match"
+                      ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700";
+            return (
             <div
               key={c.guest_contact_id ?? `guest-${c.guest_name}`}
-              className="rounded-xl border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800"
+              className={`rounded-xl border p-4 shadow ${cardBg}`}
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
@@ -1610,7 +1650,8 @@ export function GuestContactsClient({
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

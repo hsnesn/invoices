@@ -14,13 +14,14 @@ const CACHE_TTL = 300;
 export default async function GuestContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; filterBy?: string; dateFilter?: string; deptFilter?: string; progFilter?: string; favoriteFilter?: string; titleFilter?: string; topicFilter?: string; sortBy?: string }>;
+  searchParams: Promise<{ page?: string; search?: string; filterBy?: string; inviteFilter?: string; dateFilter?: string; deptFilter?: string; progFilter?: string; favoriteFilter?: string; titleFilter?: string; topicFilter?: string; sortBy?: string }>;
 }) {
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp?.page ?? "1", 10) || 1);
   const filterParams = {
     search: sp?.search ?? "",
     filterBy: sp?.filterBy ?? "all",
+    inviteFilter: sp?.inviteFilter ?? "all",
     dateFilter: sp?.dateFilter ?? "all",
     deptFilter: sp?.deptFilter ?? "all",
     progFilter: sp?.progFilter ?? "all",
@@ -49,6 +50,7 @@ export default async function GuestContactsPage({
   const [
     { data: invoices },
     guestContactsRows,
+    { data: producerGuests },
   ] = await Promise.all([
     supabase
       .from("invoices")
@@ -58,7 +60,23 @@ export default async function GuestContactsPage({
       .order("created_at", { ascending: false })
       .limit(INVOICE_LIMIT),
     fetchGuestContacts(filterParams.search),
+    supabase.from("producer_guests").select("guest_name, invited_at, accepted, matched_at").order("invited_at", { ascending: false }),
   ]);
+
+  function normalizeName(s: string): string {
+    return s.toLowerCase().trim().replace(/\s+/g, " ");
+  }
+  const inviteStatusByKey = new Map<string, "accepted" | "rejected" | "no_response" | "no_match">();
+  for (const r of producerGuests ?? []) {
+    const key = normalizeName(r.guest_name ?? "");
+    if (!key || inviteStatusByKey.has(key)) continue;
+    const invited = !!r.invited_at;
+    const matched = !!r.matched_at;
+    if (r.accepted === true) inviteStatusByKey.set(key, "accepted");
+    else if (r.accepted === false) inviteStatusByKey.set(key, "rejected");
+    else if (invited && !matched) inviteStatusByKey.set(key, "no_match");
+    else if (invited) inviteStatusByKey.set(key, "no_response");
+  }
 
   const deptMap = new Map((departments ?? []).map((d) => [d.id, d.name]));
   const progMap = new Map((programs ?? []).map((p) => [p.id, p.name]));
@@ -113,6 +131,7 @@ export default async function GuestContactsPage({
     prohibited_topics?: string[];
     conflict_of_interest_notes?: string | null;
     last_invited_at?: string | null;
+    invite_status?: "accepted" | "rejected" | "no_response" | "no_match";
   };
   const rows: Row[] = [];
 
@@ -280,9 +299,12 @@ export default async function GuestContactsPage({
     }
   }
 
-  const allContacts = Array.from(seen.values()).sort((a, b) =>
-    a.guest_name.localeCompare(b.guest_name)
-  );
+  const allContacts = Array.from(seen.values())
+    .map((c) => ({
+      ...c,
+      invite_status: inviteStatusByKey.get(normalizeName(c.guest_name)) ?? undefined,
+    }))
+    .sort((a, b) => a.guest_name.localeCompare(b.guest_name));
 
   const filtered = filterAndSortContacts(allContacts, filterParams);
   const totalCount = filtered.length;
