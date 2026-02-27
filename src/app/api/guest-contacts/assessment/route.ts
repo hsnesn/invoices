@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
-import OpenAI from "openai";
 import type { PageKey } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -169,11 +168,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const openai = new OpenAI({
-      apiKey,
-      timeout: 25_000,
-      maxRetries: 1,
-    });
+    const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/$/, "");
+    const model = process.env.EXTRACTION_MODEL || "gpt-4o-mini";
 
     const appearancesText = appearances
       .map(
@@ -213,22 +209,47 @@ Provide a concise assessment following the format described.`;
 
     let assessment: string;
     try {
-      const completion = await openai.chat.completions.create({
-        model: process.env.EXTRACTION_MODEL || "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 500,
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25_000);
+      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          max_tokens: 500,
+        }),
+        signal: controller.signal,
       });
-      assessment = completion.choices[0]?.message?.content?.trim() || "Unable to generate assessment.";
+      clearTimeout(timeoutId);
+
+      const text = await res.text();
+      let data: { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(`Invalid response (${res.status})`);
+      }
+
+      if (!res.ok) {
+        const errMsg = data?.error?.message || `HTTP ${res.status}`;
+        throw new Error(errMsg);
+      }
+
+      assessment = data.choices?.[0]?.message?.content?.trim() || "Unable to generate assessment.";
     } catch (openaiError) {
       const msg = openaiError instanceof Error ? openaiError.message : String(openaiError);
-      const isAuth = /api_key|invalid|authentication|401|unauthorized/i.test(msg);
+      const isAuth = /api_key|invalid|authentication|401|unauthorized|incorrect_api_key/i.test(msg);
       const isRateLimit = /rate_limit|429|too many/i.test(msg);
-      const isTimeout = /timeout|timed out|ETIMEDOUT|ECONNRESET/i.test(msg);
+      const isTimeout = /timeout|timed out|ETIMEDOUT|ECONNRESET|abort/i.test(msg);
       const isConnection =
-        /connection|ECONNREFUSED|ENOTFOUND|fetch failed|network|socket hang|ETIMEDOUT/i.test(msg);
+        /connection|ECONNREFUSED|ENOTFOUND|fetch failed|network|socket hang|Failed to fetch/i.test(msg);
       if (isAuth) {
         assessment =
           "AI assessment unavailable: OpenAI API key is invalid or missing. Add OPENAI_API_KEY in Vercel → Project Settings → Environment Variables.";
@@ -236,7 +257,7 @@ Provide a concise assessment following the format described.`;
         assessment = "AI assessment temporarily unavailable: Too many requests. Please try again in a moment.";
       } else if (isTimeout || isConnection) {
         assessment =
-          "AI assessment unavailable: Cannot reach OpenAI API from the server. Check: 1) OPENAI_API_KEY is set in Vercel env vars. 2) Your OpenAI account has credits. 3) Try redeploying or a different Vercel region.";
+          "AI assessment unavailable: Cannot reach OpenAI API. Try: 1) OPENAI_BASE_URL if using a proxy. 2) Different Vercel region. 3) Check OpenAI status page.";
       } else {
         assessment = `AI assessment temporarily unavailable: ${msg}`;
       }
