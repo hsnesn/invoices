@@ -54,6 +54,10 @@ function buildInviteHtml(params: {
   const progDescBlock = safe.programDescription
     ? `<p><em>${safe.programDescription}</em></p>`
     : "";
+  const pickupBlock =
+    params.format === "studio"
+      ? "<p>We can arrange to pick you up from your preferred location and drop you back after the recording.</p>"
+      : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#333">
 <div style="max-width:600px;margin:0 auto;padding:20px">
 <p>${safe.greeting},</p>
@@ -62,7 +66,7 @@ function buildInviteHtml(params: {
 ${progDescBlock}
 <p>The recording is scheduled for <strong>${safe.recordDate}</strong> at <strong>${safe.recordTime}</strong>.</p>
 <p>${formatText}</p>
-<p>We can arrange to pick you up from your preferred location and drop you back after the recording.</p>
+${pickupBlock}
 <p>Would you be interested in joining us for this program? Please reply to this email to confirm your participation.</p>
 <p>Best regards,<br/>${safe.producerName}</p>
 </div></body></html>`;
@@ -116,12 +120,15 @@ export async function POST(request: NextRequest) {
       const producerUserId = body.producer_user_id?.trim();
       const programName = body.program_name?.trim() || "our program";
       const topic = body.topic?.trim() || "the scheduled topic";
-      const recordDate = body.record_date?.trim() || "TBD";
-      const recordTime = body.record_time?.trim() || "TBD";
+      const recordDate = body.record_date?.trim();
+      const recordTime = body.record_time?.trim();
+      if (!recordDate || !recordTime || recordDate === "TBD" || recordTime === "TBD") {
+        return NextResponse.json({ error: "Recording date and time are required" }, { status: 400 });
+      }
       const format = body.format === "studio" ? "studio" : "remote";
       const studioAddress = body.studio_address?.trim() || "";
       const includeProgramDescription = !!body.include_program_description;
-      const attachCalendar = body.attach_calendar !== false && recordDate !== "TBD" && recordTime !== "TBD";
+      const attachCalendar = body.attach_calendar !== false;
       const bccProducer = body.bcc_producer !== false && !!producerEmail;
       const customGreetings = body.custom_greetings ?? {};
 

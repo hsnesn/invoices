@@ -1892,12 +1892,13 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
   const [programs, setPrograms] = useState<Program[]>([]);
   const [producerId, setProducerId] = useState("");
   const [programName, setProgramName] = useState("");
-  const [topic, setTopic] = useState("");
+  const [generalTopic, setGeneralTopic] = useState("");
+  const [programSpecificTopic, setProgramSpecificTopic] = useState("");
   const [recordDate, setRecordDate] = useState("");
   const [recordTime, setRecordTime] = useState("");
   const [format, setFormat] = useState<"remote" | "studio">("remote");
   const [studioAddress, setStudioAddress] = useState("TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ");
-  const [includeProgramDescription, setIncludeProgramDescription] = useState(false);
+  const [includeProgramDescription, setIncludeProgramDescription] = useState(true);
   const [attachCalendar, setAttachCalendar] = useState(true);
   const [bccProducer, setBccProducer] = useState(true);
   const [customGreetings, setCustomGreetings] = useState<Record<string, string>>({});
@@ -1906,12 +1907,18 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
   const [sending, setSending] = useState(false);
   const withEmail = contacts.filter((c) => c.email || c.ai_contact_info?.email);
 
+  const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
   const INVITE_TEMPLATES_KEY = "guest-invite-templates";
-  const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; programName: string; topic: string; format: string; studioAddress: string }>>(() => {
+  const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; programName: string; generalTopic?: string; programSpecificTopic?: string; topic?: string; format: string; studioAddress: string }>>(() => {
     if (typeof window === "undefined") return [];
     try {
       const s = localStorage.getItem(INVITE_TEMPLATES_KEY);
-      return s ? JSON.parse(s) : [];
+      const parsed = s ? JSON.parse(s) : [];
+      return parsed.map((t: { topic?: string; programSpecificTopic?: string; generalTopic?: string } & Record<string, unknown>) => ({
+        ...t,
+        programSpecificTopic: t.programSpecificTopic ?? t.topic ?? "",
+        generalTopic: t.generalTopic ?? "",
+      }));
     } catch {
       return [];
     }
@@ -1964,15 +1971,19 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
         toast.error("Please select a producer (reply-to address required)");
         return;
       }
+      if (!recordDate.trim() || !recordTime.trim()) {
+        toast.error("Recording date and time are required");
+        return;
+      }
       Object.assign(payload, {
         use_template: true,
         producer_name: selectedProducer.full_name,
         producer_email: selectedProducer.email,
         producer_user_id: selectedProducer.id,
         program_name: programName.trim() || "our program",
-        topic: topic.trim() || "the scheduled topic",
-        record_date: recordDate.trim() || "TBD",
-        record_time: recordTime.trim() || "TBD",
+        topic: programSpecificTopic.trim() || "the scheduled topic",
+        record_date: recordDate.trim(),
+        record_time: recordTime.trim(),
         format,
         studio_address: format === "studio" ? studioAddress.trim() : "",
         include_program_description: includeProgramDescription,
@@ -2073,33 +2084,35 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                 )}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Topic</label>
+                <label className="mb-1 block text-sm font-medium">General topic</label>
+                <select value={generalTopic} onChange={(e) => setGeneralTopic(e.target.value)} className={inputCls}>
+                  <option value="">— Select —</option>
+                  {GENERAL_TOPIC_OPTIONS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">For internal use only (not shown in email)</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Program-specific topic *</label>
                 <input
                   type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. Foreign Policy, News"
-                  list="topic-list"
+                  value={programSpecificTopic}
+                  onChange={(e) => setProgramSpecificTopic(e.target.value)}
+                  placeholder="e.g. US-Turkey relations, Climate summit outcomes"
                   className={inputCls}
+                  required
                 />
-                <datalist id="topic-list">
-                  <option value="News" />
-                  <option value="Foreign Policy" />
-                  <option value="Domestic Politics" />
-                  <option value="Security" />
-                  {topicNames.filter((t) => !["News", "Foreign Policy", "Domestic Politics", "Security"].includes(t)).map((t) => (
-                    <option key={t} value={t} />
-                  ))}
-                </datalist>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Shown in the invitation email</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Recording date</label>
-                  <input type="date" value={recordDate} onChange={(e) => setRecordDate(e.target.value)} className={inputCls} />
+                  <label className="mb-1 block text-sm font-medium">Recording date *</label>
+                  <input type="date" value={recordDate} onChange={(e) => setRecordDate(e.target.value)} required className={inputCls} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Recording time</label>
-                  <input type="time" value={recordTime} onChange={(e) => setRecordTime(e.target.value)} className={inputCls} />
+                  <label className="mb-1 block text-sm font-medium">Recording time *</label>
+                  <input type="time" value={recordTime} onChange={(e) => setRecordTime(e.target.value)} required className={inputCls} />
                 </div>
               </div>
               <div>
@@ -2144,7 +2157,8 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                       const t = savedTemplates[Number(e.target.value)];
                       if (t) {
                         setProgramName(t.programName);
-                        setTopic(t.topic);
+                        setGeneralTopic(t.generalTopic ?? "");
+                        setProgramSpecificTopic(t.programSpecificTopic ?? (t as { topic?: string }).topic ?? "");
                         setFormat(t.format as "remote" | "studio");
                         setStudioAddress(t.studioAddress);
                       }
@@ -2163,7 +2177,7 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                   onClick={() => {
                     const name = prompt("Template name (e.g. Roundtable Studio)?");
                     if (name?.trim()) {
-                      const next = [...savedTemplates, { name: name.trim(), programName, topic, format, studioAddress }];
+                      const next = [...savedTemplates, { name: name.trim(), programName, generalTopic, programSpecificTopic, format, studioAddress }];
                       setSavedTemplates(next);
                       try {
                         localStorage.setItem(INVITE_TEMPLATES_KEY, JSON.stringify(next));
@@ -2208,13 +2222,15 @@ ${customGreetings[withEmail[0].guest_name] || (withEmail[0].guest_name.split(/\s
 
 I hope this message finds you well.
 
-I am writing to invite you to participate in ${programName.trim() || "our program"}, which will be broadcast on TRT World and will focus on ${topic.trim() || "the scheduled topic"}.
+I am writing to invite you to participate in ${programName.trim() || "our program"}, which will be broadcast on TRT World and will focus on ${programSpecificTopic.trim() || "the scheduled topic"}.${includeProgramDescription && programName.trim() && getProgramDescription(programName) ? `
+
+${getProgramDescription(programName)}` : ""}
 
 The recording is scheduled for ${recordDate.trim() || "TBD"} at ${recordTime.trim() || "TBD"}.
 
-${format === "remote" ? "The recording will be conducted remotely via Skype or Zoom." : `The recording will take place in our studio. The address is: ${studioAddress || "—"}`}
+${format === "remote" ? "The recording will be conducted remotely via Skype or Zoom." : `The recording will take place in our studio. The address is: ${studioAddress || "—"}`}${format === "studio" ? `
 
-We can arrange to pick you up from your preferred location and drop you back after the recording.
+We can arrange to pick you up from your preferred location and drop you back after the recording.` : ""}
 
 Would you be interested in joining us for this program? Please reply to this email to confirm your participation.
 
@@ -2261,7 +2277,16 @@ ${selectedProducer?.full_name || "Producer"}`}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Cancel</button>
             {!showConfirm && (
-              <button type="submit" disabled={sending || withEmail.length === 0} className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={
+                  sending ||
+                  withEmail.length === 0 ||
+                  (mode === "invite" &&
+                    (!producerId || !programSpecificTopic.trim() || !recordDate.trim() || !recordTime.trim()))
+                }
+                className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+              >
                 {sending ? "Sending..." : "Send"}
               </button>
             )}
