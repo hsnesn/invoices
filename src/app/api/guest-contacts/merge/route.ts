@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     const { data: primaryRow } = await supabase
       .from("guest_contacts")
-      .select("id, guest_name, phone, email, title, ai_contact_info, ai_assessment, is_favorite, tags")
+      .select("id, guest_name, phone, email, title, title_category, topic, topic_category, ai_contact_info, ai_assessment, is_favorite, tags")
       .eq("guest_name_key", primaryKey)
       .maybeSingle();
 
@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
       phone: string | null;
       email: string | null;
       title: string | null;
+      title_category: string | null;
+      topic: string | null;
+      topic_category: string | null;
       ai_contact_info: Record<string, unknown> | null;
       ai_assessment: string | null;
       is_favorite: boolean;
@@ -49,6 +52,9 @@ export async function POST(request: NextRequest) {
           phone: (primaryRow.phone as string) || null,
           email: (primaryRow.email as string) || null,
           title: (primaryRow.title as string) || null,
+          title_category: (primaryRow.title_category as string) || null,
+          topic: (primaryRow.topic as string) || null,
+          topic_category: (primaryRow.topic_category as string) || null,
           ai_contact_info: (primaryRow.ai_contact_info as Record<string, unknown>) ?? null,
           ai_assessment: (primaryRow.ai_assessment as string) ?? null,
           is_favorite: !!(primaryRow.is_favorite as boolean),
@@ -58,6 +64,9 @@ export async function POST(request: NextRequest) {
           phone: null,
           email: null,
           title: null,
+          title_category: null,
+          topic: null,
+          topic_category: null,
           ai_contact_info: null,
           ai_assessment: null,
           is_favorite: false,
@@ -68,7 +77,7 @@ export async function POST(request: NextRequest) {
       if (key === primaryKey) continue;
       const { data: row } = await supabase
         .from("guest_contacts")
-        .select("id, phone, email, title, ai_contact_info, ai_assessment, is_favorite, tags")
+        .select("id, phone, email, title, title_category, topic, topic_category, ai_contact_info, ai_assessment, is_favorite, tags")
         .eq("guest_name_key", key)
         .maybeSingle();
 
@@ -77,6 +86,9 @@ export async function POST(request: NextRequest) {
       if (row.phone && !merged.phone) merged.phone = row.phone as string;
       if (row.email && !merged.email) merged.email = row.email as string;
       if (row.title && !merged.title) merged.title = row.title as string;
+      if (row.title_category && !merged.title_category) merged.title_category = row.title_category as string;
+      if (row.topic && !merged.topic) merged.topic = row.topic as string;
+      if (row.topic_category && !merged.topic_category) merged.topic_category = row.topic_category as string;
       if (row.is_favorite) merged.is_favorite = true;
       if (Array.isArray(row.tags)) {
         for (const t of row.tags as string[]) {
@@ -105,6 +117,9 @@ export async function POST(request: NextRequest) {
           phone: merged.phone,
           email: merged.email,
           title: merged.title,
+          title_category: merged.title_category,
+          topic: merged.topic,
+          topic_category: merged.topic_category,
           ai_contact_info: merged.ai_contact_info,
           ai_assessment: merged.ai_assessment,
           is_favorite: merged.is_favorite,
@@ -118,6 +133,9 @@ export async function POST(request: NextRequest) {
         phone: merged.phone,
         email: merged.email,
         title: merged.title,
+        title_category: merged.title_category,
+        topic: merged.topic,
+        topic_category: merged.topic_category,
         ai_contact_info: merged.ai_contact_info,
         ai_assessment: merged.ai_assessment,
         is_favorite: merged.is_favorite,

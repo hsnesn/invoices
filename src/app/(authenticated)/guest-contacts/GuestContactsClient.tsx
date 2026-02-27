@@ -26,7 +26,9 @@ type AiContactInfo = { phone?: string | null; email?: string | null; social_medi
 type Contact = {
   guest_name: string;
   title: string | null;
+  title_category?: string | null;
   topic: string | null;
+  topic_category?: string | null;
   phone: string | null;
   email: string | null;
   invoice_id: string | null;
@@ -124,6 +126,14 @@ export function GuestContactsClient({
   const [mergeModal, setMergeModal] = useState<string[] | null>(null);
   const [merging, setMerging] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [categorizing, setCategorizing] = useState(false);
+  const [categorizeMessage, setCategorizeMessage] = useState<string | null>(null);
+  const [duplicatesModal, setDuplicatesModal] = useState<{ primary: string; duplicates: { guest_name: string; id: string }[] }[] | null>(null);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
+  const guestLogInputRef = useRef<HTMLInputElement>(null);
+  const [guestLogFile, setGuestLogFile] = useState<File | null>(null);
+  const [guestLogImporting, setGuestLogImporting] = useState(false);
+  const [guestLogMessage, setGuestLogMessage] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set(COLUMN_IDS);
     try {
@@ -202,6 +212,83 @@ export function GuestContactsClient({
       setExtractMessage("Request failed");
     } finally {
       setExtracting(false);
+    }
+  };
+
+  const runCategorize = async () => {
+    setCategorizing(true);
+    setCategorizeMessage(null);
+    try {
+      const res = await fetch("/api/admin/categorize-guest-contacts", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setCategorizeMessage(data.message ?? `Categorized ${data.titlesCategorized ?? 0} titles, ${data.topicsCategorized ?? 0} topics. ${data.contactsUpdated ?? 0} contacts updated.`);
+        window.location.reload();
+      } else {
+        setCategorizeMessage(data.error ?? "Categorization failed");
+      }
+    } catch {
+      setCategorizeMessage("Request failed");
+    } finally {
+      setCategorizing(false);
+    }
+  };
+
+  const runFindDuplicates = async () => {
+    setDuplicatesLoading(true);
+    setDuplicatesModal(null);
+    try {
+      const res = await fetch("/api/guest-contacts/duplicates");
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.groups)) {
+        setDuplicatesModal(data.groups);
+      } else {
+        setDuplicatesModal([]);
+      }
+    } catch {
+      setDuplicatesModal([]);
+    } finally {
+      setDuplicatesLoading(false);
+    }
+  };
+
+  const runGuestLogImport = async () => {
+    const file = guestLogFile;
+    if (!file) {
+      setGuestLogMessage("Select an Excel file first.");
+      return;
+    }
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      setGuestLogMessage("Use Excel (.xlsx or .xls)");
+      return;
+    }
+    setGuestLogImporting(true);
+    setGuestLogMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300_000);
+      const res = await fetch("/api/admin/import-guest-log", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+        credentials: "same-origin",
+      });
+      clearTimeout(timeoutId);
+      const data = await res.json();
+      if (res.ok) {
+        setGuestLogMessage(data.message ?? "Import complete.");
+        setGuestLogFile(null);
+        if (guestLogInputRef.current) guestLogInputRef.current.value = "";
+        window.location.reload();
+      } else {
+        setGuestLogMessage(data.error ?? "Import failed");
+      }
+    } catch (e) {
+      setGuestLogMessage(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setGuestLogImporting(false);
     }
   };
 
@@ -764,6 +851,47 @@ export function GuestContactsClient({
             >
               Bulk email ({selectedGuests.size})
             </button>
+            <button
+              type="button"
+              onClick={runCategorize}
+              disabled={categorizing}
+              className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200 dark:hover:bg-indigo-900/50 disabled:opacity-50"
+            >
+              {categorizing ? "Categorizing..." : "AI categorize all"}
+            </button>
+            <button
+              type="button"
+              onClick={runFindDuplicates}
+              disabled={duplicatesLoading}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50"
+            >
+              {duplicatesLoading ? "Searching..." : "Find duplicates"}
+            </button>
+            <>
+              <input
+                ref={guestLogInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                aria-label="Select Guest Log Excel file"
+                onChange={(e) => setGuestLogFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={() => guestLogInputRef.current?.click()}
+                className="rounded-lg border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-800 hover:bg-teal-100 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-200 dark:hover:bg-teal-900/50"
+              >
+                {guestLogFile ? guestLogFile.name : "Select Guest Log"}
+              </button>
+            </>
+            <button
+              type="button"
+              onClick={runGuestLogImport}
+              disabled={guestLogImporting || !guestLogFile}
+              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+            >
+              {guestLogImporting ? "Importing..." : "Import Guest Log"}
+            </button>
           </>
         )}
         <button
@@ -787,6 +915,12 @@ export function GuestContactsClient({
         )}
         {bulkMessage && (
           <span className="text-sm text-gray-600 dark:text-gray-400">{bulkMessage}</span>
+        )}
+        {categorizeMessage && (
+          <span className="text-sm text-gray-600 dark:text-gray-400">{categorizeMessage}</span>
+        )}
+        {guestLogMessage && (
+          <span className="text-sm text-gray-600 dark:text-gray-400">{guestLogMessage}</span>
         )}
       </div>
 
@@ -851,6 +985,48 @@ export function GuestContactsClient({
           onMerge={runMerge}
           merging={merging}
         />
+      )}
+
+      {duplicatesModal !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Potential duplicates</h3>
+              <button
+                type="button"
+                onClick={() => setDuplicatesModal(null)}
+                className="rounded-lg border border-gray-300 px-3 py-1 text-sm hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+            {duplicatesModal.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No potential duplicates found.</p>
+            ) : (
+              <ul className="space-y-3">
+                {duplicatesModal.map((g, i) => (
+                  <li key={i} className="rounded-lg border border-gray-200 p-3 dark:border-gray-600">
+                    <span className="font-medium text-gray-900 dark:text-white">{g.primary}</span>
+                    <span className="text-gray-500 dark:text-gray-400"> ← </span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">{g.duplicates.map((d) => d.guest_name).join(", ")}</span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMergeModal([g.primary, ...g.duplicates.map((d) => d.guest_name)]);
+                          setDuplicatesModal(null);
+                        }}
+                        className="ml-2 rounded border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200"
+                      >
+                        Merge
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
 
       {viewMode === "table" ? (

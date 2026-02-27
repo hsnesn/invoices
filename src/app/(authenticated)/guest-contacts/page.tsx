@@ -40,7 +40,7 @@ export default async function GuestContactsPage({
       .neq("invoice_type", "freelancer")
       .neq("invoice_type", "guest_contact_scan")
       .order("created_at", { ascending: false }),
-    supabase.from("guest_contacts").select("id, guest_name, phone, email, title, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags").order("guest_name"),
+    supabase.from("guest_contacts").select("id, guest_name, phone, email, title, title_category, topic, topic_category, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags").order("guest_name"),
     supabase.from("departments").select("id, name"),
     supabase.from("programs").select("id, name, department_id"),
   ]);
@@ -75,7 +75,9 @@ export default async function GuestContactsPage({
   type Row = {
     guest_name: string;
     title: string | null;
+    title_category: string | null;
     topic: string | null;
+    topic_category: string | null;
     phone: string | null;
     email: string | null;
     invoice_id: string | null;
@@ -133,7 +135,9 @@ export default async function GuestContactsPage({
     rows.push({
       guest_name: guestName,
       title,
+      title_category: null,
       topic: topic || null,
+      topic_category: null,
       phone: phone || null,
       email: email || null,
       invoice_id: inv.id,
@@ -165,6 +169,7 @@ export default async function GuestContactsPage({
           department_name: r.department_name ?? existing.department_name,
           program_name: r.program_name ?? existing.program_name,
           topic: r.topic ?? existing.topic,
+          topic_category: r.topic_category ?? existing.topic_category,
           invoice_id: r.invoice_id ?? existing.invoice_id,
           created_at: r.created_at,
         });
@@ -174,6 +179,7 @@ export default async function GuestContactsPage({
           department_name: existing.department_name ?? r.department_name,
           program_name: existing.program_name ?? r.program_name,
           topic: existing.topic ?? r.topic,
+          topic_category: existing.topic_category ?? r.topic_category,
         });
       }
     }
@@ -197,7 +203,7 @@ export default async function GuestContactsPage({
     const key = normalizeKey(gc.guest_name ?? "");
     if (!key) continue;
     const gcId = (gc as { id?: string }).id ?? null;
-    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[] };
+    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[]; title_category?: string | null; topic_category?: string | null };
     const matchKey = findMatchingKey(key);
     const existing = matchKey ? seen.get(matchKey) : undefined;
     const aiInfo = gcData.ai_contact_info ?? null;
@@ -205,7 +211,9 @@ export default async function GuestContactsPage({
     const merged: Row = {
       guest_name: gc.guest_name ?? "",
       title: existing?.title ?? gc.title ?? null,
-      topic: existing?.topic ?? null,
+      title_category: gcData.title_category ?? existing?.title_category ?? null,
+      topic: existing?.topic ?? (gc as { topic?: string | null }).topic ?? null,
+      topic_category: gcData.topic_category ?? existing?.topic_category ?? null,
       phone: (existing?.phone || gc.phone) ?? null,
       email: (existing?.email || gc.email) ?? null,
       invoice_id: (existing?.invoice_id as string) || null,
@@ -220,7 +228,7 @@ export default async function GuestContactsPage({
       tags: (gcData.tags?.length ? gcData.tags : existing?.tags) ?? [],
     };
     if (!existing) {
-      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined });
+      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined, title_category: gcData.title_category ?? null, topic_category: gcData.topic_category ?? null });
     } else {
       const updateKey = matchKey ?? key;
       seen.set(updateKey, {
@@ -246,8 +254,8 @@ export default async function GuestContactsPage({
 
   const departmentNames = Array.from(new Set(allContacts.map((c) => c.department_name).filter(Boolean))) as string[];
   const programNames = Array.from(new Set(allContacts.map((c) => c.program_name).filter(Boolean))) as string[];
-  const titleNames = Array.from(new Set(allContacts.map((c) => c.title?.trim() || "").filter(Boolean))).sort();
-  const topicNames = Array.from(new Set(allContacts.map((c) => c.topic?.trim() || "").filter(Boolean))).sort();
+  const titleNames = Array.from(new Set(allContacts.map((c) => (c.title_category?.trim() || c.title?.trim() || "")).filter(Boolean))).sort();
+  const topicNames = Array.from(new Set(allContacts.map((c) => (c.topic_category?.trim() || c.topic?.trim() || "")).filter(Boolean))).sort();
   const hasEmptyTitle = allContacts.some((c) => !(c.title?.trim()));
   const hasEmptyTopic = allContacts.some((c) => !(c.topic?.trim()));
   const similarNames = (() => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { getOrCreateTitleCategory } from "@/lib/guest-contact-categorize";
 
 export async function PATCH(
   request: NextRequest,
@@ -31,7 +32,15 @@ export async function PATCH(
     if (body.guest_name !== undefined) updates.guest_name = body.guest_name.trim() || null;
     if (body.phone !== undefined) updates.phone = body.phone?.trim() || null;
     if (body.email !== undefined) updates.email = body.email?.trim() || null;
-    if (body.title !== undefined) updates.title = body.title?.trim() || null;
+    if (body.title !== undefined) {
+      const rawTitle = body.title?.trim() || null;
+      updates.title = rawTitle;
+      if (rawTitle) {
+        updates.title_category = await getOrCreateTitleCategory(rawTitle);
+      } else {
+        updates.title_category = null;
+      }
+    }
     if (body.is_favorite !== undefined) updates.is_favorite = body.is_favorite;
     if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => typeof t === "string") : [];
 

@@ -1,7 +1,9 @@
 export type ContactForFilter = {
   guest_name: string;
   title: string | null;
+  title_category?: string | null;
   topic: string | null;
+  topic_category?: string | null;
   phone: string | null;
   email: string | null;
   last_appearance_date?: string;
@@ -56,7 +58,9 @@ export function filterAndSortContacts<T extends ContactForFilter>(
         !q ||
         c.guest_name.toLowerCase().includes(q) ||
         (c.title?.toLowerCase().includes(q) ?? false) ||
+        (c.title_category?.toLowerCase().includes(q) ?? false) ||
         (c.topic?.toLowerCase().includes(q) ?? false) ||
+        (c.topic_category?.toLowerCase().includes(q) ?? false) ||
         (c.phone?.includes(q) ?? false) ||
         (c.email?.toLowerCase().includes(q) ?? false) ||
         (c.tags?.some((t) => t.toLowerCase().includes(q)) ?? false);
@@ -78,13 +82,13 @@ export function filterAndSortContacts<T extends ContactForFilter>(
       if (deptFilter !== "all" && c.department_name !== deptFilter) return false;
       if (progFilter !== "all" && c.program_name !== progFilter) return false;
       if (titleFilter !== "all") {
-        const contactTitle = (c.title?.trim() || "") || "";
+        const contactTitle = (c.title_category?.trim() || c.title?.trim() || "") || "";
         const matchEmpty = titleFilter === "__empty__";
         if (matchEmpty && contactTitle !== "") return false;
         if (!matchEmpty && contactTitle !== titleFilter) return false;
       }
       if (topicFilter !== "all") {
-        const contactTopic = (c.topic?.trim() || "") || "";
+        const contactTopic = (c.topic_category?.trim() || c.topic?.trim() || "") || "";
         const matchEmpty = topicFilter === "__empty__";
         if (matchEmpty && contactTopic !== "") return false;
         if (!matchEmpty && contactTopic !== topicFilter) return false;

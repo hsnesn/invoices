@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
+import { getOrCreateTitleCategory, getOrCreateTopicCategory } from "@/lib/guest-contact-categorize";
 
 export const maxDuration = 120;
 
@@ -116,6 +117,11 @@ export async function POST(request: NextRequest) {
         const phone = (typeof raw.guest_phone === "string" ? raw.guest_phone.trim() : null) || null;
         const email = (typeof raw.guest_email === "string" ? raw.guest_email.trim() : null) || null;
         const title = (typeof raw.title === "string" ? raw.title.trim() : null) || null;
+        const topic =
+          (typeof raw.topic === "string" ? raw.topic.trim() : null) ||
+          (typeof raw.description === "string" ? raw.description.trim() : null) ||
+          (typeof raw.service_description === "string" ? raw.service_description.trim() : null) ||
+          null;
 
         await supabase.storage.from(BUCKET).remove([storagePath]);
         await supabase.from("invoices").delete().eq("id", invoiceId);
@@ -128,15 +134,25 @@ export async function POST(request: NextRequest) {
         const key = guestName.toLowerCase().trim();
         const { data: existing } = await supabase
           .from("guest_contacts")
-          .select("id, phone, email, title")
+          .select("id, phone, email, title, topic")
           .eq("guest_name_key", key)
           .maybeSingle();
+
+        const rawTitle = title || (existing?.title as string) || null;
+        const rawTopic = topic || (existing?.topic as string) || null;
+        const [titleCategory, topicCategory] = await Promise.all([
+          rawTitle ? getOrCreateTitleCategory(rawTitle) : Promise.resolve(null),
+          rawTopic ? getOrCreateTopicCategory(rawTopic) : Promise.resolve(null),
+        ]);
 
         const merged = {
           guest_name: guestName,
           phone: phone || (existing?.phone as string) || null,
           email: email || (existing?.email as string) || null,
-          title: title || (existing?.title as string) || null,
+          title: rawTitle,
+          topic: rawTopic,
+          title_category: titleCategory,
+          topic_category: topicCategory,
           source: "bulk_upload",
           updated_at: new Date().toISOString(),
         };

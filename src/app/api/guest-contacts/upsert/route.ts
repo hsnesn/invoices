@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { getOrCreateTitleCategory } from "@/lib/guest-contact-categorize";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,11 +32,15 @@ export async function POST(request: NextRequest) {
       .eq("guest_name_key", key)
       .maybeSingle();
 
+    const rawTitle = body.title?.trim() || null;
+    const titleCategory = rawTitle ? await getOrCreateTitleCategory(rawTitle) : null;
+
     const payload: Record<string, unknown> = {
       guest_name: guestName,
       phone: body.phone?.trim() || null,
       email: body.email?.trim() || null,
-      title: body.title?.trim() || null,
+      title: rawTitle,
+      title_category: titleCategory,
       updated_at: new Date().toISOString(),
     };
     if (body.is_favorite !== undefined) payload.is_favorite = body.is_favorite;
