@@ -2,11 +2,14 @@ import { requirePageAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { filterAndSortContacts } from "@/lib/guest-contacts-utils";
 import { GuestContactsClient } from "./GuestContactsClient";
+import { fetchGuestContacts } from "@/lib/guest-contacts-fetch";
+import { getCached, setCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const PAGE_SIZE = 25;
+const CACHE_TTL = 300;
 
 export default async function GuestContactsPage({
   searchParams,
@@ -29,11 +32,23 @@ export default async function GuestContactsPage({
   const { profile } = await requirePageAccess("guest_contacts");
   const supabase = createAdminClient();
   const INVOICE_LIMIT = 2000;
+
+  let departments = getCached<{ id: string; name: string }[]>("departments");
+  let programs = getCached<{ id: string; name: string; department_id: string }[]>("programs");
+  if (!departments) {
+    const { data } = await supabase.from("departments").select("id, name");
+    departments = data ?? [];
+    setCache("departments", departments, CACHE_TTL);
+  }
+  if (!programs) {
+    const { data } = await supabase.from("programs").select("id, name, department_id");
+    programs = data ?? [];
+    setCache("programs", programs, CACHE_TTL);
+  }
+
   const [
     { data: invoices },
-    { data: guestContactsRows },
-    { data: departments },
-    { data: programs },
+    guestContactsRows,
   ] = await Promise.all([
     supabase
       .from("invoices")
@@ -42,9 +57,7 @@ export default async function GuestContactsPage({
       .neq("invoice_type", "guest_contact_scan")
       .order("created_at", { ascending: false })
       .limit(INVOICE_LIMIT),
-    supabase.from("guest_contacts").select("id, guest_name, phone, email, title, title_category, topic, topic_category, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags").order("guest_name"),
-    supabase.from("departments").select("id, name"),
-    supabase.from("programs").select("id, name, department_id"),
+    fetchGuestContacts(filterParams.search),
   ]);
 
   const deptMap = new Map((departments ?? []).map((d) => [d.id, d.name]));
@@ -92,6 +105,9 @@ export default async function GuestContactsPage({
     guest_contact_id?: string;
     is_favorite?: boolean;
     tags?: string[];
+    affiliated_orgs?: string[];
+    prohibited_topics?: string[];
+    conflict_of_interest_notes?: string | null;
   };
   const rows: Row[] = [];
 
@@ -205,7 +221,7 @@ export default async function GuestContactsPage({
     const key = normalizeKey(gc.guest_name ?? "");
     if (!key) continue;
     const gcId = (gc as { id?: string }).id ?? null;
-    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[]; title_category?: string | null; topic_category?: string | null };
+    const gcData = gc as { ai_contact_info?: AiContactInfo; ai_assessment?: string | null; is_favorite?: boolean; tags?: string[]; title_category?: string | null; topic_category?: string | null; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null };
     const matchKey = findMatchingKey(key);
     const existing = matchKey ? seen.get(matchKey) : undefined;
     const aiInfo = gcData.ai_contact_info ?? null;
@@ -228,6 +244,9 @@ export default async function GuestContactsPage({
       guest_contact_id: gcId ?? existing?.guest_contact_id ?? undefined,
       is_favorite: gcData.is_favorite ?? existing?.is_favorite ?? false,
       tags: (gcData.tags?.length ? gcData.tags : existing?.tags) ?? [],
+      affiliated_orgs: gcData.affiliated_orgs ?? existing?.affiliated_orgs ?? [],
+      prohibited_topics: gcData.prohibited_topics ?? existing?.prohibited_topics ?? [],
+      conflict_of_interest_notes: gcData.conflict_of_interest_notes ?? existing?.conflict_of_interest_notes ?? null,
     };
     if (!existing) {
       seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined, title_category: gcData.title_category ?? null, topic_category: gcData.topic_category ?? null });

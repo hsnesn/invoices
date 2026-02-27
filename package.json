@@ -16,6 +16,7 @@
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "jszip": "^3.10.1",
+    "libphonenumber-js": "^1.12.38",
     "mammoth": "^1.11.0",
     "next": "14.2.18",
     "openai": "^4.73.0",

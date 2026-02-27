@@ -13,7 +13,7 @@ const MAX_BULK = 50;
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(request.headers);
+    const rl = checkRateLimit(request);
     if (!rl.ok) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },

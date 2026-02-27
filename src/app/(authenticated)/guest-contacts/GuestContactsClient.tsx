@@ -42,6 +42,9 @@ type Contact = {
   guest_contact_id?: string;
   is_favorite?: boolean;
   tags?: string[];
+  affiliated_orgs?: string[];
+  prohibited_topics?: string[];
+  conflict_of_interest_notes?: string | null;
 };
 
 type Appearance = {
@@ -534,7 +537,7 @@ export function GuestContactsClient({
     }
   };
 
-  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[] }) => {
+  const saveContact = async (payload: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => {
     setSaving(true);
     try {
       if (editContact?.guest_contact_id) {
@@ -1458,10 +1461,20 @@ export function GuestContactsClient({
       {editContact && (
         <ContactFormModal
           modalTitle="Edit contact"
-          initial={{ guest_name: editContact.guest_name, phone: editContact.phone, email: editContact.email, title: editContact.title, tags: editContact.tags }}
+          initial={{
+            guest_name: editContact.guest_name,
+            phone: editContact.phone,
+            email: editContact.email,
+            title: editContact.title,
+            tags: editContact.tags,
+            affiliated_orgs: editContact.affiliated_orgs ?? [],
+            prohibited_topics: editContact.prohibited_topics ?? [],
+            conflict_of_interest_notes: editContact.conflict_of_interest_notes ?? "",
+          }}
           onSave={(payload) => saveContact(payload)}
           onClose={() => setEditContact(null)}
           saving={saving}
+          showConflictOfInterest
         />
       )}
 
@@ -1662,18 +1675,23 @@ function ContactFormModal({
   onSave,
   onClose,
   saving,
+  showConflictOfInterest,
 }: {
   modalTitle: string;
-  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null; tags?: string[] };
-  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[] }) => void;
+  initial: { guest_name: string; phone: string | null; email: string | null; title: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string };
+  onSave: (p: { guest_name: string; phone?: string | null; email?: string | null; title?: string | null; tags?: string[]; affiliated_orgs?: string[]; prohibited_topics?: string[]; conflict_of_interest_notes?: string | null }) => void;
   onClose: () => void;
   saving: boolean;
+  showConflictOfInterest?: boolean;
 }) {
   const [guestName, setGuestName] = useState(initial.guest_name);
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [email, setEmail] = useState(initial.email ?? "");
   const [title, setTitle] = useState(initial.title ?? "");
   const [tagsStr, setTagsStr] = useState((initial.tags ?? []).join(", "));
+  const [affiliatedOrgsStr, setAffiliatedOrgsStr] = useState((initial.affiliated_orgs ?? []).join(", "));
+  const [prohibitedTopicsStr, setProhibitedTopicsStr] = useState((initial.prohibited_topics ?? []).join(", "));
+  const [coiNotes, setCoiNotes] = useState(initial.conflict_of_interest_notes ?? "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1683,12 +1701,19 @@ function ContactFormModal({
       return;
     }
     const tags = tagsStr.split(",").map((t) => t.trim()).filter(Boolean);
+    const affiliatedOrgs = affiliatedOrgsStr.split(",").map((t) => t.trim()).filter(Boolean);
+    const prohibitedTopics = prohibitedTopicsStr.split(",").map((t) => t.trim()).filter(Boolean);
     onSave({
       guest_name: name,
       phone: phone.trim() || null,
       email: email.trim() || null,
       title: title.trim() || null,
       tags: tags.length > 0 ? tags : undefined,
+      ...(showConflictOfInterest && {
+        affiliated_orgs: affiliatedOrgs.length > 0 ? affiliatedOrgs : undefined,
+        prohibited_topics: prohibitedTopics.length > 0 ? prohibitedTopics : undefined,
+        conflict_of_interest_notes: coiNotes.trim() || null,
+      }),
     });
   };
 
@@ -1744,6 +1769,48 @@ function ContactFormModal({
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             />
           </div>
+          {showConflictOfInterest && (
+            <>
+              <div>
+                <label htmlFor="affiliated_orgs" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Affiliated organizations (comma-separated)
+                </label>
+                <input
+                  id="affiliated_orgs"
+                  type="text"
+                  value={affiliatedOrgsStr}
+                  onChange={(e) => setAffiliatedOrgsStr(e.target.value)}
+                  placeholder="e.g. BBC, Reuters"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="prohibited_topics" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Prohibited topics (comma-separated)
+                </label>
+                <input
+                  id="prohibited_topics"
+                  type="text"
+                  value={prohibitedTopicsStr}
+                  onChange={(e) => setProhibitedTopicsStr(e.target.value)}
+                  placeholder="e.g. Company X, Stock Y"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="coi_notes" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Conflict of interest notes
+                </label>
+                <textarea
+                  id="coi_notes"
+                  value={coiNotes}
+                  onChange={(e) => setCoiNotes(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+            </>
+          )}
           <div>
             <label htmlFor="phone" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Phone

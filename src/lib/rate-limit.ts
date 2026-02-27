@@ -1,42 +1,43 @@
 /**
- * Simple in-memory rate limiter. Use for development/single-instance.
- * For production with multiple instances, consider Redis-based solution.
+ * Simple in-memory rate limiter for API routes.
+ * For production with multiple instances, use Redis (e.g. @upstash/ratelimit).
  */
-
 const store = new Map<string, { count: number; resetAt: number }>();
 
-const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 60; // 60 requests per minute per IP
+export function rateLimit(key: string, limit: number, windowSeconds: number): { ok: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = store.get(key);
 
-function getClientId(headers: Headers): string {
-  return (
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headers.get("x-real-ip") ||
-    "unknown"
-  );
+  if (!entry) {
+    store.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+    return { ok: true, remaining: limit - 1 };
+  }
+
+  if (now > entry.resetAt) {
+    store.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+    return { ok: true, remaining: limit - 1 };
+  }
+
+  entry.count++;
+  if (entry.count > limit) {
+    return { ok: false, remaining: 0 };
+  }
+  return { ok: true, remaining: limit - entry.count };
 }
 
-export function checkRateLimit(headers: Headers): { ok: boolean; retryAfter?: number } {
-  const id = getClientId(headers);
-  const now = Date.now();
-  let entry = store.get(id);
+export function getRateLimitKey(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
+  const path = new URL(request.url).pathname;
+  return `${path}:${ip}`;
+}
 
-  if (!entry || now > entry.resetAt) {
-    entry = { count: 0, resetAt: now + WINDOW_MS };
-    store.set(id, entry);
-  }
-
-  entry.count += 1;
-
-  // Cleanup old entries periodically
-  if (Math.random() < 0.01) {
-    Array.from(store.entries()).forEach(([k, v]) => {
-      if (now > v.resetAt) store.delete(k);
-    });
-  }
-
-  if (entry.count > MAX_REQUESTS) {
-    return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+/** Legacy API: check rate limit from request, 60 req/min per IP+path. Returns { ok, retryAfter? }. */
+export function checkRateLimit(request: Request): { ok: boolean; retryAfter?: number } {
+  const key = getRateLimitKey(request);
+  const result = rateLimit(key, 60, 60);
+  if (!result.ok) {
+    return { ok: false, retryAfter: 60 };
   }
   return { ok: true };
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import type { PageKey } from "@/lib/types";
+import stringSimilarity from "string-similarity";
 
 function normalizeKey(s: string): string {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
@@ -15,7 +16,9 @@ function firstLastKey(s: string): string {
   return `${parts[0]!} ${parts[parts.length - 1]!}`;
 }
 
-/** Simple similarity: share first+last or one contains the other */
+const SIMILARITY_THRESHOLD = 0.85;
+
+/** Fuzzy duplicate check: exact, first+last, contains, or Levenshtein similarity */
 function mightBeDuplicate(a: string, b: string): boolean {
   const na = normalizeKey(a);
   const nb = normalizeKey(b);
@@ -24,7 +27,10 @@ function mightBeDuplicate(a: string, b: string): boolean {
   const fb = firstLastKey(b);
   if (fa && fb && fa === fb) return true;
   if (na.includes(nb) || nb.includes(na)) return true;
-  return false;
+  const similarity = stringSimilarity.compareTwoStrings(na, nb);
+  if (similarity >= SIMILARITY_THRESHOLD) return true;
+  const flSimilarity = stringSimilarity.compareTwoStrings(fa, fb);
+  return flSimilarity >= SIMILARITY_THRESHOLD;
 }
 
 /** GET /api/guest-contacts/duplicates - Find potential duplicate groups */

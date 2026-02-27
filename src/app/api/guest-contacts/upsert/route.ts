@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { getOrCreateTitleCategory } from "@/lib/guest-contact-categorize";
+import { validateEmail, validatePhone, formatPhone } from "@/lib/contact-validation";
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
+    const rl = rateLimit(getRateLimitKey(request), 30, 60);
+    if (!rl.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+
     const { profile } = await requireAuth();
     if (profile.role !== "admin") {
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
@@ -24,6 +29,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "guest_name is required (min 2 chars)" }, { status: 400 });
     }
 
+    const emailCheck = validateEmail(body.email);
+    if (!emailCheck.valid) {
+      return NextResponse.json({ error: emailCheck.message }, { status: 400 });
+    }
+    const phoneCheck = validatePhone(body.phone);
+    if (!phoneCheck.valid) {
+      return NextResponse.json({ error: phoneCheck.message }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
     const key = guestName.toLowerCase().trim();
     const { data: existing } = await supabase
@@ -35,9 +49,10 @@ export async function POST(request: NextRequest) {
     const rawTitle = body.title?.trim() || null;
     const titleCategory = rawTitle ? await getOrCreateTitleCategory(rawTitle) : null;
 
+    const phoneVal = body.phone?.trim() || null;
     const payload: Record<string, unknown> = {
       guest_name: guestName,
-      phone: body.phone?.trim() || null,
+      phone: phoneVal ? (formatPhone(phoneVal) ?? phoneVal) : null,
       email: body.email?.trim() || null,
       title: rawTitle,
       title_category: titleCategory,

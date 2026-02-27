@@ -23,7 +23,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const rl = checkRateLimit(request.headers);
+    const rl = checkRateLimit(request);
     if (!rl.ok) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },
