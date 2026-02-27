@@ -35,7 +35,10 @@ export default async function HelpPage() {
           <li><strong>Improve visibility</strong> — Dashboards and reports show pending items, spending by department, and monthly trends so you can see what needs attention.</li>
           <li><strong>Support different roles</strong> — Submitters, managers, finance, and admins each see only what they need and can perform only the actions allowed for their role.</li>
         </ol>
-        <p className="mt-4 text-sm italic text-gray-600 dark:text-gray-400">
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+          <strong>Why &quot;Clari&quot;?</strong> The name comes from the Latin <em>clarus</em> (clear, bright, evident). In ancient Rome, <em>clarus</em> was used as an honorific for distinguished figures. For this system, it reflects the goal of bringing clarity to invoice workflows and approvals.
+        </p>
+        <p className="mt-2 text-sm italic text-gray-600 dark:text-gray-400">
           This system was developed by <strong>Hasan Esen</strong>.
         </p>
       </section>
