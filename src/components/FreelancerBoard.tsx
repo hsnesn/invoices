@@ -992,7 +992,7 @@ export function FreelancerBoard({
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-white shrink-0">Contractor Invoices</h1>
         <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <button onClick={() => setShowDashboard(!showDashboard)} className={`rounded-xl px-3 py-2 text-sm font-medium shadow-sm transition-all flex items-center gap-1.5 ${showDashboard ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200"}`}>
+          <button onClick={() => setShowDashboard(!showDashboard)} className={`rounded-xl px-3 py-2 text-sm font-medium shadow-sm transition-all flex items-center gap-1.5 ${showDashboard ? "bg-[#5034FF] text-white shadow-[#5034FF]/25" : "bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/25 dark:bg-blue-600 dark:hover:bg-blue-500"}`}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>
             Dashboard
           </button>
@@ -1005,7 +1005,7 @@ export function FreelancerBoard({
             Export PDF
           </button>
           <div ref={columnsAnchorRef}>
-            <button onClick={() => setShowColumnPicker(!showColumnPicker)} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+            <button onClick={() => setShowColumnPicker(!showColumnPicker)} className="rounded-xl bg-slate-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-700 dark:bg-slate-500 dark:hover:bg-slate-400 flex items-center gap-1.5">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" /></svg>
               Columns
             </button>

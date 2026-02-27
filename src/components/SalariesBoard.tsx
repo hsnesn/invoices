@@ -1079,7 +1079,7 @@ export function SalariesBoard({
           )}
           <button
             onClick={(e) => { setShowColumnPicker((p) => !p); (e.target as HTMLElement).getBoundingClientRect(); }}
-            className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            className="rounded-lg bg-slate-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 shadow-sm dark:bg-slate-500 dark:hover:bg-slate-400"
           >
             Columns
           </button>
