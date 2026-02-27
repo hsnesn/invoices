@@ -924,6 +924,16 @@ function InvoiceTable({
                       <p className="text-sm text-gray-500">Loading...</p>
                     ) : (
                       <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <a href={`/invoices/${expandedRowId}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
+                            View full invoice →
+                          </a>
+                          {rows.find((x) => x.id === expandedRowId)?.submitterId && rows.find((x) => x.id === expandedRowId)!.submitterId !== currentUserId && (
+                            <a href={`/messages?invoiceId=${expandedRowId}&recipientId=${rows.find((x) => x.id === expandedRowId)!.submitterId}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
+                              Message submitter
+                            </a>
+                          )}
+                        </div>
                         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                           {/* Timeline */}
                           <div>

@@ -1227,6 +1227,13 @@ export function FreelancerBoard({
                             <tr><td colSpan={COLUMNS.length + ((currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") ? 1 : 0)} className="bg-slate-50 px-6 py-4 dark:bg-slate-800/50">
                               {detailLoading ? <div className="flex items-center gap-2 text-sm text-gray-500"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" /></svg>Loading...</div> : (
                                 <div className="space-y-4">
+                                  {r.submitterId && r.submitterId !== currentUserId && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <a href={`/messages?invoiceId=${expandedRowId}&recipientId=${r.submitterId}`} className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
+                                        Message submitter
+                                      </a>
+                                    </div>
+                                  )}
                                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                     <div>
                                       <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h4>

@@ -30,21 +30,31 @@ type Conversation = {
   unread: number;
 };
 
+// Use /notification.mp3 if you add your own file to public/. Falls back to built-in beep.
 function playNotificationSound() {
   try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 800;
-    osc.type = "sine";
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.25);
+    const audio = new Audio("/notification.mp3");
+    audio.volume = 0.6;
+    void audio.play().catch(() => {
+      try {
+        const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (Ctx) {
+          const ctx = new Ctx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 800;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.25, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.25);
+        }
+      } catch {
+        /* ignore */
+      }
+    });
   } catch {
     /* ignore */
   }
@@ -53,10 +63,13 @@ function playNotificationSound() {
 export default function MessagesPage() {
   const searchParams = useSearchParams();
   const invoiceIdFromUrl = searchParams.get("invoiceId");
+  const recipientIdFromUrl = searchParams.get("recipientId");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [showRecipientPicker, setShowRecipientPicker] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState<{ id: string; invoice_number: string; beneficiary: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -178,6 +191,17 @@ export default function MessagesPage() {
         .catch(() => setInvoiceRef({ id: invoiceIdFromUrl, invoice_number: "…" }));
     }
   }, [invoiceIdFromUrl]);
+
+  useEffect(() => {
+    if (!recipientIdFromUrl) return;
+    setSelectedUserId(recipientIdFromUrl);
+    const r = recipients.find((x) => x.id === recipientIdFromUrl);
+    const name = r?.full_name ?? "Unknown";
+    setConversations((prev) => {
+      if (prev.some((c) => c.userId === recipientIdFromUrl)) return prev;
+      return [{ userId: recipientIdFromUrl, name, lastMessage: "", lastAt: new Date().toISOString(), unread: 0 }, ...prev];
+    });
+  }, [recipientIdFromUrl, recipients]);
 
   useEffect(() => {
     if (selectedUserId) {
@@ -331,21 +355,46 @@ export default function MessagesPage() {
           )}
           {recipients.length > 0 && (
             <div className="border-t border-gray-200 p-2 dark:border-gray-700">
-              <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Start chat with</p>
-              <div className="flex flex-wrap gap-1">
-                {recipients
-                  .filter((r) => !conversations.some((c) => c.userId === r.id))
-                  .slice(0, 8)
-                  .map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => startChatWith(r.id)}
-                      className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                    >
-                      {r.full_name}
-                    </button>
-                  ))}
-              </div>
+              <button
+                onClick={() => setShowRecipientPicker((v) => !v)}
+                className="w-full rounded-lg border border-dashed border-gray-300 px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+              >
+                {showRecipientPicker ? "− Hide" : "+"} Select person to chat with
+              </button>
+              {showRecipientPicker && (
+                <div className="mt-2 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Search by name..."
+                    value={recipientSearch}
+                    onChange={(e) => setRecipientSearch(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  />
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                    {recipients
+                      .filter((r) => {
+                        const q = recipientSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        return (r.full_name ?? "").toLowerCase().includes(q) ||
+                          (r.role ?? "").toLowerCase().includes(q);
+                      })
+                      .map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => {
+                            startChatWith(r.id);
+                            setShowRecipientPicker(false);
+                            setRecipientSearch("");
+                          }}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <span className="font-medium text-gray-900 dark:text-white">{r.full_name}</span>
+                          {r.role && <span className="text-xs text-gray-500">({r.role})</span>}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
