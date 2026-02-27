@@ -43,6 +43,12 @@ export function Nav({ profile }: { profile: Profile }) {
           </button>
         )}
         <Link
+          href="/help"
+          className="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
+        >
+          Help
+        </Link>
+        <Link
           href="/profile"
           className="hidden text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white sm:inline"
         >
