@@ -43,7 +43,7 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="relative rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+        className="relative rounded-lg p-1.5 sm:p-2 shrink-0 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
         title="Notifications"
         aria-label="Notifications"
       >

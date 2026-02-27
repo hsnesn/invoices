@@ -23,20 +23,18 @@ export function Nav({ profile }: { profile: Profile }) {
   return (
     <>
       <MessageNotificationSound />
-      <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200/80 bg-white/95 px-4 sm:px-6 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-gray-800 dark:bg-gray-900 dark:bg-gray-900/95 supports-[backdrop-filter]:dark:bg-gray-900/80 min-w-0">
-      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-        <Link href="/dashboard" className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
-          <img src="/trt-logo.png" alt="TRT" className="h-7 sm:h-8 object-contain shrink-0" />
-          <span className="text-sm sm:text-base font-semibold text-gray-800 dark:text-white truncate">
-            Invoice Approval
-          </span>
-        </Link>
-      </div>
-      <div className="flex items-center gap-3">
+      <nav className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200/80 bg-white/95 px-3 sm:px-6 py-2 sm:py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-gray-800 dark:bg-gray-900 dark:bg-gray-900/95 supports-[backdrop-filter]:dark:bg-gray-900/80 min-w-0">
+      <Link href="/dashboard" className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+        <img src="/trt-logo.png" alt="TRT" className="h-6 sm:h-8 object-contain shrink-0" />
+        <span className="hidden sm:inline text-sm sm:text-base font-semibold text-gray-800 dark:text-white truncate">
+          Invoice Approval
+        </span>
+      </Link>
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {themeContext && (
           <button
             onClick={themeContext.toggleTheme}
-            className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+            className="rounded-lg p-1.5 sm:p-2 shrink-0 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
             title={themeContext.theme === "dark" ? "Light mode" : "Dark mode"}
             aria-label={themeContext.theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
@@ -51,9 +49,14 @@ export function Nav({ profile }: { profile: Profile }) {
         <MessagesNavBadge />
         <Link
           href="/help"
-          className="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
+          className="flex items-center gap-1.5 rounded-lg p-2 sm:p-0 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white sm:hover:bg-transparent"
+          title="Help"
+          aria-label="Help"
         >
-          Help
+          <svg className="h-5 w-5 shrink-0 sm:hidden" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="hidden sm:inline text-sm">Help</span>
         </Link>
         <Link
           href="/profile"
@@ -71,9 +74,10 @@ export function Nav({ profile }: { profile: Profile }) {
         </Link>
         <button
           onClick={handleSignOut}
-          className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+          className="rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white shrink-0"
         >
-          Sign out
+          <span className="sm:hidden">Out</span>
+          <span className="hidden sm:inline">Sign out</span>
         </button>
       </div>
     </nav>

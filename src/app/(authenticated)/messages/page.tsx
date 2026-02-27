@@ -151,6 +151,20 @@ export default function MessagesPage() {
     }
   }, []);
 
+  const markAsRead = useCallback(
+    async (id: string) => {
+      try {
+        await fetch(`/api/messages/${id}/read`, { method: "PATCH" });
+        fetchAllMessages(messageSearch);
+        if (selectedUserId) fetchConversation(selectedUserId);
+        void mutate("/api/dashboard/my-tasks");
+      } catch {
+        /* ignore */
+      }
+    },
+    [messageSearch, selectedUserId, fetchAllMessages, fetchConversation]
+  );
+
   useEffect(() => {
     fetchAllMessages(messageSearch);
     fetchRecipients();
@@ -190,6 +204,13 @@ export default function MessagesPage() {
       fetchAllMessages(messageSearch);
     }
   }, [selectedUserId, fetchConversation, fetchAllMessages, messageSearch]);
+
+  /* Mark unread as read when viewing a conversation (covers URL open + click) */
+  useEffect(() => {
+    if (!selectedUserId) return;
+    const toMark = messages.filter((m) => m.sender_id === selectedUserId && m.is_to_me && !m.read_at);
+    toMark.forEach((m) => markAsRead(m.id));
+  }, [selectedUserId, messages, markAsRead]);
 
   useEffect(() => {
     const t = setTimeout(() => fetchInvoiceSearch(invoiceSearchQuery), 300);
@@ -372,17 +393,6 @@ export default function MessagesPage() {
     }
   };
 
-  const markAsRead = async (id: string) => {
-    try {
-      await fetch(`/api/messages/${id}/read`, { method: "PATCH" });
-      fetchAllMessages(messageSearch);
-      if (selectedUserId) fetchConversation(selectedUserId);
-      void mutate("/api/dashboard/my-tasks");
-    } catch {
-      /* ignore */
-    }
-  };
-
   const startNewChat = () => {
     setSelectedUserId(null);
     setMessages([]);
@@ -390,11 +400,6 @@ export default function MessagesPage() {
 
   const selectConversation = (userId: string) => {
     setSelectedUserId(userId);
-    const conv = conversations.find((c) => c.userId === userId);
-    if (conv?.unread) {
-      const toMark = messages.filter((m) => m.recipient_id === userId && m.is_to_me && !m.read_at);
-      toMark.forEach((m) => markAsRead(m.id));
-    }
   };
 
   const startChatWith = (userId: string) => {
