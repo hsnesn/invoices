@@ -65,7 +65,11 @@ export async function POST(request: NextRequest) {
 
     for (const inv of invoices ?? []) {
       const meta = parseServiceDesc(inv.service_description);
-      const gen = inv.generated_invoice_data as { guest_name?: string | null; appearances?: { topic: string; date: string; amount: number }[] } | null;
+      const gen = inv.generated_invoice_data as {
+        guest_name?: string | null;
+        title?: string | null;
+        appearances?: { topic: string; date: string; amount: number }[];
+      } | null;
       const extRaw = (inv as { invoice_extracted_fields?: { raw_json?: Record<string, unknown>; gross_amount?: number }[] | { raw_json?: Record<string, unknown>; gross_amount?: number } | null }).invoice_extracted_fields;
       const ext = Array.isArray(extRaw) ? extRaw[0] : extRaw;
       const raw = ext?.raw_json ?? {};
