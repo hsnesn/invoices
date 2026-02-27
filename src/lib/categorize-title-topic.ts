@@ -92,8 +92,10 @@ export async function categorizeTopics(rawTopics: string[]): Promise<Map<string,
 ## Rules
 - Output ONLY a JSON array. No markdown, no explanation.
 - Each item: {"raw": "exact input string", "category": "standardized category"}
-- Use concise, consistent category names (e.g. "Politics", "Sports", "Culture", "News", "Documentary", "Entertainment", "Business", "International", "Other").
-- Group similar topics: "Elections" and "Political debate" -> "Politics".
+- Prefer these high-level categories when applicable: "Foreign Policy / Security", "Domestic Politics", "Business", "Culture", "Sports", "Other".
+- "Foreign Policy / Security": international relations, defence, security, diplomacy, conflict, migration, global affairs.
+- "Domestic Politics": elections, parliament, devolution, UK politics, policy, government.
+- Group similar topics into one of the above.
 - Preserve the exact "raw" string from the input.
 - If unsure, use "Other".`;
 

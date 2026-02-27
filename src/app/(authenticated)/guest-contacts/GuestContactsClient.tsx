@@ -142,9 +142,18 @@ export function GuestContactsClient({
   const [duplicatesModal, setDuplicatesModal] = useState<{ primary: string; duplicates: { guest_name: string; id: string }[] }[] | null>(null);
   const [duplicatesLoading, setDuplicatesLoading] = useState(false);
   const guestLogInputRef = useRef<HTMLInputElement>(null);
+  const guestListInputRef = useRef<HTMLInputElement>(null);
   const [guestLogFile, setGuestLogFile] = useState<File | null>(null);
   const [guestLogImporting, setGuestLogImporting] = useState(false);
   const [guestLogMessage, setGuestLogMessage] = useState<string | null>(null);
+  const [guestListFile, setGuestListFile] = useState<File | null>(null);
+  const [guestListImporting, setGuestListImporting] = useState(false);
+  const [guestListMessage, setGuestListMessage] = useState<string | null>(null);
+  const [deleteBackupModal, setDeleteBackupModal] = useState(false);
+  const [restoreModal, setRestoreModal] = useState(false);
+  const [backups, setBackups] = useState<{ id: string; backed_up_at: string; contact_count: number }[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set(COLUMN_IDS);
     try {
@@ -300,6 +309,107 @@ export function GuestContactsClient({
       setGuestLogMessage(e instanceof Error ? e.message : "Request failed");
     } finally {
       setGuestLogImporting(false);
+    }
+  };
+
+  const runGuestListImport = async () => {
+    const file = guestListFile;
+    if (!file) {
+      setGuestListMessage("Select Guest_List_FINAL Excel file first.");
+      return;
+    }
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      setGuestListMessage("Use Excel (.xlsx or .xls)");
+      return;
+    }
+    setGuestListImporting(true);
+    setGuestListMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300_000);
+      const res = await fetch("/api/admin/import-guest-list-excel", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+        credentials: "same-origin",
+      });
+      clearTimeout(timeoutId);
+      const data = await res.json();
+      if (res.ok) {
+        setGuestListMessage(data.message ?? "Import complete.");
+        setGuestListFile(null);
+        if (guestListInputRef.current) guestListInputRef.current.value = "";
+        window.location.reload();
+      } else {
+        setGuestListMessage(data.error ?? "Import failed");
+      }
+    } catch (e) {
+      setGuestListMessage(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setGuestListImporting(false);
+    }
+  };
+
+  const runDeleteAndBackup = async () => {
+    if (!confirm("Delete the entire guest list? A backup will be created so you can restore.")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/admin/guest-contacts/delete-and-backup", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDeleteBackupModal(false);
+        toast.success(data.message ?? "List cleared.");
+        window.location.reload();
+      } else {
+        toast.error(data.error ?? "Delete failed");
+      }
+    } catch {
+      toast.error("Request failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const fetchBackups = async () => {
+    try {
+      const res = await fetch("/api/admin/guest-contacts/backups", { credentials: "same-origin" });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.backups)) {
+        setBackups(data.backups);
+      } else {
+        setBackups([]);
+      }
+    } catch {
+      setBackups([]);
+    }
+  };
+
+  const runRestore = async (backupId: string) => {
+    setRestoring(true);
+    try {
+      const res = await fetch("/api/admin/guest-contacts/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backup_id: backupId }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRestoreModal(false);
+        toast.success(data.message ?? "Restored.");
+        window.location.reload();
+      } else {
+        toast.error(data.error ?? "Restore failed");
+      }
+    } catch {
+      toast.error("Request failed");
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -925,6 +1035,51 @@ export function GuestContactsClient({
         >
           {guestLogImporting ? "Importing..." : "Import Guest Log"}
         </button>
+        <input
+          ref={guestListInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          aria-label="Select Guest List Excel (overwrite)"
+          onChange={(e) => setGuestListFile(e.target.files?.[0] ?? null)}
+        />
+        <button
+          type="button"
+          onClick={() => guestListInputRef.current?.click()}
+          className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-800 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/30 dark:text-rose-200 dark:hover:bg-rose-900/50"
+        >
+          {guestListFile ? guestListFile.name : "Select Guest List"}
+        </button>
+        <button
+          type="button"
+          onClick={runGuestListImport}
+          disabled={guestListImporting || !guestListFile}
+          title="Overwrites guest list with Excel. Preserves AI assessment, invoice links."
+          className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+        >
+          {guestListImporting ? "Importing..." : "Import & Overwrite"}
+        </button>
+        {isAdmin && (
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteBackupModal(true)}
+              disabled={totalCount === 0}
+              title="Delete list and create backup for restore"
+              className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200 dark:hover:bg-red-900/50 disabled:opacity-50"
+            >
+              Delete list
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRestoreModal(true); fetchBackups(); }}
+              title="Restore from a previous backup"
+              className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200 dark:hover:bg-violet-900/50"
+            >
+              Restore
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={() => setColumnsModal(true)}
@@ -952,6 +1107,9 @@ export function GuestContactsClient({
         )}
         {guestLogMessage && (
           <span className="text-sm text-gray-600 dark:text-gray-400">{guestLogMessage}</span>
+        )}
+        {guestListMessage && (
+          <span className="text-sm text-gray-600 dark:text-gray-400">{guestListMessage}</span>
         )}
       </div>
 
@@ -1570,6 +1728,73 @@ export function GuestContactsClient({
               className="mt-4 w-full rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
             >
               Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {deleteBackupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteBackupModal(false)}>
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Delete guest list</h2>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              This will remove all {totalCount} contacts from the list. A backup will be created so you can restore later. Invoice data is not affected.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={runDeleteAndBackup}
+                disabled={deleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete & backup"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteBackupModal(false)}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restoreModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setRestoreModal(false)}>
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Restore from backup</h2>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              Select a backup to restore. This will replace the current list with the backed-up contacts.
+            </p>
+            {backups.length === 0 ? (
+              <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">No backups found.</p>
+            ) : (
+              <ul className="mb-4 max-h-48 space-y-2 overflow-y-auto">
+                {backups.map((b) => (
+                  <li key={b.id} className="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-600">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {b.contact_count} contacts · {new Date(b.backed_up_at).toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => runRestore(b.id)}
+                      disabled={restoring}
+                      className="rounded bg-violet-600 px-3 py-1 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                    >
+                      Restore
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              onClick={() => setRestoreModal(false)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Close
             </button>
           </div>
         </div>

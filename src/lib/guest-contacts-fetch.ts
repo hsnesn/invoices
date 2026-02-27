@@ -16,7 +16,7 @@ export async function fetchGuestContacts(searchQuery?: string | null) {
       console.warn("search_guest_contacts RPC failed, falling back to full fetch:", error.message);
       const { data: fallback } = await supabase
         .from("guest_contacts")
-        .select("id, guest_name, phone, email, title, title_category, topic, topic_category, organization, bio, photo_url, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags, affiliated_orgs, prohibited_topics, conflict_of_interest_notes")
+        .select("id, guest_name, phone, email, title, title_category, topic, topic_category, organization, bio, photo_url, primary_program, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags, affiliated_orgs, prohibited_topics, conflict_of_interest_notes")
         .order("guest_name");
       return fallback ?? [];
     }
@@ -25,7 +25,7 @@ export async function fetchGuestContacts(searchQuery?: string | null) {
 
   const { data } = await supabase
     .from("guest_contacts")
-    .select("id, guest_name, phone, email, title, title_category, topic, topic_category, organization, bio, photo_url, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags, affiliated_orgs, prohibited_topics, conflict_of_interest_notes")
+    .select("id, guest_name, phone, email, title, title_category, topic, topic_category, organization, bio, photo_url, primary_program, ai_contact_info, ai_searched_at, ai_assessment, ai_assessed_at, updated_at, is_favorite, tags, affiliated_orgs, prohibited_topics, conflict_of_interest_notes")
     .order("guest_name");
   return data ?? [];
 }
