@@ -25,6 +25,11 @@ export async function GET() {
       .select("id, created_at, invoice_workflows(status)")
       .eq("invoice_type", "freelancer");
 
+    const { data: otherInvoices } = await supabase
+      .from("invoices")
+      .select("id, created_at, invoice_workflows(status)")
+      .eq("invoice_type", "other");
+
     const guest = (guestInvoices ?? []).reduce(
       (acc, inv) => {
         const wf = unwrap(inv.invoice_workflows as WfShape[] | WfShape | null);
@@ -83,10 +88,22 @@ export async function GET() {
       return { month: label, guest: guestCount, freelancer: flCount, total: guestCount + flCount };
     });
 
+    const other = (otherInvoices ?? []).reduce(
+      (acc, inv) => {
+        const wf = unwrap(inv.invoice_workflows as WfShape[] | WfShape | null);
+        const s = wf?.status ?? "submitted";
+        if (s === "ready_for_payment") acc.pending++;
+        else if (["paid", "archived"].includes(s)) acc.paid++;
+        return acc;
+      },
+      { pending: 0, paid: 0, rejected: 0 }
+    );
+
     return NextResponse.json(
       {
         guest: { ...guest, total: guest.pending + guest.paid + guest.rejected },
         freelancer: { ...freelancer, total: freelancer.pending + freelancer.paid + freelancer.rejected },
+        other: { ...other, total: other.pending + other.paid + other.rejected },
         monthlyTrend,
       },
       { headers: { "Cache-Control": "no-store, max-age=0" } }
@@ -97,6 +114,7 @@ export async function GET() {
       {
         guest: { pending: 0, paid: 0, rejected: 0, total: 0 },
         freelancer: { pending: 0, paid: 0, rejected: 0, total: 0 },
+        other: { pending: 0, paid: 0, rejected: 0, total: 0 },
         monthlyTrend: [],
       },
       { status: 200 }

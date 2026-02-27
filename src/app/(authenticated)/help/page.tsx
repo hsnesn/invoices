@@ -38,6 +38,7 @@ export default async function HelpPage() {
           <li><a href="#contractor-overview" className="hover:text-sky-600 dark:hover:text-sky-400">Contractor invoices overview</a></li>
           <li><a href="#contractor-submit" className="hover:text-sky-600 dark:hover:text-sky-400">Submitting a contractor invoice</a></li>
           <li><a href="#contractor-approval" className="hover:text-sky-600 dark:hover:text-sky-400">Contractor approval workflow</a></li>
+          <li><a href="#other-invoices" className="hover:text-sky-600 dark:hover:text-sky-400">Other invoices</a></li>
           <li><a href="#salaries" className="hover:text-sky-600 dark:hover:text-sky-400">Salaries</a></li>
           <li><a href="#setup" className="hover:text-sky-600 dark:hover:text-sky-400">Setup</a></li>
           <li><a href="#reports" className="hover:text-sky-600 dark:hover:text-sky-400">Reports</a></li>
@@ -224,18 +225,27 @@ export default async function HelpPage() {
           <Tip>If the automatic Booking Form email fails, admin can trigger it manually from the invoice detail page.</Tip>
         </section>
 
-        {/* 13. Salaries */}
+        {/* 13. Other Invoices */}
+        <section id="other-invoices" className="scroll-mt-24">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">13. Other Invoices</h2>
+          <p className="mt-2">
+            <strong>Other Invoices</strong> is for any type of invoice that does not fit guest or contractor flows. Admin, finance and operations can upload files (PDF, DOCX, XLSX, etc.) from their computer. AI extracts beneficiary name, amount, invoice number and date. The list shows all uploaded invoices. Use filters (status, search, date range) to find what you need. When payment is done, click <strong>Mark paid</strong>. You can also select multiple invoices and mark them as paid in bulk.
+          </p>
+          <Tip>Other invoices skip the manager approval step. They go straight to &quot;ready for payment&quot; and you mark them paid when done.</Tip>
+        </section>
+
+        {/* 14. Salaries */}
         <section id="salaries" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">13. Salaries</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">14. Salaries</h2>
           <p className="mt-2">
             Only admin, operations and finance can access Salaries. Here you manage salary payments for employees. You can add new salary records, edit them, upload payslips, and mark them as paid. Finance can only mark paid — they cannot add, edit or delete.
           </p>
           <Tip>Salaries are separate from guest and contractor invoices. They have their own list and workflow.</Tip>
         </section>
 
-        {/* 14. Setup */}
+        {/* 15. Setup */}
         <section id="setup" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">14. Setup (admin only)</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">15. Setup (admin only)</h2>
           <p className="mt-2">
             In Setup you manage <strong>Departments</strong> and <strong>Programmes</strong>. Departments are broad groups (e.g. News, Sport). Programmes belong to a department (e.g. News Hour, Sports Today). When submitting an invoice, users pick from these. Admin can also configure contractor templates, email settings, department managers, and <strong>Approval Delegation</strong> (backup approvers when a manager is absent).
           </p>
