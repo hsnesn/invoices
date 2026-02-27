@@ -14,6 +14,8 @@ type FilterParams = {
   deptFilter?: string;
   progFilter?: string;
   favoriteFilter?: boolean | null;
+  titleFilter?: string;
+  topicFilter?: string;
   sortBy?: string;
 };
 
@@ -24,6 +26,7 @@ type AiContactInfo = { phone?: string | null; email?: string | null; social_medi
 type Contact = {
   guest_name: string;
   title: string | null;
+  topic: string | null;
   phone: string | null;
   email: string | null;
   invoice_id: string | null;
@@ -72,6 +75,10 @@ export function GuestContactsClient({
   filterParams,
   departments,
   programs,
+  titles,
+  topics,
+  hasEmptyTitle,
+  hasEmptyTopic,
   similarNames: similarNamesProp,
   isAdmin,
 }: {
@@ -84,6 +91,10 @@ export function GuestContactsClient({
   filterParams: FilterParams;
   departments: string[];
   programs: string[];
+  titles: string[];
+  topics: string[];
+  hasEmptyTitle: boolean;
+  hasEmptyTopic: boolean;
   similarNames: string[][];
   isAdmin?: boolean;
 }) {
@@ -144,7 +155,9 @@ export function GuestContactsClient({
     const dateFilter = updates.dateFilter ?? filterParams.dateFilter ?? "all";
     const deptFilter = updates.deptFilter ?? filterParams.deptFilter ?? "all";
     const progFilter = updates.progFilter ?? filterParams.progFilter ?? "all";
-    const favoriteFilter = updates.favoriteFilter ?? filterParams.favoriteFilter ?? null;
+    const favoriteFilter = "favoriteFilter" in updates ? updates.favoriteFilter ?? null : filterParams.favoriteFilter ?? null;
+    const titleFilter = updates.titleFilter ?? filterParams.titleFilter ?? "all";
+    const topicFilter = updates.topicFilter ?? filterParams.topicFilter ?? "all";
     const sortBy = updates.sortBy ?? filterParams.sortBy ?? "name";
     const pageNum = updates.page ?? page;
     if (search) params.set("search", search);
@@ -154,6 +167,8 @@ export function GuestContactsClient({
     if (progFilter !== "all") params.set("progFilter", progFilter);
     if (favoriteFilter === true) params.set("favoriteFilter", "true");
     if (favoriteFilter === false) params.set("favoriteFilter", "false");
+    if (titleFilter !== "all") params.set("titleFilter", titleFilter);
+    if (topicFilter !== "all") params.set("topicFilter", topicFilter);
     if (sortBy !== "name") params.set("sortBy", sortBy);
     if (pageNum > 1) params.set("page", String(pageNum));
     router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`);
@@ -373,6 +388,8 @@ export function GuestContactsClient({
   const deptFilter = filterParams.deptFilter ?? "all";
   const progFilter = filterParams.progFilter ?? "all";
   const favoriteFilter = filterParams.favoriteFilter ?? null;
+  const titleFilter = filterParams.titleFilter ?? "all";
+  const topicFilter = filterParams.topicFilter ?? "all";
   const sortBy = filterParams.sortBy ?? "name";
   const search = filterParams.search ?? "";
 
@@ -501,7 +518,7 @@ export function GuestContactsClient({
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Guest Contacts");
-    const hasFilters = filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || favoriteFilter != null || !!(search?.trim());
+    const hasFilters = filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all" || favoriteFilter != null || !!(search?.trim());
     const baseName = `guest-contacts-${new Date().toISOString().slice(0, 10)}`;
     XLSX.writeFile(wb, hasFilters ? `${baseName}-filtered.xlsx` : `${baseName}.xlsx`, { bookSST: true });
   };
@@ -636,6 +653,34 @@ export function GuestContactsClient({
             ))}
           </select>
         )}
+        {(titles.length > 0 || hasEmptyTitle) && (
+          <select
+            value={titleFilter}
+            onChange={(e) => updateUrl({ titleFilter: e.target.value, page: 1 })}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            aria-label="Filter by title"
+          >
+            <option value="all">All titles</option>
+            {hasEmptyTitle && <option value="__empty__">(No title)</option>}
+            {titles.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        )}
+        {(topics.length > 0 || hasEmptyTopic) && (
+          <select
+            value={topicFilter}
+            onChange={(e) => updateUrl({ topicFilter: e.target.value, page: 1 })}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            aria-label="Filter by topic"
+          >
+            <option value="all">All topics</option>
+            {hasEmptyTopic && <option value="__empty__">(No topic)</option>}
+            {topics.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        )}
         <button
           type="button"
           onClick={() => updateUrl({ favoriteFilter: favoriteFilter === true ? null : true, page: 1 })}
@@ -748,7 +793,7 @@ export function GuestContactsClient({
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount} contacts
-          {(filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || favoriteFilter) && " (filtered)"}
+          {(filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all" || favoriteFilter != null) && " (filtered)"}
         </p>
         {totalPages > 1 && (
           <div className="flex items-center gap-1">

@@ -11,7 +11,7 @@ const PAGE_SIZE = 25;
 export default async function GuestContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; filterBy?: string; dateFilter?: string; deptFilter?: string; progFilter?: string; favoriteFilter?: string; sortBy?: string }>;
+  searchParams: Promise<{ page?: string; search?: string; filterBy?: string; dateFilter?: string; deptFilter?: string; progFilter?: string; favoriteFilter?: string; titleFilter?: string; topicFilter?: string; sortBy?: string }>;
 }) {
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp?.page ?? "1", 10) || 1);
@@ -22,6 +22,8 @@ export default async function GuestContactsPage({
     deptFilter: sp?.deptFilter ?? "all",
     progFilter: sp?.progFilter ?? "all",
     favoriteFilter: sp?.favoriteFilter === "true" ? true : sp?.favoriteFilter === "false" ? false : null,
+    titleFilter: sp?.titleFilter ?? "all",
+    topicFilter: sp?.topicFilter ?? "all",
     sortBy: sp?.sortBy ?? "name",
   };
   const { profile } = await requirePageAccess("guest_contacts");
@@ -73,6 +75,7 @@ export default async function GuestContactsPage({
   type Row = {
     guest_name: string;
     title: string | null;
+    topic: string | null;
     phone: string | null;
     email: string | null;
     invoice_id: string | null;
@@ -109,6 +112,7 @@ export default async function GuestContactsPage({
       gen?.title?.trim() ||
       fromMeta(meta, ["title", "programme title", "program title"]) ||
       null;
+    const topic = fromMeta(meta, ["topic", "description", "service description"]) || null;
     const phone =
       gen?.guest_phone?.trim() ||
       fromMeta(meta, ["guest phone", "guest phone number", "phone"]) ||
@@ -129,6 +133,7 @@ export default async function GuestContactsPage({
     rows.push({
       guest_name: guestName,
       title,
+      topic: topic || null,
       phone: phone || null,
       email: email || null,
       invoice_id: inv.id,
@@ -159,6 +164,7 @@ export default async function GuestContactsPage({
           last_appearance_date: r.last_appearance_date,
           department_name: r.department_name ?? existing.department_name,
           program_name: r.program_name ?? existing.program_name,
+          topic: r.topic ?? existing.topic,
           invoice_id: r.invoice_id ?? existing.invoice_id,
           created_at: r.created_at,
         });
@@ -167,6 +173,7 @@ export default async function GuestContactsPage({
           ...existing,
           department_name: existing.department_name ?? r.department_name,
           program_name: existing.program_name ?? r.program_name,
+          topic: existing.topic ?? r.topic,
         });
       }
     }
@@ -198,6 +205,7 @@ export default async function GuestContactsPage({
     const merged: Row = {
       guest_name: gc.guest_name ?? "",
       title: existing?.title ?? gc.title ?? null,
+      topic: existing?.topic ?? null,
       phone: (existing?.phone || gc.phone) ?? null,
       email: (existing?.email || gc.email) ?? null,
       invoice_id: (existing?.invoice_id as string) || null,
@@ -238,6 +246,10 @@ export default async function GuestContactsPage({
 
   const departmentNames = Array.from(new Set(allContacts.map((c) => c.department_name).filter(Boolean))) as string[];
   const programNames = Array.from(new Set(allContacts.map((c) => c.program_name).filter(Boolean))) as string[];
+  const titleNames = Array.from(new Set(allContacts.map((c) => c.title?.trim() || "").filter(Boolean))).sort();
+  const topicNames = Array.from(new Set(allContacts.map((c) => c.topic?.trim() || "").filter(Boolean))).sort();
+  const hasEmptyTitle = allContacts.some((c) => !(c.title?.trim()));
+  const hasEmptyTopic = allContacts.some((c) => !(c.topic?.trim()));
   const similarNames = (() => {
     const seen = new Map<string, string[]>();
     for (const c of allContacts) {
@@ -263,6 +275,10 @@ export default async function GuestContactsPage({
         filterParams={filterParams}
         departments={departmentNames}
         programs={programNames}
+        titles={titleNames}
+        topics={topicNames}
+        hasEmptyTitle={hasEmptyTitle}
+        hasEmptyTopic={hasEmptyTopic}
         similarNames={similarNames}
         isAdmin={profile.role === "admin"}
       />
