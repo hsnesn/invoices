@@ -12,6 +12,8 @@ import { FreelancerMobileCards } from "./FreelancerMobileCards";
 
 const FreelancerDashboard = lazy(() => import("./FreelancerDashboard").then(m => ({ default: m.FreelancerDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
+import { useExportLocale } from "@/contexts/ExportLocaleContext";
+import { ExportLocaleSelector } from "./ExportLocaleSelector";
 import { STATUS_GROUP_COLORS, departmentBadgeStyle, statusBadgeStyle } from "@/lib/colors";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -778,19 +780,22 @@ export function FreelancerBoard({
   }, [rows]);
 
   /* ---------- PDF export ---------- */
+  const { locale: exportLocale } = useExportLocale();
   const exportToPdf = useCallback(async (data: DisplayRow[]) => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
     doc.setFontSize(14); doc.text("Contractor Invoice Report", 14, 15);
-    doc.setFontSize(8); doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")} | ${data.length} invoices`, 14, 20);
+    doc.setFontSize(8); doc.text(`Generated: ${formatDate(new Date())} | ${data.length} invoices`, 14, 20);
     autoTable(doc, {
       startY: 25, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [59, 130, 246] },
       head: [["Contractor", "Company", "Service", "Department", "Days", "Rate", "Amount", "Status", "Month", "Booked By"]],
-      body: data.map(r => [r.contractor, r.companyName, r.serviceDescription, r.department, r.serviceDaysCount, r.serviceRate, r.amount, r.status, r.month, r.bookedBy]),
+      body: data.map(r => [r.contractor, r.companyName, r.serviceDescription, r.department, r.serviceDaysCount, r.serviceRate, r.amountNum != null ? formatCurrency(r.amountNum) : r.amount, r.status, r.month, r.bookedBy]),
     });
     doc.save(`freelancer-invoices-${new Date().toISOString().split("T")[0]}.pdf`);
-  }, []);
+  }, [exportLocale]);
 
   /* ---------- Realtime ---------- */
   useEffect(() => {
@@ -811,23 +816,25 @@ export function FreelancerBoard({
 
   /* ---------- Export ---------- */
   const exportToExcel = useCallback(async (data: DisplayRow[]) => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const XLSX = await import("xlsx");
     const xlsRows = data.map(r => ({
       Contractor: r.contractor, "Submitted by": r.submittedBy, "Company Name": r.companyName,
-      "Submission Date": r.submissionDate, "Service Description": r.serviceDescription,
+      "Submission Date": formatDate(r.submissionDate), "Service Description": r.serviceDescription,
       Department: r.department, "Department 2": r.department2, "Booked by": r.bookedBy,
       "Service Days": r.serviceDaysCount, Month: r.month, Days: r.days, "Rate/Day": r.serviceRate,
       "Additional Cost": r.additionalCost, "Add. Cost Reason": r.additionalCostReason,
-      Amount: r.amount,
+      Amount: r.amountNum != null ? formatCurrency(r.amountNum) : r.amount,
       Beneficiary: r.beneficiary, "Sort Code": r.sortCode, "Account No": r.accountNumber, "INV Number": r.invNumber,
       Approver: r.deptManager, Status: r.status,
-      "Rejection Reason": r.rejectionReason, "Paid Date": r.paidDate,
+      "Rejection Reason": r.rejectionReason, "Paid Date": formatDate(r.paidDate),
     }));
     const ws = XLSX.utils.json_to_sheet(xlsRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Contractor Invoices");
-    XLSX.writeFile(wb, `freelancer-invoices-${new Date().toISOString().split("T")[0]}.xlsx`);
-  }, []);
+    XLSX.writeFile(wb, `freelancer-invoices-${new Date().toISOString().split("T")[0]}.xlsx`, { bookSST: true });
+  }, [exportLocale]);
 
   /* ---------- Grouped rows ---------- */
   const groupedRows = useMemo(() => {
@@ -1011,6 +1018,7 @@ export function FreelancerBoard({
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>
             Dashboard
           </button>
+          <ExportLocaleSelector />
           <button onClick={() => void exportToExcel(filteredRows)} className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors shadow-sm">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
             Export Excel

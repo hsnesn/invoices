@@ -4,6 +4,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { FooterShortcutTrigger } from "@/components/FooterShortcutTrigger";
 import { InvoiceToastListener } from "@/components/InvoiceToastListener";
+import { ExportLocaleWrapper } from "@/components/ExportLocaleWrapper";
 
 export default async function AuthenticatedLayout({
   children,
@@ -12,6 +13,7 @@ export default async function AuthenticatedLayout({
 }) {
   const { profile } = await requireAuth();
   return (
+    <ExportLocaleWrapper>
     <div className="flex min-h-screen flex-col bg-gray-100 dark:bg-slate-950">
       <KeyboardShortcuts />
       <Nav profile={profile} />
@@ -26,5 +28,6 @@ export default async function AuthenticatedLayout({
         </p>
       </footer>
     </div>
+    </ExportLocaleWrapper>
   );
 }

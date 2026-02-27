@@ -11,6 +11,8 @@ import { InvoiceMobileCards } from "./InvoiceMobileCards";
 
 const DashboardSection = lazy(() => import("./InvoiceDashboard").then((m) => ({ default: m.InvoiceDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
+import { useExportLocale } from "@/contexts/ExportLocaleContext";
+import { ExportLocaleSelector } from "./ExportLocaleSelector";
 import { departmentBadgeStyle, programmeBadgeStyle, GUEST_SECTION_COLORS } from "@/lib/colors";
 
 function parseInvoiceDate(s: string): Date | null {
@@ -1256,6 +1258,7 @@ export function InvoicesBoard({
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
+  const { locale: exportLocale } = useExportLocale();
 
   useEffect(() => {
     if (initialGroupFilter) setGroupFilter(initialGroupFilter);
@@ -2304,40 +2307,62 @@ export function InvoicesBoard({
   const exportCustomReport = useCallback(async (data: DisplayRow[]) => {
     const fields = Object.entries(customReportFields).filter(([, v]) => v).map(([k]) => k);
     if (fields.length === 0) return;
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const XLSX = await import("xlsx");
     const fieldLabels: Record<string, string> = { guest: "Guest", producer: "Producer", department: "Department", programme: "Programme", amount: "Amount", invoiceDate: "Date", accountName: "Account", invNumber: "INV#", status: "Status", paymentType: "Payment", topic: "Topic", tx1: "TX1", lineManager: "Dept EP", title: "Title" };
+    const dateFields = new Set(["invoiceDate", "tx1", "tx2", "tx3"]);
     const rows = data.map((r) => {
       const obj: Record<string, string> = {};
       fields.forEach((f) => {
-        const v = (r as Record<string, unknown>)[f];
-        obj[fieldLabels[f] ?? f] = v != null && typeof v !== "object" ? String(v) : "";
+        if (f === "amount" && r.amountNum != null) {
+          obj[fieldLabels[f] ?? f] = formatCurrency(r.amountNum);
+        } else if (dateFields.has(f)) {
+          const v = (r as Record<string, unknown>)[f];
+          obj[fieldLabels[f] ?? f] = formatDate(v as string | Date | null | undefined);
+        } else {
+          const v = (r as Record<string, unknown>)[f];
+          obj[fieldLabels[f] ?? f] = v != null && typeof v !== "object" ? String(v) : "";
+        }
       });
       return obj;
     });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Custom Report");
-    XLSX.writeFile(wb, `invoice-report-${new Date().toISOString().split("T")[0]}.xlsx`);
+    XLSX.writeFile(wb, `invoice-report-${new Date().toISOString().split("T")[0]}.xlsx`, { bookSST: true });
     setShowCustomReport(false);
-  }, [customReportFields]);
+  }, [customReportFields, exportLocale]);
 
   const exportPdf = useCallback(async (data: DisplayRow[]) => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
     doc.setFontSize(14);
     doc.text("Invoice Report", 14, 15);
     doc.setFontSize(8);
-    doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, 14, 20);
+    doc.text(`Generated: ${formatDate(new Date())}`, 14, 20);
     autoTable(doc, {
       startY: 25,
       styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [59, 130, 246] },
       head: [["Guest", "Producer", "Payment", "Department", "Programme", "Amount", "INV#", "Status", "Date"]],
-      body: data.map((r) => [r.guest, r.producer, r.paymentType, r.department, r.programme, r.amount, r.invNumber, r.status, r.invoiceDate]),
+      body: data.map((r) => [
+        r.guest,
+        r.producer,
+        r.paymentType,
+        r.department,
+        r.programme,
+        r.amountNum != null ? formatCurrency(r.amountNum) : r.amount,
+        r.invNumber,
+        r.status,
+        formatDate(r.invoiceDate),
+      ]),
     });
     doc.save(`invoices-${new Date().toISOString().split("T")[0]}.pdf`);
-  }, []);
+  }, [exportLocale]);
 
   const downloadFile = useCallback(async (url: string, name: string) => {
     try {
@@ -2376,6 +2401,8 @@ export function InvoicesBoard({
   }, []);
 
   const exportToExcel = useCallback(async (data: DisplayRow[]) => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const XLSX = await import("xlsx");
     const rows = data.map((r) => ({
       "Guest Name": r.guest,
@@ -2385,25 +2412,25 @@ export function InvoicesBoard({
       "Department": r.department,
       "Programme": r.programme,
       "Topic": r.topic,
-      "TX Date 1": r.tx1,
-      "TX Date 2": r.tx2,
-      "TX Date 3": r.tx3,
-      "Invoice Date": r.invoiceDate,
+      "TX Date 1": formatDate(r.tx1),
+      "TX Date 2": formatDate(r.tx2),
+      "TX Date 3": formatDate(r.tx3),
+      "Invoice Date": formatDate(r.invoiceDate),
       "Account Name": r.accountName,
-      "Amount": r.amount,
+      "Amount": r.amountNum != null ? formatCurrency(r.amountNum) : r.amount,
       "INV Number": r.invNumber,
       "Sort Code": r.sortCode,
       "Account Number": r.accountNumber,
       "Dept EP": r.lineManager,
-      "Payment Date": r.paymentDate,
+      "Payment Date": formatDate(r.paymentDate),
       "Status": r.status,
       "Rejection Reason": r.rejectionReason || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Invoices");
-    XLSX.writeFile(wb, `invoices-${new Date().toISOString().split("T")[0]}.xlsx`);
-  }, []);
+    XLSX.writeFile(wb, `invoices-${new Date().toISOString().split("T")[0]}.xlsx`, { bookSST: true });
+  }, [exportLocale]);
 
   const saveDraft = useCallback(async (invoiceId: string, draft: EditDraft) => {
     const res = await fetch(`/api/invoices/${invoiceId}`, {
@@ -2893,6 +2920,7 @@ export function InvoicesBoard({
               Import Excel
             </button>
           )}
+          <ExportLocaleSelector />
           <button
             onClick={() => void exportToExcel(filtered)}
             className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors shadow-sm shadow-emerald-500/25"

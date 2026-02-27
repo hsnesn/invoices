@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { getFormatters, type ExportLocale } from "@/lib/export-locale";
 import * as XLSX from "xlsx";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get("month");
     const year = searchParams.get("year");
     const name = searchParams.get("name");
+    const locale = (searchParams.get("locale") === "tr" ? "tr" : "en") as ExportLocale;
 
     const supabase = createAdminClient();
     let query = supabase
@@ -36,25 +38,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const { formatDate, formatCurrency } = getFormatters(locale);
     const rows = (salaries ?? []).map((s) => {
       const emp = s.employees as { full_name?: string; bank_account_number?: string; sort_code?: string } | null;
       const sortCode = s.sort_code ?? emp?.sort_code ?? "";
       const account = s.bank_account_number ?? emp?.bank_account_number ?? "";
       return {
         EMPLOYEE: s.employee_name ?? "",
-        "NET PAY": s.net_pay ?? "",
+        "NET PAY": s.net_pay != null ? formatCurrency(s.net_pay) : "",
         "SORT CODE": sortCode,
         ACCOUNT: account,
         REFERENCE: s.reference ?? "",
         MONTH: s.payment_month ?? "",
-        DATE: s.process_date ?? "",
+        DATE: formatDate(s.paid_date ?? s.process_date ?? null),
       };
     });
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Salaries");
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx", bookSST: true });
 
     const filename = `salaries-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
     return new NextResponse(buf, {

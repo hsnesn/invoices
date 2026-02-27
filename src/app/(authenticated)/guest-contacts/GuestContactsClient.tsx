@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useExportLocale } from "@/contexts/ExportLocaleContext";
+import { ExportLocaleSelector } from "@/components/ExportLocaleSelector";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toUserFriendlyError } from "@/lib/error-messages";
@@ -86,6 +88,7 @@ export function GuestContactsClient({
   isAdmin?: boolean;
 }) {
   const router = useRouter();
+  const { locale: exportLocale } = useExportLocale();
   const pathname = usePathname();
   const [searchInput, setSearchInput] = useState(filterParams.search ?? "");
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -469,10 +472,12 @@ export function GuestContactsClient({
   };
 
   const exportExcel = async () => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate } = getFormatters(exportLocale);
     const colOrder = COLUMN_IDS.filter((id) => id !== "actions" && visibleColumns.has(id));
     const headerMap: Record<string, (c: Contact) => string> = {
       guest_name: (c) => c.guest_name,
-      last_appearance: (c) => (c.last_appearance_date || c.created_at) ? new Date(c.last_appearance_date || c.created_at).toISOString().slice(0, 10) : "",
+      last_appearance: (c) => formatDate(c.last_appearance_date || c.created_at || null),
       department: (c) => c.department_name ?? "",
       programme: (c) => c.program_name ?? "",
       title: (c) => c.title ?? "",
@@ -498,7 +503,7 @@ export function GuestContactsClient({
     XLSX.utils.book_append_sheet(wb, ws, "Guest Contacts");
     const hasFilters = filterBy !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || favoriteFilter != null || !!(search?.trim());
     const baseName = `guest-contacts-${new Date().toISOString().slice(0, 10)}`;
-    XLSX.writeFile(wb, hasFilters ? `${baseName}-filtered.xlsx` : `${baseName}.xlsx`);
+    XLSX.writeFile(wb, hasFilters ? `${baseName}-filtered.xlsx` : `${baseName}.xlsx`, { bookSST: true });
   };
 
   const runMerge = async (primary: string, mergeFrom: string[]) => {
@@ -723,6 +728,7 @@ export function GuestContactsClient({
         >
           Columns
         </button>
+        <ExportLocaleSelector />
         <button
           type="button"
           onClick={exportExcel}

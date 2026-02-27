@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { EmptyState } from "./EmptyState";
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
+import { useExportLocale } from "@/contexts/ExportLocaleContext";
+import { ExportLocaleSelector } from "./ExportLocaleSelector";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -311,6 +313,7 @@ export function SalariesBoard({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<SalaryRow | null>(null);
+  const { locale: exportLocale } = useExportLocale();
   const [addEmployeeName, setAddEmployeeName] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadEmployeeId, setUploadEmployeeId] = useState("");
@@ -616,6 +619,7 @@ export function SalariesBoard({
       if (monthFilter) params.set("month", monthFilter);
       if (yearFilter) params.set("year", yearFilter);
       if (nameFilter) params.set("name", nameFilter);
+      params.set("locale", exportLocale);
       const res = await fetch(`/api/salaries/export?${params}`);
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
@@ -631,18 +635,20 @@ export function SalariesBoard({
     } finally {
       setExporting(false);
     }
-  }, [statusFilter, monthFilter, yearFilter, nameFilter]);
+  }, [statusFilter, monthFilter, yearFilter, nameFilter, exportLocale]);
 
   const handleExportPdf = useCallback(async () => {
     setExporting(true);
     try {
+      const { getFormatters } = await import("@/lib/export-locale");
+      const { formatDate, formatCurrency } = getFormatters(exportLocale);
       const { default: jsPDF } = await import("jspdf");
       const { default: autoTable } = await import("jspdf-autotable");
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
       doc.setFontSize(14);
       doc.text("Salary Report", 14, 15);
       doc.setFontSize(8);
-      doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")} | ${filtered.length} records`, 14, 20);
+      doc.text(`Generated: ${formatDate(new Date())} | ${filtered.length} records`, 14, 20);
       const bank = (s: SalaryRow) => getBankDisplay(s);
       autoTable(doc, {
         startY: 25,
@@ -653,12 +659,12 @@ export function SalariesBoard({
           const b = bank(s);
           return [
             s.employee_name ?? "—",
-            fmtCurrency(s.net_pay),
+            s.net_pay != null ? formatCurrency(s.net_pay) : "—",
             b.sortCode,
             b.account,
             s.reference ?? "—",
             s.payment_month ?? "—",
-            s.paid_date ?? s.process_date ?? "—",
+            formatDate(s.paid_date ?? s.process_date ?? null),
           ];
         }),
       });
@@ -669,7 +675,7 @@ export function SalariesBoard({
     } finally {
       setExporting(false);
     }
-  }, [filtered]);
+  }, [filtered, exportLocale]);
 
   const handleSaveEdit = useCallback(async (salary: SalaryRow, updates: Record<string, unknown>) => {
     setSavingEdit(true);
@@ -967,6 +973,7 @@ export function SalariesBoard({
               </button>
             </>
           )}
+          <ExportLocaleSelector />
           <button
             onClick={() => void handleExportExcel()}
             disabled={exporting || salaries.length === 0}

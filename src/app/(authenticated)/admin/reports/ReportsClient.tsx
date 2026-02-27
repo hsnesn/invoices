@@ -27,7 +27,11 @@ type ReportData = {
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#f97316", "#14b8a6", "#6366f1"];
 
-function fmt(v: number) { return `£${v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+import { formatCurrencyTR, getFormatters } from "@/lib/export-locale";
+import { useExportLocale } from "@/contexts/ExportLocaleContext";
+import { ExportLocaleSelector } from "@/components/ExportLocaleSelector";
+
+function fmt(v: number) { return formatCurrencyTR(v); }
 function pctChange(cur: number, prev: number) { if (prev === 0) return cur > 0 ? "+100%" : "0%"; const p = ((cur - prev) / prev * 100).toFixed(1); return (cur >= prev ? "+" : "") + p + "%"; }
 
 /* ------------------------------------------------------------------ */
@@ -35,6 +39,7 @@ function pctChange(cur: number, prev: number) { if (prev === 0) return cur > 0 ?
 /* ------------------------------------------------------------------ */
 
 export function ReportsClient() {
+  const { locale: exportLocale } = useExportLocale();
   const now = new Date();
   const [reportType, setReportType] = useState<"monthly" | "quarterly" | "department" | "custom">("monthly");
   const [invoiceType, setInvoiceType] = useState<"all" | "guest" | "freelancer">("all");
@@ -73,24 +78,25 @@ export function ReportsClient() {
 
   const exportPdf = useCallback(async () => {
     if (!report) return;
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
     const getY = () => (doc as never as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY ?? 20;
     doc.setFontSize(16); doc.text(`Invoice Report — ${report.period}`, 14, 15);
-    doc.setFontSize(9); doc.text(`Type: ${report.invoiceType} | Tab: ${activeTab} | Generated: ${new Date(report.generatedAt).toLocaleString("en-GB")}`, 14, 21);
+    doc.setFontSize(9); doc.text(`Type: ${report.invoiceType} | Tab: ${activeTab} | Generated: ${formatDate(report.generatedAt)}`, 14, 21);
 
     let startY = 26;
     if (activeTab === "overview") {
-      autoTable(doc, { startY: 26, theme: "grid", headStyles: { fillColor: [59, 130, 246] }, head: [["Metric", "Value"]], body: [["Total Invoices", String(report.summary.totalInvoices)], ["Total Amount", fmt(report.summary.totalAmount)], ["Paid", `${report.summary.paidInvoices} (${fmt(report.summary.paidAmount)})`], ["Pending", fmt(report.summary.pendingAmount)], ["Rejected", String(report.summary.rejectedCount)], ["Avg Processing", report.processing.avg != null ? `${report.processing.avg} days` : "N/A"]] });
+      autoTable(doc, { startY: 26, theme: "grid", headStyles: { fillColor: [59, 130, 246] }, head: [["Metric", "Value"]], body: [["Total Invoices", String(report.summary.totalInvoices)], ["Total Amount", formatCurrency(report.summary.totalAmount)], ["Paid", `${report.summary.paidInvoices} (${formatCurrency(report.summary.paidAmount)})`], ["Pending", formatCurrency(report.summary.pendingAmount)], ["Rejected", String(report.summary.rejectedCount)], ["Avg Processing", report.processing.avg != null ? `${report.processing.avg} days` : "N/A"]] });
       const de = Object.entries(report.byDepartment).sort((a, b) => b[1].amount - a[1].amount);
-      if (de.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Department Breakdown", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [16, 185, 129] }, head: [["Department", "Count", "Amount"]], body: de.map(([d, v]) => [d, String(v.count), fmt(v.amount)]), styles: { fontSize: 8 } }); }
+      if (de.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Department Breakdown", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [16, 185, 129] }, head: [["Department", "Count", "Amount"]], body: de.map(([d, v]) => [d, String(v.count), formatCurrency(v.amount)]), styles: { fontSize: 8 } }); }
     } else if (activeTab === "producers") {
       const pe = Object.entries(report.byProducer).sort((a, b) => b[1].amount - a[1].amount);
-      if (pe.length) { doc.setFontSize(11); doc.text("Top Producers", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [124, 58, 237] }, head: [["Producer", "Total", "Amount", "Paid", "Unpaid", "Avg"]], body: pe.map(([n, d]) => [n, String(d.count), fmt(d.amount), String(d.paidCount), String(d.unpaidCount), fmt(d.count > 0 ? d.amount / d.count : 0)]), styles: { fontSize: 8 } }); }
+      if (pe.length) { doc.setFontSize(11); doc.text("Top Producers", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [124, 58, 237] }, head: [["Producer", "Total", "Amount", "Paid", "Unpaid", "Avg"]], body: pe.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount), String(d.paidCount), String(d.unpaidCount), formatCurrency(d.count > 0 ? d.amount / d.count : 0)]), styles: { fontSize: 8 } }); }
     } else if (activeTab === "guests") {
       const ge = Object.entries(report.topGuests).sort((a, b) => b[1].amount - a[1].amount).slice(0, 30);
-      if (ge.length) { doc.setFontSize(11); doc.text("Top Guests by Spend", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [234, 88, 12] }, head: [["Name", "Count", "Amount"]], body: ge.map(([n, d]) => [n, String(d.count), fmt(d.amount)]), styles: { fontSize: 8 } }); }
+      if (ge.length) { doc.setFontSize(11); doc.text("Top Guests by Spend", 14, startY + 8); autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [234, 88, 12] }, head: [["Name", "Count", "Amount"]], body: ge.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount)]), styles: { fontSize: 8 } }); }
     } else if (activeTab === "rejections") {
       const { rejections } = report;
       doc.setFontSize(11); doc.text("Rejection Summary", 14, startY + 8);
@@ -100,13 +106,13 @@ export function ReportsClient() {
     } else if (activeTab === "freelancer") {
       const { freelancer } = report;
       doc.setFontSize(11); doc.text("Contractor Invoices", 14, startY + 8);
-      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Metric", "Value"]], body: [["Total", String(freelancer.total)], ["Total Amount", fmt(freelancer.totalAmount)]], styles: { fontSize: 9 } });
+      autoTable(doc, { startY: startY + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Metric", "Value"]], body: [["Total", String(freelancer.total)], ["Total Amount", formatCurrency(freelancer.totalAmount)]], styles: { fontSize: 9 } });
       const contractorEntries = Object.entries(freelancer.byContractor).sort((a, b) => b[1].amount - a[1].amount).slice(0, 30);
-      if (contractorEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Top Contractors", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Contractor", "Count", "Amount"]], body: contractorEntries.map(([n, d]) => [n, String(d.count), fmt(d.amount)]), styles: { fontSize: 8 } }); }
+      if (contractorEntries.length) { let y = getY(); if (y > 240) { doc.addPage(); y = 10; } doc.setFontSize(11); doc.text("Top Contractors", 14, y + 8); autoTable(doc, { startY: y + 11, theme: "grid", headStyles: { fillColor: [20, 184, 166] }, head: [["Contractor", "Count", "Amount"]], body: contractorEntries.map(([n, d]) => [n, String(d.count), formatCurrency(d.amount)]), styles: { fontSize: 8 } }); }
     }
 
     doc.save(`invoice-report-${report.period.replace(/\s+/g, "-")}-${activeTab}.pdf`);
-  }, [report, activeTab]);
+  }, [report, activeTab, exportLocale]);
 
   const years = useMemo(() => { const y = new Date().getFullYear(); return Array.from({ length: 5 }, (_, i) => y - i); }, []);
   const TABS = useMemo(() => {
@@ -164,6 +170,7 @@ export function ReportsClient() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-lg font-bold text-gray-800 dark:text-white">{report.period} — {report.invoiceType === "all" ? "All" : report.invoiceType.charAt(0).toUpperCase() + report.invoiceType.slice(1)} Invoices</h2>
             <div className="flex items-center gap-2">
+              <ExportLocaleSelector />
               <button onClick={() => void exportPdf()} className="rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-600 shadow-sm flex items-center gap-1"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>PDF</button>
               {emailTo.trim() && <button onClick={() => void sendReportEmail()} disabled={emailSending} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 shadow-sm flex items-center gap-1"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>{emailSending ? "Sending..." : "Email"}</button>}
             </div>

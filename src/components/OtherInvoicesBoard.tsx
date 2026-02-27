@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/error-messages";
 import { OtherDashboard } from "./OtherDashboard";
+import { useExportLocale } from "@/contexts/ExportLocaleContext";
+import { ExportLocaleSelector } from "./ExportLocaleSelector";
 
 function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
@@ -491,21 +493,24 @@ export function OtherInvoicesBoard({
     setPreviewLoading(false);
   }, [previewUrl]);
 
+  const { locale: exportLocale } = useExportLocale();
   const exportToPdf = useCallback(async (data: DisplayRow[]) => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
     doc.setFontSize(14);
     doc.text("Other Invoices Report", 14, 15);
     doc.setFontSize(8);
-    doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")} | ${data.length} invoices`, 14, 20);
+    doc.text(`Generated: ${formatDate(new Date())} | ${data.length} invoices`, 14, 20);
     autoTable(doc, {
       startY: 25,
       styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [59, 130, 246] },
       head: [["Amount", "Currency", "Beneficiary", "Sort Code", "Account No", "INV Number", "Submitted by", "Company", "INV date", "Due date", "Purpose", "Status"]],
       body: data.map((r) => [
-        r.amount,
+        formatCurrency(r.amountNum),
         r.currency,
         r.beneficiary,
         r.sortCode,
@@ -513,19 +518,21 @@ export function OtherInvoicesBoard({
         r.invNumber,
         r.submittedBy,
         r.companyName,
-        r.invDate,
-        r.dueDate,
+        formatDate(r.invDate),
+        formatDate(r.dueDate),
         r.purpose,
         r.status,
       ]),
     });
     doc.save(`other-invoices-${new Date().toISOString().split("T")[0]}.pdf`);
-  }, []);
+  }, [exportLocale]);
 
   const exportToExcel = useCallback(async (data: DisplayRow[]) => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate, formatCurrency } = getFormatters(exportLocale);
     const XLSX = await import("xlsx");
     const xlsRows = data.map((r) => ({
-      Amount: r.amount,
+      Amount: formatCurrency(r.amountNum),
       Currency: r.currency,
       Beneficiary: r.beneficiary,
       "Sort Code": r.sortCode,
@@ -533,16 +540,16 @@ export function OtherInvoicesBoard({
       "INV Number": r.invNumber,
       "Submitted by": r.submittedBy,
       "Company Name": r.companyName,
-      "INV date": r.invDate,
-      "Due date": r.dueDate,
+      "INV date": formatDate(r.invDate),
+      "Due date": formatDate(r.dueDate),
       Purpose: r.purpose,
       Status: r.status,
     }));
     const ws = XLSX.utils.json_to_sheet(xlsRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Other Invoices");
-    XLSX.writeFile(wb, `other-invoices-${new Date().toISOString().split("T")[0]}.xlsx`);
-  }, []);
+    XLSX.writeFile(wb, `other-invoices-${new Date().toISOString().split("T")[0]}.xlsx`, { bookSST: true });
+  }, [exportLocale]);
 
   const onToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -608,6 +615,7 @@ export function OtherInvoicesBoard({
             </svg>
             Dashboard
           </button>
+          <ExportLocaleSelector />
           <button onClick={() => void exportToExcel(filteredRows)} className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors shadow-sm">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />

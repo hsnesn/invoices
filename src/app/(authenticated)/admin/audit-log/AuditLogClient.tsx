@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { useExportLocale } from "@/contexts/ExportLocaleContext";
+import { ExportLocaleSelector } from "@/components/ExportLocaleSelector";
 
 type AuditRow = {
   id: number;
@@ -24,6 +26,7 @@ function escapeCsv(val: unknown): string {
 }
 
 export function AuditLogClient() {
+  const { locale: exportLocale } = useExportLocale();
   const [events, setEvents] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [invoiceId, setInvoiceId] = useState("");
@@ -81,9 +84,11 @@ export function AuditLogClient() {
   }, [events]);
 
   const exportExcel = useCallback(async () => {
+    const { getFormatters } = await import("@/lib/export-locale");
+    const { formatDate } = getFormatters(exportLocale);
     const XLSX = await import("xlsx");
     const rows = events.map((e) => ({
-      Date: new Date(e.created_at).toISOString(),
+      Date: formatDate(e.created_at),
       Event: e.event_type,
       Actor: e.actor_name,
       "Invoice ID": e.invoice_id ?? "",
@@ -95,9 +100,9 @@ export function AuditLogClient() {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Audit Log");
-    XLSX.writeFile(wb, `audit-log-${new Date().toISOString().split("T")[0]}.xlsx`);
+    XLSX.writeFile(wb, `audit-log-${new Date().toISOString().split("T")[0]}.xlsx`, { bookSST: true });
     toast.success("Audit log exported");
-  }, [events]);
+  }, [events, exportLocale]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -152,7 +157,8 @@ export function AuditLogClient() {
           >
             Apply
           </button>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex items-center gap-2">
+            <ExportLocaleSelector />
             <button
               onClick={exportCsv}
               disabled={events.length === 0}
