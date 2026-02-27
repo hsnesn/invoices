@@ -18,6 +18,11 @@ type ProducerGuest = {
   accepted: boolean | null;
   matched_invoice_id: string | null;
   matched_at: string | null;
+  payment_received?: boolean | null;
+  payment_amount?: number | null;
+  payment_currency?: string | null;
+  recording_date?: string | null;
+  recording_topic?: string | null;
   created_at: string;
 };
 
@@ -46,6 +51,8 @@ export function InvitedGuestsClient({
   const [acceptanceModal, setAcceptanceModal] = useState<ProducerGuest | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [bulkAcceptModal, setBulkAcceptModal] = useState(false);
   const [sending, setSending] = useState(false);
 
   const [acceptanceForm, setAcceptanceForm] = useState({
@@ -56,6 +63,7 @@ export function InvitedGuestsClient({
     recording_topic: "",
     program_name: "",
     generate_invoice: false,
+    save_as_template: false,
     invoice_number: "",
     invoice_date: new Date().toISOString().slice(0, 10),
     account_name: "",
@@ -86,6 +94,15 @@ export function InvitedGuestsClient({
   const [showPreview, setShowPreview] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [invoiceTemplates, setInvoiceTemplates] = useState<{ id: string; name: string; guest_name: string | null; account_name: string | null; account_number: string | null; sort_code: string | null; bank_name: string | null; bank_address: string | null; paypal: string | null }[]>([]);
+  const [bulkAcceptForm, setBulkAcceptForm] = useState({
+    payment_received: true,
+    payment_amount: 0,
+    payment_currency: "GBP" as "GBP" | "EUR" | "USD",
+    recording_date: new Date().toISOString().slice(0, 10),
+    recording_topic: "",
+    program_name: "",
+  });
+  const [invoiceNumberConflict, setInvoiceNumberConflict] = useState(false);
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
   useEffect(() => {
@@ -118,6 +135,33 @@ export function InvitedGuestsClient({
       .catch(() => {});
   }, [initialTitles]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setInviteModal(null);
+        setAcceptanceModal(null);
+        setBulkInviteModal(false);
+        setBulkAcceptModal(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (!acceptanceForm.invoice_number.trim()) {
+      setInvoiceNumberConflict(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/invoices/next-invoice-number?check=${encodeURIComponent(acceptanceForm.invoice_number)}`, { credentials: "same-origin" })
+        .then((r) => r.json())
+        .then((d) => setInvoiceNumberConflict(d.exists === true))
+        .catch(() => setInvoiceNumberConflict(false));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [acceptanceForm.invoice_number]);
+
   const selectedProducer = producers.find((p) => p.id === currentUserId) ?? { id: currentUserId, full_name: currentUserFullName };
 
   const filteredGuests = guests.filter((g) => {
@@ -128,6 +172,17 @@ export function InvitedGuestsClient({
     if (statusFilter === "no_match") return g.invited_at && !g.matched_at;
     return true;
   });
+
+  const searchLower = searchQuery.trim().toLowerCase();
+  const displayedGuests = searchLower
+    ? filteredGuests.filter(
+        (g) =>
+          g.guest_name.toLowerCase().includes(searchLower) ||
+          (g.email ?? "").toLowerCase().includes(searchLower) ||
+          (g.program_name ?? "").toLowerCase().includes(searchLower) ||
+          (g.title ?? "").toLowerCase().includes(searchLower)
+      )
+    : filteredGuests;
 
   const selectedGuests = filteredGuests.filter((g) => selectedIds.has(g.id));
   const selectedWithEmail = selectedGuests.filter((g) => g.email && g.email.includes("@"));
@@ -271,6 +326,72 @@ export function InvitedGuestsClient({
     return null;
   };
 
+  const handleBulkMarkAccepted = async () => {
+    const idsToAccept = selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).map((g) => g.id);
+    if (idsToAccept.length === 0) {
+      toast.error("Select at least one invited guest (not yet accepted) with email");
+      return;
+    }
+    if (bulkAcceptForm.payment_received && bulkAcceptForm.payment_amount <= 0) {
+      toast.error("Payment amount is required when guests receive payment");
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch("/api/producer-guests/bulk-mark-accepted", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: idsToAccept,
+          payment_received: bulkAcceptForm.payment_received,
+          payment_amount: bulkAcceptForm.payment_received ? bulkAcceptForm.payment_amount : undefined,
+          payment_currency: bulkAcceptForm.payment_received ? bulkAcceptForm.payment_currency : undefined,
+          recording_date: bulkAcceptForm.recording_date,
+          recording_topic: bulkAcceptForm.recording_topic,
+          program_name: bulkAcceptForm.program_name || undefined,
+        }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message ?? "Guests marked as accepted");
+        setBulkAcceptModal(false);
+        setSelectedIds(new Set());
+        const list = await fetch("/api/producer-guests", { credentials: "same-origin" }).then((r) => r.json());
+        setGuests(Array.isArray(list) ? list : []);
+      } else {
+        toast.error(data.error ?? "Failed");
+      }
+    } catch {
+      toast.error("Request failed");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const exportToCsv = () => {
+    const headers = ["Guest", "Title", "Program", "Email", "Invited", "Matched", "Accepted", "Payment", "Recording Date"];
+    const rows = displayedGuests.map((g) => [
+      g.guest_name,
+      g.title || "",
+      g.program_name || "",
+      g.email || "",
+      g.invited_at ? new Date(g.invited_at).toLocaleDateString() : "",
+      g.matched_at ? new Date(g.matched_at).toLocaleDateString() : "",
+      g.accepted === true ? "Yes" : g.accepted === false ? "No" : "—",
+      g.payment_received ? `${g.payment_amount ?? 0} ${g.payment_currency ?? ""}` : "Unpaid",
+      g.recording_date ? new Date(g.recording_date).toLocaleDateString() : "",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invited-guests-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const updateAccepted = async (id: string, accepted: boolean | null) => {
     try {
       const res = await fetch(`/api/producer-guests/${id}`, {
@@ -313,6 +434,10 @@ export function InvitedGuestsClient({
         toast.error("Invoice number and bank details are required to generate invoice");
         return;
       }
+      if (invoiceNumberConflict) {
+        toast.error("This invoice number already exists. Please use a different number.");
+        return;
+      }
     }
     setSending(true);
     try {
@@ -340,7 +465,30 @@ export function InvitedGuestsClient({
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message ?? "Guest marked as accepted");
+        if (acceptanceForm.save_as_template && acceptanceForm.account_name && acceptanceForm.account_number && acceptanceForm.sort_code && acceptanceModal) {
+          try {
+            await fetch("/api/guest-invoice-templates", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: `${acceptanceModal.guest_name} – ${acceptanceForm.program_name || "template"}`,
+                guest_name: acceptanceModal.guest_name,
+                account_name: acceptanceForm.account_name,
+                account_number: acceptanceForm.account_number,
+                sort_code: acceptanceForm.sort_code,
+                bank_name: acceptanceForm.bank_name,
+                bank_address: acceptanceForm.bank_address,
+                paypal: acceptanceForm.paypal,
+              }),
+              credentials: "same-origin",
+            });
+            toast.success("Guest marked as accepted. Bank details saved as template.");
+          } catch {
+            toast.success(data.message ?? "Guest marked as accepted");
+          }
+        } else {
+          toast.success(data.message ?? "Guest marked as accepted");
+        }
         setAcceptanceModal(null);
         const list = await fetch("/api/producer-guests", { credentials: "same-origin" }).then((r) => r.json());
         setGuests(Array.isArray(list) ? list : []);
@@ -374,6 +522,13 @@ export function InvitedGuestsClient({
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            type="search"
+            placeholder="Search guest, email, program..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm w-56 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -386,6 +541,12 @@ export function InvitedGuestsClient({
             <option value="no_match">No match</option>
           </select>
           <button
+            onClick={exportToCsv}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            Export CSV
+          </button>
+          <button
             onClick={() => {
               setBulkInviteModal(true);
               setForm({ ...form, guest_name: "", email: "", title: "" });
@@ -394,6 +555,23 @@ export function InvitedGuestsClient({
             className="rounded-xl border border-sky-600 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Bulk invite ({selectedWithEmail.length})
+          </button>
+          <button
+            onClick={() => {
+              setBulkAcceptModal(true);
+              setBulkAcceptForm({
+                payment_received: true,
+                payment_amount: 0,
+                payment_currency: "GBP",
+                recording_date: new Date().toISOString().slice(0, 10),
+                recording_topic: "",
+                program_name: defaultProgramName,
+              });
+            }}
+            disabled={selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).length === 0}
+            className="rounded-xl border border-emerald-600 px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Bulk mark accepted
           </button>
         </div>
         <button
@@ -432,10 +610,10 @@ export function InvitedGuestsClient({
                 <th className="px-4 py-2">
                   <input
                     type="checkbox"
-                    checked={filteredGuests.length > 0 && selectedIds.size === filteredGuests.filter((g) => g.email).length}
+                    checked={displayedGuests.length > 0 && displayedGuests.filter((g) => g.email).every((g) => selectedIds.has(g.id))}
                     onChange={(e) => {
                       const checked = e.target.checked;
-                      setSelectedIds(checked ? new Set(filteredGuests.filter((g) => g.email).map((g) => g.id)) : new Set());
+                      setSelectedIds(checked ? new Set(displayedGuests.filter((g) => g.email).map((g) => g.id)) : new Set());
                     }}
                     className="h-4 w-4 rounded"
                   />
@@ -448,18 +626,26 @@ export function InvitedGuestsClient({
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Invited</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Matched</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Accepted</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Payment</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Recorded</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
               {guests.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 10 : 9} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-gray-500">
                     No invited guests yet. Click &quot;Invite Guest&quot; to add one.
                   </td>
                 </tr>
+              ) : displayedGuests.length === 0 ? (
+                <tr>
+                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-gray-500">
+                    No guests match your search.
+                  </td>
+                </tr>
               ) : (
-                filteredGuests.map((g) => {
+                displayedGuests.map((g) => {
                   const noMatch = g.invited_at && !g.matched_at;
                   const rowBg =
                     g.accepted === true
@@ -534,6 +720,7 @@ export function InvitedGuestsClient({
                                 recording_topic: "",
                                 program_name: g.program_name || defaultProgramName,
                                 generate_invoice: false,
+                                save_as_template: false,
                                 invoice_number: "",
                                 invoice_date: new Date().toISOString().slice(0, 10),
                                 account_name: "",
@@ -566,7 +753,41 @@ export function InvitedGuestsClient({
                           <option value="no">No</option>
                         </select>
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-4 py-2 text-sm">
+                        {g.payment_received ? (
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            {g.payment_amount != null ? `${g.payment_amount} ${g.payment_currency ?? ""}` : "Paid"}
+                          </span>
+                        ) : g.accepted === true ? (
+                          <span className="text-gray-500">Unpaid</span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
+                        {g.recording_date ? new Date(g.recording_date).toLocaleDateString() : "—"}
+                      </td>
+                      <td className="px-4 py-2 flex flex-wrap gap-1">
+                        {g.accepted === true && g.email?.includes("@") && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/producer-guests/${g.id}/resend-post-recording-email`, {
+                                  method: "POST",
+                                  credentials: "same-origin",
+                                });
+                                const data = await res.json();
+                                if (res.ok) toast.success(data.message ?? "Email resent");
+                                else toast.error(data.error ?? "Failed");
+                              } catch {
+                                toast.error("Failed to resend");
+                              }
+                            }}
+                            className="text-amber-600 hover:underline text-xs"
+                          >
+                            Resend email
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setInviteModal(g);
@@ -1020,6 +1241,11 @@ ${selectedProducer.full_name}`}
                       <p className="text-xs text-amber-600 dark:text-amber-400">
                         Invoice number is auto-suggested from existing records. You can edit if needed.
                       </p>
+                      {invoiceNumberConflict && (
+                        <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+                          This invoice number already exists. Please use a different number.
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="mb-1 block text-sm font-medium">Invoice number *</label>
@@ -1107,6 +1333,15 @@ ${selectedProducer.full_name}`}
                           className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={acceptanceForm.save_as_template}
+                          onChange={(e) => setAcceptanceForm((p) => ({ ...p, save_as_template: e.target.checked }))}
+                          className="h-4 w-4 rounded text-sky-600"
+                        />
+                        <span className="text-sm">Save bank details as template for future use</span>
+                      </label>
                     </div>
                   )}
                 </>
@@ -1119,7 +1354,7 @@ ${selectedProducer.full_name}`}
               <button
                 type="button"
                 onClick={handleMarkAccepted}
-                disabled={sending || !acceptanceModal.email?.includes("@") || (acceptanceForm.payment_received && acceptanceForm.payment_amount <= 0) || (acceptanceForm.generate_invoice && (!acceptanceForm.invoice_number.trim() || !acceptanceForm.account_name.trim() || !acceptanceForm.account_number.trim() || !acceptanceForm.sort_code.trim()))}
+                disabled={sending || !acceptanceModal.email?.includes("@") || (acceptanceForm.payment_received && acceptanceForm.payment_amount <= 0) || (acceptanceForm.generate_invoice && (invoiceNumberConflict || !acceptanceForm.invoice_number.trim() || !acceptanceForm.account_name.trim() || !acceptanceForm.account_number.trim() || !acceptanceForm.sort_code.trim()))}
                 className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 {sending ? "Processing..." : "Mark Accepted & Send"}
@@ -1193,6 +1428,72 @@ ${selectedProducer.full_name}`}
                   className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50"
                 >
                   {sending ? "Sending..." : `Send to ${selectedWithEmail.length} guest(s)`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkAcceptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" onClick={() => setBulkAcceptModal(false)}>
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Bulk mark accepted</h2>
+            <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              Marking {selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).length} guest(s) as accepted. Invoice generation is not available for bulk; use single flow for that.
+            </p>
+            <div className="mb-4 max-h-24 overflow-y-auto rounded border p-2 text-xs">
+              {selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).map((g) => (
+                <div key={g.id}>{g.guest_name} ({g.email})</div>
+              ))}
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Do guests receive payment?</label>
+                <div className="flex gap-4">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input type="radio" checked={bulkAcceptForm.payment_received} onChange={() => setBulkAcceptForm((p) => ({ ...p, payment_received: true }))} className="h-4 w-4 text-sky-600" />
+                    <span className="text-sm">Yes</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input type="radio" checked={!bulkAcceptForm.payment_received} onChange={() => setBulkAcceptForm((p) => ({ ...p, payment_received: false }))} className="h-4 w-4 text-sky-600" />
+                    <span className="text-sm">No</span>
+                  </label>
+                </div>
+              </div>
+              {bulkAcceptForm.payment_received && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Amount *</label>
+                    <input type="number" min={0} step={0.01} value={bulkAcceptForm.payment_amount || ""} onChange={(e) => setBulkAcceptForm((p) => ({ ...p, payment_amount: parseFloat(e.target.value) || 0 }))} className="rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Currency</label>
+                    <select value={bulkAcceptForm.payment_currency} onChange={(e) => setBulkAcceptForm((p) => ({ ...p, payment_currency: e.target.value as "GBP" | "EUR" | "USD" }))} className="rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                      <option value="GBP">GBP</option>
+                      <option value="EUR">EUR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-sm font-medium">Program (for thank-you)</label>
+                <input type="text" value={bulkAcceptForm.program_name} onChange={(e) => setBulkAcceptForm((p) => ({ ...p, program_name: e.target.value }))} list="program-list-bulk-accept" className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                <datalist id="program-list-bulk-accept">{programs.map((p) => (<option key={p.id} value={p.name} />))}</datalist>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Recording date</label>
+                <input type="date" value={bulkAcceptForm.recording_date} onChange={(e) => setBulkAcceptForm((p) => ({ ...p, recording_date: e.target.value }))} className="rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Recording topic</label>
+                <input type="text" value={bulkAcceptForm.recording_topic} onChange={(e) => setBulkAcceptForm((p) => ({ ...p, recording_topic: e.target.value }))} placeholder="e.g. US-Turkey relations" className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setBulkAcceptModal(false)} className="rounded-lg border px-4 py-2 text-sm">Cancel</button>
+                <button type="button" onClick={handleBulkMarkAccepted} disabled={sending || (bulkAcceptForm.payment_received && bulkAcceptForm.payment_amount <= 0)} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50">
+                  {sending ? "Processing..." : "Mark Accepted & Send Emails"}
                 </button>
               </div>
             </div>

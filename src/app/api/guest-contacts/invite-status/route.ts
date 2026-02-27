@@ -42,10 +42,7 @@ export async function GET() {
       }
     }
 
-    const result: Record<string, { accepted: boolean | null; invited_at: string | null; matched_at: string | null }> = {};
-    for (const [k, v] of byKey) {
-      result[k] = v;
-    }
+    const result = Object.fromEntries(byKey);
     return NextResponse.json(result);
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

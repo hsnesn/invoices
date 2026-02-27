@@ -1,15 +1,26 @@
 /**
  * Get next suggested invoice number based on existing records.
  * Parses INV-YYYY-NNN or similar patterns, returns next in sequence.
+ * Query param ?check=INV-2025-001 returns { exists: boolean } for conflict check.
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const supabase = createAdminClient();
+
+    const checkNum = request.nextUrl.searchParams.get("check")?.trim();
+    if (checkNum) {
+      const { data: existing } = await supabase
+        .from("invoice_extracted_fields")
+        .select("invoice_id")
+        .ilike("invoice_number", checkNum)
+        .limit(1);
+      return NextResponse.json({ exists: (existing ?? []).length > 0 });
+    }
 
     const { data: rows } = await supabase
       .from("invoice_extracted_fields")
