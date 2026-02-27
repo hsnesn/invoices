@@ -15,6 +15,12 @@ type Stats = {
   monthlyTrend: { month: string; guest: number; freelancer: number; total: number }[];
 };
 
+type SubmitterStats = {
+  guestPending: number;
+  freelancerPending: number;
+  totalPending: number;
+};
+
 interface PageCard {
   title: string;
   description: string;
@@ -197,6 +203,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     statsFetcher,
     { refreshInterval: 10000, revalidateOnFocus: true, dedupingInterval: 3000 }
   );
+  const { data: submitterStats, mutate: mutateSubmitter } = useSWR<SubmitterStats>(
+    isSubmitter ? "/api/dashboard/submitter-stats" : null,
+    statsFetcher,
+    { refreshInterval: 10000, revalidateOnFocus: true, dedupingInterval: 3000 }
+  );
 
   const visiblePages = PAGES.filter((p) => {
     if (p.viewerHidden && isViewer) return false;
@@ -233,8 +244,36 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       </div>
 
+      {/* Submitter: My Pending Invoices */}
+      {isSubmitter && submitterStats && (
+        <div className="mb-8 min-w-0">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Auto-refresh every 10s</span>
+            <button
+              type="button"
+              onClick={() => void mutateSubmitter()}
+              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+            >
+              Refresh
+            </button>
+          </div>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
+            <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
+              <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">My Pending Invoices</p>
+              <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{submitterStats.totalPending}</p>
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                {submitterStats.guestPending} guest · {submitterStats.freelancerPending} contractor
+              </p>
+              <Link href="/invoices?group=pending" className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
+                View →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Metric Cards - hidden from submitters */}
-      {canSeeStats && stats && (
+      {canSeeStats && (
         <div className="mb-8 min-w-0">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Auto-refresh every 10s</span>
@@ -246,7 +285,18 @@ export function DashboardHome({ profile }: { profile: Profile }) {
               Refresh
             </button>
           </div>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 min-w-0">
+          {!stats ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 min-w-0">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="rounded-xl border border-gray-200/80 bg-gray-50/80 p-4 dark:border-gray-700/60 dark:bg-gray-800/40 animate-pulse">
+                  <div className="h-3 w-24 rounded bg-gray-200 dark:bg-gray-600" />
+                  <div className="mt-2 h-8 w-12 rounded bg-gray-200 dark:bg-gray-600" />
+                  <div className="mt-2 h-4 w-16 rounded bg-gray-200 dark:bg-gray-600" />
+                </div>
+              ))}
+            </div>
+          ) : (
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 min-w-0">
           <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
             <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Guest Pending</p>
             <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{stats.guest.pending}</p>
@@ -264,16 +314,31 @@ export function DashboardHome({ profile }: { profile: Profile }) {
           <div className="rounded-xl border border-teal-200/80 bg-teal-50/80 p-4 shadow-sm dark:border-teal-800/60 dark:bg-teal-950/30">
             <p className="text-xs font-medium uppercase tracking-wider text-teal-600 dark:text-teal-400">Contractor Pending</p>
             <p className="mt-1 text-2xl font-bold text-teal-800 dark:text-teal-200">{stats.freelancer.pending}</p>
-            <Link href="/freelancer-invoices" className="mt-2 inline-block text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+            <Link href="/freelancer-invoices?group=pending" className="mt-2 inline-block text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
               View →
             </Link>
           </div>
           <div className="rounded-xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
             <p className="text-xs font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Contractor Paid</p>
             <p className="mt-1 text-2xl font-bold text-sky-800 dark:text-sky-200">{stats.freelancer.paid}</p>
-            <Link href="/freelancer-invoices" className="mt-2 inline-block text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">
+            <Link href="/freelancer-invoices?group=paid" className="mt-2 inline-block text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">
               View →
             </Link>
+          </div>
+          <div className="rounded-xl border border-rose-200/80 bg-rose-50/80 p-4 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/30">
+            <p className="text-xs font-medium uppercase tracking-wider text-rose-600 dark:text-rose-400">Rejected</p>
+            <p className="mt-1 text-2xl font-bold text-rose-800 dark:text-rose-200">{stats.guest.rejected + stats.freelancer.rejected}</p>
+            <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">
+              {stats.guest.rejected} guest · {stats.freelancer.rejected} contractor
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Link href="/invoices?group=rejected" className="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300">
+                Guest →
+              </Link>
+              <Link href="/freelancer-invoices?group=rejected" className="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300">
+                Contractor →
+              </Link>
+            </div>
           </div>
           {stats.other != null && (
             <div className="rounded-xl border border-orange-200/80 bg-orange-50/80 p-4 shadow-sm dark:border-orange-800/60 dark:bg-orange-950/30">
@@ -285,6 +350,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             </div>
           )}
         </div>
+          )}
         </div>
       )}
 

@@ -272,7 +272,7 @@ export async function sendManagerApprovedEmail(params: {
     to,
     subject,
     html: wrap("Invoice Approved", `
-      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Great news! The invoice has been approved${params.managerName ? ` by <strong>${params.managerName}</strong>` : ""} and is now pending admin review.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Great news! The invoice has been approved${params.managerName ? ` by <strong>${params.managerName}</strong>` : ""} and is now pending review.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge(statusSuffix, "#d1fae5", "#065f46")}</p>
@@ -307,7 +307,7 @@ export async function sendManagerRejectedEmail(params: {
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
       <div style="margin:16px 0;padding:12px 16px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0">
-        <p style="margin:0;font-size:13px;color:#7f1d1d"><strong>Rejection Reason:</strong> ${params.reason}</p>
+        <p style="margin:0;font-size:13px;color:#7f1d1d"><strong>Rejection Reason:</strong> ${params.reason?.trim() || "No reason provided"}</p>
       </div>
       <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Rejected", "#fecaca", "#991b1b")}</p>
       <p style="margin:0 0 8px;font-size:14px;color:#334155">You can make corrections and resubmit the invoice.</p>

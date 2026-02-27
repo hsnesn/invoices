@@ -4,6 +4,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspens
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { toast } from "sonner";
+import { setInvoiceToast } from "@/components/InvoiceToastListener";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { EmptyState } from "./EmptyState";
 import { InvoiceMobileCards } from "./InvoiceMobileCards";
@@ -11,6 +12,16 @@ import { InvoiceMobileCards } from "./InvoiceMobileCards";
 const DashboardSection = lazy(() => import("./InvoiceDashboard").then((m) => ({ default: m.InvoiceDashboard })));
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 import { departmentBadgeStyle, programmeBadgeStyle, GUEST_SECTION_COLORS } from "@/lib/colors";
+
+function parseInvoiceDate(s: string): Date | null {
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    return Number.isFinite(d.getTime()) ? d : null;
+  }
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
 
 type InvoiceRow = {
   id: string;
@@ -62,6 +73,8 @@ type DisplayRow = {
   invoiceDate: string;
   accountName: string;
   amount: string;
+  amountNum: number | null;
+  anomalyFlags: string[];
   invNumber: string;
   sortCode: string;
   accountNumber: string;
@@ -464,7 +477,8 @@ function calcGroup(status: string, paymentType: string): DisplayRow["group"] {
   return "pending_line_manager";
 }
 
-function sectionTitle(group: DisplayRow["group"]): string {
+function sectionTitle(group: DisplayRow["group"] | "pending"): string {
+  if (group === "pending") return "Pending";
   if (group === "pending_line_manager") return "Pending Dept EP Approval";
   if (group === "ready_for_payment") return "Ready For Payment";
   if (group === "paid_invoices") return "Paid Invoices";
@@ -836,7 +850,22 @@ function InvoiceTable({
                 </div>
               </td>}
               {isCol("accountName") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountName}>{r.accountName}</td>}
-              {isCol("amount") && <td className="px-4 py-3 text-sm text-gray-700">{r.amount}</td>}
+              {isCol("amount") && (
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  <span className="inline-flex items-center gap-1">
+                    {r.amount}
+                    {r.anomalyFlags?.length > 0 && (
+                      <span
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400"
+                        title={r.anomalyFlags.join("; ")}
+                        aria-label={`Anomaly: ${r.anomalyFlags.join("; ")}`}
+                      >
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                      </span>
+                    )}
+                  </span>
+                </td>
+              )}
               {isCol("invNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.invNumber}>{r.invNumber}</td>}
               {isCol("sortCode") && <td className="px-4 py-3 text-sm text-gray-700">{r.sortCode}</td>}
               {isCol("accountNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountNumber}>{r.accountNumber}</td>}
@@ -1148,6 +1177,7 @@ export function InvoicesBoard({
   currentUserId,
   isOperationsRoomMember = false,
   initialExpandedId,
+  initialGroupFilter,
 }: {
   invoices: InvoiceRow[];
   departmentPairs: [string, string][];
@@ -1159,11 +1189,12 @@ export function InvoicesBoard({
   currentUserId: string;
   isOperationsRoomMember?: boolean;
   initialExpandedId?: string;
+  initialGroupFilter?: "" | DisplayRow["group"] | "pending";
 }) {
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [programmeFilter, setProgrammeFilter] = useState("");
-  const [groupFilter, setGroupFilter] = useState<"" | DisplayRow["group"]>("");
+  const [groupFilter, setGroupFilter] = useState<"" | DisplayRow["group"] | "pending">(initialGroupFilter ?? "");
   const [missingInfoFilter, setMissingInfoFilter] = useState(false);
   const [producerFilter, setProducerFilter] = useState("");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("");
@@ -1200,6 +1231,10 @@ export function InvoicesBoard({
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
+
+  useEffect(() => {
+    if (initialGroupFilter) setGroupFilter(initialGroupFilter);
+  }, [initialGroupFilter]);
 
   useEffect(() => {
     if (!showColumnPicker) {
@@ -1332,6 +1367,7 @@ export function InvoicesBoard({
           : null;
       const amountNum = ext?.gross_amount ?? (Number.isFinite(grossFromRaw ?? NaN) ? grossFromRaw : null);
       const amount = amountNum != null ? String(amountNum) : "—";
+      const amountNumVal = amountNum != null && Number.isFinite(amountNum) ? amountNum : null;
       const invNumber =
         ext?.invoice_number ??
         (typeof raw.invoice_number === "string" ? raw.invoice_number : null) ??
@@ -1383,6 +1419,8 @@ export function InvoicesBoard({
         invoiceDate,
         accountName,
         amount,
+        amountNum: amountNumVal,
+        anomalyFlags: [],
         invNumber: normalizeInvoiceNumber(invNumber),
         sortCode,
         accountNumber,
@@ -1401,13 +1439,46 @@ export function InvoicesBoard({
     });
   }, [invoices, departmentMap, programMap, profileMap]);
 
+  const rowsWithAnomalies = useMemo(() => {
+    const amounts = rows.filter((r) => r.amountNum != null).map((r) => r.amountNum!);
+    const n = amounts.length;
+    const mean = n > 0 ? amounts.reduce((a, b) => a + b, 0) / n : 0;
+    const variance = n > 1 ? amounts.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : 0;
+    const std = Math.sqrt(variance) || 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const oneYearAgo = new Date(today);
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+    return rows.map((r) => {
+      const flags: string[] = [];
+      if (r.amountNum != null && std > 0 && n >= 3) {
+        if (r.amountNum > mean + 2 * std) flags.push("Unusual amount (high)");
+        else if (r.amountNum < mean - 2 * std) flags.push("Unusual amount (low)");
+      }
+      const dateStr = r.invoiceDate?.trim();
+      if (dateStr && dateStr !== "—") {
+        const parsed = parseInvoiceDate(dateStr);
+        if (parsed) {
+          if (parsed > today) flags.push("Future date");
+          else if (parsed < oneYearAgo) flags.push("Very old date (>1 year)");
+        }
+      }
+      return { ...r, anomalyFlags: flags };
+    });
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let result = rows.filter((r) => {
+    let result = rowsWithAnomalies.filter((r) => {
       if (missingInfoFilter && !r.hasMissingInfo) return false;
       if (departmentFilter && r.department !== departmentFilter) return false;
       if (programmeFilter && r.programme !== programmeFilter) return false;
-      if (groupFilter && r.group !== groupFilter) return false;
+      if (groupFilter) {
+        if (groupFilter === "pending") {
+          if (r.group !== "pending_line_manager" && r.group !== "ready_for_payment") return false;
+        } else if (r.group !== groupFilter) return false;
+      }
       if (producerFilter && r.producer !== producerFilter) return false;
       if (paymentTypeFilter && r.paymentType.toLowerCase().replace(/\s+/g, "_") !== paymentTypeFilter) return false;
       if (managerFilter && r.lineManager !== managerFilter) return false;
@@ -1422,7 +1493,8 @@ export function InvoicesBoard({
         r.topic.toLowerCase().includes(q) ||
         r.invNumber.toLowerCase().includes(q) ||
         r.accountName.toLowerCase().includes(q) ||
-        r.lineManager.toLowerCase().includes(q)
+        r.lineManager.toLowerCase().includes(q) ||
+        r.tags.some((t) => t.toLowerCase().includes(q))
       );
     });
 
@@ -1444,8 +1516,16 @@ export function InvoicesBoard({
     }
 
     return result;
-  }, [rows, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [rowsWithAnomalies, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, producerFilter, paymentTypeFilter, managerFilter, dateFrom, dateTo, sortField, sortDir]);
 
+  const groupsForFilter: (DisplayRow["group"] | "pending")[] = [
+    "pending",
+    "pending_line_manager",
+    "rejected",
+    "ready_for_payment",
+    "paid_invoices",
+    "no_payment_needed",
+  ];
   const groups: DisplayRow["group"][] = [
     "pending_line_manager",
     "rejected",
@@ -1466,6 +1546,7 @@ export function InvoicesBoard({
         }),
       });
       if (res.ok) {
+        setInvoiceToast("success", "Invoice approved");
         window.location.reload();
       }
     } finally {
@@ -1491,6 +1572,7 @@ export function InvoicesBoard({
         }),
       });
       if (res.ok) {
+        setInvoiceToast("success", "Invoice rejected");
         window.location.reload();
       }
     } finally {
@@ -1512,6 +1594,7 @@ export function InvoicesBoard({
         }),
       });
       if (res.ok) {
+        setInvoiceToast("success", "Invoice marked as paid");
         window.location.reload();
       } else {
         const data = await res.json().catch(() => null);
@@ -2677,9 +2760,9 @@ export function InvoicesBoard({
             <input type="checkbox" checked={missingInfoFilter} onChange={(e) => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
             Missing info
           </label>
-          <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value as "" | DisplayRow["group"])} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+          <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value as "" | DisplayRow["group"] | "pending")} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             <option value="">Status</option>
-            {groups.map((g) => (<option key={g} value={g}>{sectionTitle(g)}</option>))}
+            {groupsForFilter.map((g) => (<option key={g} value={g}>{sectionTitle(g)}</option>))}
           </select>
           <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             <option value="">Department</option>
@@ -3272,11 +3355,28 @@ export function InvoicesBoard({
         />
       )}
 
-      {rejectModalId && (
+      {rejectModalId && (() => {
+        const rejectRow = rowsWithAnomalies.find((r) => r.id === rejectModalId);
+        const suggestedReason =
+          rejectRow?.missingFields?.length
+            ? `Please provide: ${rejectRow.missingFields.join(", ")}.`
+            : rejectRow?.hasMissingInfo
+              ? "Please provide the missing information before resubmitting."
+              : null;
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Reject invoice">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800 dark:border dark:border-slate-700">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Reject Invoice</h3>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please enter the reason for rejection:</p>
+            {suggestedReason && (
+              <button
+                type="button"
+                onClick={() => setRejectReason(suggestedReason)}
+                className="mt-2 w-full rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-left text-sm text-sky-700 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300 dark:hover:bg-sky-900/50"
+              >
+                Use suggestion: &quot;{suggestedReason}&quot;
+              </button>
+            )}
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
@@ -3304,7 +3404,8 @@ export function InvoicesBoard({
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {(previewUrl || previewHtml || previewLoading) && (
         <div

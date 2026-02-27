@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+
+type DuplicateHit = {
+  id: string;
+  guest: string;
+  amount: number | null;
+  date: string | null;
+  status: string;
+  invoice_number: string | null;
+  match_reasons: string[];
+};
 
 const fetcher = (url: string) => fetch(url).then(async (r) => {
   const d = await r.json();
@@ -66,6 +76,35 @@ export function GenerateInvoiceForm() {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateMessage, setTemplateMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateHit[]>([]);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [duplicateChecked, setDuplicateChecked] = useState(false);
+  const skipDuplicateCheckRef = useRef(false);
+
+  const checkDuplicates = useCallback(async (): Promise<DuplicateHit[]> => {
+    if (!guestName.trim()) return [];
+    try {
+      const firstDate = appearances[0]?.date || invoiceDate;
+      const res = await fetch("/api/invoices/check-duplicates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guest_name: guestName.trim(),
+          invoice_date: firstDate || undefined,
+          department_id: departmentId || undefined,
+          invoice_type: "guest",
+        }),
+      });
+      const data = await res.json();
+      const dups = data.duplicates ?? [];
+      setDuplicates(dups);
+      setDuplicateChecked(true);
+      return dups;
+    } catch {
+      setDuplicateChecked(true);
+      return [];
+    }
+  }, [guestName, departmentId, invoiceDate, appearances]);
 
   const templatesFetcher = (url: string) =>
     fetch(url).then(async (r) => {
@@ -211,6 +250,16 @@ export function GenerateInvoiceForm() {
     }
   }, [departmentId]);
 
+  useEffect(() => {
+    if (!guestName.trim()) {
+      setDuplicates([]);
+      setDuplicateChecked(false);
+      return;
+    }
+    const t = setTimeout(() => void checkDuplicates(), 400);
+    return () => clearTimeout(t);
+  }, [guestName, departmentId, checkDuplicates]);
+
   // When department has no programs (e.g. "Other departments"), program stays None
   const departmentHasPrograms = programs.length > 0;
 
@@ -241,6 +290,15 @@ export function GenerateInvoiceForm() {
       setError("Account name, account number and sort code are required");
       return;
     }
+
+    if (!skipDuplicateCheckRef.current) {
+      const dups = duplicateChecked ? duplicates : await checkDuplicates();
+      if (dups.length > 0) {
+        setShowDuplicateWarning(true);
+        return;
+      }
+    }
+    skipDuplicateCheckRef.current = false;
 
     setLoading(true);
     try {
@@ -302,6 +360,25 @@ export function GenerateInvoiceForm() {
       <p className="text-sm text-slate-600">
         Generate an invoice when the guest has not provided one. The PDF will be created and added to the Files section.
       </p>
+
+      {duplicates.length > 0 && (
+        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-950/40" role="alert">
+          <div className="flex items-start gap-3">
+            <svg className="h-6 w-6 flex-shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+            <div>
+              <p className="font-semibold text-amber-900 dark:text-amber-100">Possible duplicate invoice{duplicates.length > 1 ? "s" : ""} detected</p>
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">We found {duplicates.length} existing invoice{duplicates.length > 1 ? "s" : ""} that may match. Please verify before submitting.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {duplicates.slice(0, 3).map((d) => (
+                  <a key={d.id} href={`/invoices?expand=${d.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-amber-200 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-300 dark:bg-amber-800 dark:text-amber-100 dark:hover:bg-amber-700">
+                    {d.guest} {d.invoice_number ? `#${d.invoice_number}` : ""}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Template selector and save */}
       <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-600 dark:bg-slate-800/50">
@@ -539,6 +616,56 @@ export function GenerateInvoiceForm() {
       </button>
 
       {error && <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {showDuplicateWarning && duplicates.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white shadow-2xl dark:border-amber-800 dark:bg-slate-900">
+            <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-4 dark:border-amber-800 dark:bg-amber-950/30 rounded-t-2xl">
+              <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              <div>
+                <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-200">Possible Duplicate Invoice</h3>
+                <p className="text-sm text-amber-600 dark:text-amber-400">We found existing invoices that may be duplicates. Continue anyway?</p>
+              </div>
+            </div>
+            <div className="max-h-72 overflow-y-auto px-6 py-4 space-y-3">
+              {duplicates.map((d) => (
+                <div key={d.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-900 dark:text-white">{d.guest}</span>
+                    <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-200">{d.status.replace(/_/g, " ")}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+                    {d.match_reasons.map((r) => (
+                      <span key={r} className="rounded bg-amber-100 px-1.5 py-0.5 dark:bg-amber-900/50">{r}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setShowDuplicateWarning(false)}
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDuplicateWarning(false);
+                  skipDuplicateCheckRef.current = true;
+                  const form = document.querySelector("form");
+                  if (form) form.requestSubmit();
+                }}
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500"
+              >
+                Continue anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

@@ -19,6 +19,8 @@ type DisplayRow = {
   invoiceDate: string;
   accountName: string;
   amount: string;
+  amountNum: number | null;
+  anomalyFlags: string[];
   invNumber: string;
   sortCode: string;
   accountNumber: string;

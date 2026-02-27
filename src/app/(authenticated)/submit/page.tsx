@@ -117,9 +117,17 @@ function SubmitPageContent() {
   }, [guestName, txDate1, departmentId]);
 
   useEffect(() => {
-    setDuplicateChecked(false);
-    setDuplicates([]);
-  }, [guestName]);
+    if (!guestName.trim()) {
+      setDuplicates([]);
+      setDuplicateChecked(false);
+      return;
+    }
+    if (files.length > 0) {
+      void checkDuplicates();
+    } else {
+      setDuplicateChecked(false);
+    }
+  }, [guestName, files.length, checkDuplicates]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +273,25 @@ function SubmitPageContent() {
       {rejectedId && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
           Resubmitting after rejection. Link previous invoice when creating the new one.
+        </div>
+      )}
+
+      {duplicates.length > 0 && (
+        <div className="mb-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-950/40" role="alert">
+          <div className="flex items-start gap-3">
+            <svg className="h-6 w-6 flex-shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+            <div>
+              <p className="font-semibold text-amber-900 dark:text-amber-100">Possible duplicate invoice{duplicates.length > 1 ? "s" : ""} detected</p>
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">We found {duplicates.length} existing invoice{duplicates.length > 1 ? "s" : ""} that may match. Please verify before submitting.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {duplicates.slice(0, 3).map((d) => (
+                  <a key={d.id} href={`/invoices?expand=${d.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-amber-200 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-300 dark:bg-amber-800 dark:text-amber-100 dark:hover:bg-amber-700">
+                    {d.guest} {d.invoice_number ? `#${d.invoice_number}` : ""}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

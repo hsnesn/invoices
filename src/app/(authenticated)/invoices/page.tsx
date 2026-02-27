@@ -63,9 +63,11 @@ function canUserSeeInvoice(
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ expand?: string }>;
+  searchParams: Promise<{ expand?: string; group?: string }>;
 }) {
-  const { expand: expandId } = await searchParams;
+  const { expand: expandId, group } = await searchParams;
+  const initialGroupFilter =
+    group === "pending" ? "pending" : group === "paid" ? "paid_invoices" : undefined;
   const { session, profile } = await requirePageAccess("guest_invoices");
   const supabase = createAdminClient();
 
@@ -136,6 +138,7 @@ export default async function InvoicesPage({
       currentUserId={session.user.id}
       isOperationsRoomMember={isOperationsRoomMember}
       initialExpandedId={expandId ?? undefined}
+      initialGroupFilter={initialGroupFilter}
     />
   );
 }

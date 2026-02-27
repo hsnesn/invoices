@@ -43,9 +43,11 @@ function canUserSeeInvoice(
 export default async function FreelancerInvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ expand?: string }>;
+  searchParams: Promise<{ expand?: string; group?: string }>;
 }) {
-  const { expand: expandId } = await searchParams;
+  const { expand: expandId, group } = await searchParams;
+  const initialGroupFilter =
+    group === "pending" ? "pending" : group === "paid" ? "paid" : group === "rejected" ? "rejected" : undefined;
   const { session, profile } = await requireAuth();
   const supabase = createAdminClient();
 
@@ -106,6 +108,7 @@ export default async function FreelancerInvoicesPage({
       currentUserId={session.user.id}
       isOperationsRoomMember={isOperationsRoomMember}
       initialExpandedId={expandId ?? undefined}
+      initialGroupFilter={initialGroupFilter}
     />
   );
 }

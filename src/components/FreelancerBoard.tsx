@@ -146,6 +146,7 @@ function daysSince(d: string) { return Math.floor((Date.now() - new Date(d).getT
 export function FreelancerBoard({
   invoices, departmentPairs, profilePairs, managerProfilePairs, currentRole, currentUserId, isOperationsRoomMember = false,
   initialExpandedId,
+  initialGroupFilter,
 }: {
   invoices: FreelancerInvoiceRow[];
   departmentPairs: [string, string][];
@@ -155,6 +156,7 @@ export function FreelancerBoard({
   currentUserId: string;
   isOperationsRoomMember?: boolean;
   initialExpandedId?: string;
+  initialGroupFilter?: "" | GroupKey | "pending";
 }) {
   const router = useRouter();
   const deptMap = useMemo(() => Object.fromEntries(departmentPairs), [departmentPairs]);
@@ -222,7 +224,12 @@ export function FreelancerBoard({
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
-  const [groupFilter, setGroupFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState<"" | GroupKey | "pending">(initialGroupFilter ?? "");
+  const groupFilterOptions: { value: "" | GroupKey | "pending"; label: string }[] = [
+    { value: "", label: "All Status" },
+    { value: "pending", label: "Pending" },
+    ...GROUPS.map((g) => ({ value: g.key as GroupKey, label: g.label })),
+  ];
   const [contractorFilter, setContractorFilter] = useState("");
   const [missingInfoFilter, setMissingInfoFilter] = useState(false);
   const refreshAndKeepVisible = useCallback(() => {
@@ -235,6 +242,10 @@ export function FreelancerBoard({
   const [dateTo, setDateTo] = useState("");
   const [groupByContractor, setGroupByContractor] = useState(false);
   const [visibleCountByGroup, setVisibleCountByGroup] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (initialGroupFilter) setGroupFilter(initialGroupFilter);
+  }, [initialGroupFilter]);
 
   const hasFilter = !!(search || departmentFilter || monthFilter || groupFilter || contractorFilter || missingInfoFilter || managerFilter || bookedByFilter || dateFrom || dateTo);
   const clearFilters = () => { setSearch(""); setDepartmentFilter(""); setMonthFilter(""); setGroupFilter(""); setContractorFilter(""); setMissingInfoFilter(false); setManagerFilter(""); setBookedByFilter(""); setDateFrom(""); setDateTo(""); };
@@ -252,7 +263,11 @@ export function FreelancerBoard({
     if (search) { const q = search.toLowerCase(); if (![r.contractor, r.companyName, r.submittedBy, r.beneficiary, r.invNumber, r.serviceDescription, r.bookedBy, r.department, r.department2].some(v => v.toLowerCase().includes(q))) return false; }
     if (departmentFilter && r.departmentId !== departmentFilter) return false;
     if (monthFilter && r.month !== monthFilter) return false;
-    if (groupFilter && r.group !== groupFilter) return false;
+    if (groupFilter) {
+      if (groupFilter === "pending") {
+        if (r.group !== "submitted" && r.group !== "admin_approvals" && r.group !== "ready_for_payment") return false;
+      } else if (r.group !== groupFilter) return false;
+    }
     if (managerFilter && r.deptManagerId !== managerFilter) return false;
     if (bookedByFilter && r.bookedBy !== bookedByFilter) return false;
     if (dateFrom && r.createdAt < dateFrom) return false;
@@ -1052,7 +1067,7 @@ export function FreelancerBoard({
             <input type="checkbox" checked={missingInfoFilter} onChange={e => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />
             Missing info
           </label>
-          <select value={groupFilter} onChange={e => setGroupFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Status</option>{GROUPS.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}</select>
+          <select value={groupFilter} onChange={e => setGroupFilter(e.target.value as "" | GroupKey | "pending")} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">{groupFilterOptions.map(o => <option key={o.value || "all"} value={o.value}>{o.label}</option>)}</select>
           <select value={managerFilter} onChange={e => setManagerFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Managers</option>{(managerProfilePairs ?? []).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
           <select value={bookedByFilter} onChange={e => setBookedByFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="">All Booked By</option>{uniqueBookedBy.map(b => <option key={b} value={b}>{b}</option>)}</select>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" title="From" />
@@ -1139,8 +1154,13 @@ export function FreelancerBoard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           }
-          title="No freelancer invoices"
-          description="There are no invoices matching your filters. Submit a new invoice or adjust your search."
+          title={hasFilter ? "No invoices match your filters" : "No freelancer invoices"}
+          description={hasFilter ? "Try adjusting your search or filter criteria to see more results." : "Submit a new invoice to get started."}
+          action={hasFilter ? (
+            <button onClick={clearFilters} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Clear filters
+            </button>
+          ) : undefined}
         />
       ) : displayGroups.map(g => {
         const gRows = g.rows;
