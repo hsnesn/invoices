@@ -27,6 +27,8 @@ function buildInviteHtml(params: {
   topic: string;
   recordDate: string;
   recordTime: string;
+  format: "remote" | "studio";
+  studioAddress: string;
 }): string {
   const greeting = politeGreeting(params.guestName);
   const safe = {
@@ -36,13 +38,20 @@ function buildInviteHtml(params: {
     topic: escapeHtml(params.topic),
     recordDate: escapeHtml(params.recordDate),
     recordTime: escapeHtml(params.recordTime),
+    studioAddress: escapeHtml(params.studioAddress),
   };
+  const formatText =
+    params.format === "remote"
+      ? "The recording will be conducted remotely via Skype or Zoom."
+      : `The recording will take place in our studio. The address is: ${safe.studioAddress || "—"}`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#333">
 <div style="max-width:600px;margin:0 auto;padding:20px">
 <p>${safe.greeting},</p>
 <p>I hope this message finds you well.</p>
-<p>I am writing to invite you to participate in <strong>${safe.programName}</strong>, which will focus on ${safe.topic}.</p>
+<p>I am writing to invite you to participate in <strong>${safe.programName}</strong>, which will be broadcast on TRT World and will focus on ${safe.topic}.</p>
 <p>The recording is scheduled for <strong>${safe.recordDate}</strong> at <strong>${safe.recordTime}</strong>.</p>
+<p>${formatText}</p>
+<p>We can arrange to pick you up from your preferred location and drop you back after the recording.</p>
 <p>Would you be interested in joining us for this program? Please reply to this email to confirm your participation.</p>
 <p>Best regards,<br/>${safe.producerName}</p>
 </div></body></html>`;
@@ -66,6 +75,8 @@ export async function POST(request: NextRequest) {
       topic?: string;
       record_date?: string;
       record_time?: string;
+      format?: "remote" | "studio";
+      studio_address?: string;
       contacts?: { guest_name: string; email?: string | null }[];
       subject?: string;
       message?: string;
@@ -86,6 +97,8 @@ export async function POST(request: NextRequest) {
       const topic = body.topic?.trim() || "the scheduled topic";
       const recordDate = body.record_date?.trim() || "TBD";
       const recordTime = body.record_time?.trim() || "TBD";
+      const format = body.format === "studio" ? "studio" : "remote";
+      const studioAddress = body.studio_address?.trim() || "";
 
       const subjectBase = `Invitation: ${programName}`;
       let sent = 0;
@@ -97,6 +110,8 @@ export async function POST(request: NextRequest) {
           topic,
           recordDate,
           recordTime,
+          format,
+          studioAddress,
         });
         const result = await sendEmail({
           to: c.email!,

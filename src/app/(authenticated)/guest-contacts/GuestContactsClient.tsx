@@ -1879,6 +1879,8 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
   const [topic, setTopic] = useState("");
   const [recordDate, setRecordDate] = useState("");
   const [recordTime, setRecordTime] = useState("");
+  const [format, setFormat] = useState<"remote" | "studio">("remote");
+  const [studioAddress, setStudioAddress] = useState("TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ");
   const [sending, setSending] = useState(false);
   const withEmail = contacts.filter((c) => c.email || c.ai_contact_info?.email);
 
@@ -1930,6 +1932,8 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
         topic: topic.trim() || "the scheduled topic",
         record_date: recordDate.trim() || "TBD",
         record_time: recordTime.trim() || "TBD",
+        format,
+        studio_address: format === "studio" ? studioAddress.trim() : "",
       });
     } else {
       if (!subject.trim() || !message.trim()) {
@@ -2027,8 +2031,27 @@ function BulkEmailModal({ contacts, programs: programNames, onClose, onSent }: {
                   <input type="time" value={recordTime} onChange={(e) => setRecordTime(e.target.value)} className={inputCls} />
                 </div>
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Format</label>
+                <div className="flex gap-4">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input type="radio" name="format" checked={format === "remote"} onChange={() => setFormat("remote")} className="h-4 w-4 text-sky-600" />
+                    <span className="text-sm">Remote (Skype/Zoom)</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input type="radio" name="format" checked={format === "studio"} onChange={() => setFormat("studio")} className="h-4 w-4 text-sky-600" />
+                    <span className="text-sm">In-studio</span>
+                  </label>
+                </div>
+              </div>
+              {format === "studio" && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Studio address</label>
+                  <textarea value={studioAddress} onChange={(e) => setStudioAddress(e.target.value)} placeholder="e.g. 1 Great Cumberland Place, London W1H 7AL" rows={2} className={inputCls} />
+                </div>
+              )}
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Each guest will receive a personalized email with polite greeting, program details, and a request to confirm participation. Replies go to the producer.
+                Each guest will receive a personalized email with polite greeting, program details, format (remote/studio), pick-up/drop-off offer, and a request to confirm participation. Replies go to the producer.
               </p>
             </>
           ) : (
