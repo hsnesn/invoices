@@ -217,9 +217,9 @@ export function InvoiceDetail({
           Invoice {invoiceNumber}
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          {invoice.submitter_user_id && invoice.submitter_user_id !== profile.id && (
+          {typeof invoice.submitter_user_id === "string" && invoice.submitter_user_id !== profile.id && (
             <Link
-              href={`/messages?invoiceId=${invoice.id}&recipientId=${invoice.submitter_user_id}`}
+              href={`/messages?invoiceId=${String(invoice.id)}&recipientId=${invoice.submitter_user_id}`}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700/50"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -229,7 +229,7 @@ export function InvoiceDetail({
             </Link>
           )}
           <Link
-            href={`/messages?invoiceId=${invoice.id}`}
+            href={`/messages?invoiceId=${String(invoice.id)}`}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700/50"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
