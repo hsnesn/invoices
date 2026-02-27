@@ -46,9 +46,9 @@ export async function GET() {
     const freelancer = (flInvoices ?? []).reduce(
       (acc, inv) => {
         const wf = unwrap(inv.invoice_workflows as WfShape[] | WfShape | null);
-        const s = wf?.status ?? "submitted";
-        if (["submitted", "pending_manager", "approved_by_manager", "pending_admin", "ready_for_payment"].includes(s))
-          acc.pending++;
+        const s = (wf?.status ?? "submitted") as string;
+        const pendingStatuses = ["submitted", "pending_manager", "pending_line_manager", "approved_by_manager", "pending_admin", "ready_for_payment"];
+        if (pendingStatuses.includes(s)) acc.pending++;
         else if (["paid", "archived"].includes(s)) acc.paid++;
         else if (s === "rejected") acc.rejected++;
         return acc;
