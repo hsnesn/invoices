@@ -125,7 +125,7 @@ const PAGES: PageCard[] = [
   },
   {
     title: "Guest Contacts",
-    description: "List of guest names with phone and email from invoices. Admin-only by default.",
+    description: "List of guest names with phone and email from invoices. Admin and admin-selected users only.",
     href: "/guest-contacts",
     color: "text-violet-500",
     gradient: "from-violet-500/20 to-violet-600/5",
@@ -238,11 +238,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.viewerHidden && isViewer) return false;
     if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
-    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "messages", "guest_contacts"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices"));
-    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "setup", "messages", "guest_contacts"].includes(p.pageKey);
+    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
     if (profile.role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "messages"].includes(p.pageKey);
     if (["submitter", "manager"].includes(profile.role) && p.pageKey === "invited_guests") return true;
-    if (p.pageKey === "guest_contacts") return isAdmin || ["manager", "operations", "viewer", "submitter"].includes(profile.role) || (!!userPages && userPages.includes("guest_contacts"));
+    if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));
     if (userPages && userPages.length > 0) return userPages.includes(p.pageKey);
     return true;
   });
