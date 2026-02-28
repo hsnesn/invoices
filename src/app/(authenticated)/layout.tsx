@@ -5,7 +5,10 @@ import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { FooterShortcutTrigger } from "@/components/FooterShortcutTrigger";
 import { InvoiceToastListener } from "@/components/InvoiceToastListener";
 import { PaidIconOverlay } from "@/components/PaidIconOverlay";
+import { SessionRefresh } from "@/components/SessionRefresh";
 import { ExportLocaleWrapper } from "@/components/ExportLocaleWrapper";
+
+export const dynamic = "force-dynamic";
 
 export default async function AuthenticatedLayout({
   children,
@@ -15,6 +18,7 @@ export default async function AuthenticatedLayout({
   const { profile } = await requireAuth();
   return (
     <ExportLocaleWrapper>
+    <SessionRefresh />
     <div className="flex min-h-screen flex-col bg-gray-100 dark:bg-slate-950">
       <KeyboardShortcuts />
       <Nav profile={profile} />
