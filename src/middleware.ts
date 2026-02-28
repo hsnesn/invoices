@@ -41,15 +41,15 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession();
 
-  // IP binding: if session exists and secret is configured, bind session to IP
-  // Skip in development (localhost IP is unreliable)
-  if (session) {
-    const secret = process.env.SESSION_IP_SECRET;
-    const isProduction = process.env.NODE_ENV === "production";
-    const clientIp = getClientIp(request);
-    const isLocalhost = ["127.0.0.1", "::1", "unknown"].includes(clientIp);
+  // IP binding: disabled by default - causes "Session expired" when IP varies (proxy, mobile, VPN)
+  const ipBindingDisabled = process.env.DISABLE_IP_BINDING !== "false" && process.env.DISABLE_IP_BINDING !== "0";
+  const secret = process.env.SESSION_IP_SECRET;
+  const isProduction = process.env.NODE_ENV === "production";
+  const clientIp = getClientIp(request);
+  const isLocalhost = ["127.0.0.1", "::1", "unknown"].includes(clientIp);
 
-    if (secret && isProduction && !isLocalhost) {
+  if (session) {
+    if (!ipBindingDisabled && secret && isProduction && !isLocalhost) {
       const ipBoundValue = request.cookies.get(getIpBoundCookie())?.value;
 
       if (!ipBoundValue) {
