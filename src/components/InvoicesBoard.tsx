@@ -2529,10 +2529,10 @@ export function InvoicesBoard({
       {/* Top Action Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Guest Invoice Submission</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/invoices/invited-guests"
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-all hover:bg-emerald-100 hover:border-emerald-500/60 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
             Invited Guests
@@ -2540,13 +2540,20 @@ export function InvoicesBoard({
           {currentRole !== "viewer" && (
             <Link
               href="/submit"
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-500 transition-all flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
               New Invoice
             </Link>
           )}
-          <button onClick={() => setShowDashboard((v) => !v)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm flex items-center gap-1.5 ${showDashboard ? "bg-[#5034FF] text-white shadow-[#5034FF]/25" : "bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/25 dark:bg-blue-600 dark:hover:bg-blue-500"}`}>
+          <button
+            onClick={() => setShowDashboard((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm ${
+              showDashboard
+                ? "bg-violet-600 text-white shadow-violet-500/25 hover:bg-violet-500 dark:bg-violet-500 dark:hover:bg-violet-400"
+                : "bg-sky-600 text-white shadow-sky-500/20 hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400"
+            }`}
+          >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
             {showDashboard ? "Hide Dashboard" : "Dashboard"}
           </button>
@@ -2554,7 +2561,7 @@ export function InvoicesBoard({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowColumnPicker((v) => !v); }}
-              className="rounded-xl bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 shadow-sm dark:bg-slate-500 dark:hover:bg-slate-400 flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/></svg>
               Columns
@@ -2580,7 +2587,11 @@ export function InvoicesBoard({
               document.body
             )}
           </div>
-          <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700">
+          <select
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-500"
+          >
             <option value={10}>10/page</option>
             <option value={25}>25/page</option>
             <option value={50}>50/page</option>
