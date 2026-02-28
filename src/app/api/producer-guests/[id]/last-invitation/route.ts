@@ -45,6 +45,8 @@ export async function GET(
     const studioAddress = (inv as { studio_address?: string })?.studio_address?.trim();
 
     return NextResponse.json({
+      guest_name: (guest as { guest_name?: string }).guest_name?.trim() || null,
+      guest_email: (guest as { email?: string | null }).email?.trim() || null,
       record_date: recordDate && /^\d{4}-\d{2}-\d{2}$/.test(recordDate) ? recordDate : null,
       record_time: recordTime || null,
       program_name: programName || null,

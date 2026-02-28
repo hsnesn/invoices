@@ -34,10 +34,12 @@ export default function SubmitPage() {
 type Tab = "upload" | "generate";
 
 function SubmitPageContent() {
-  const [tab, setTab] = useState<Tab>("upload");
+  const searchParams = useSearchParams();
+  const guestIdFromUrl = searchParams.get("guest_id");
+  const tabFromUrl = searchParams.get("tab");
+  const [tab, setTab] = useState<Tab>(tabFromUrl === "generate" || guestIdFromUrl ? "generate" : "upload");
   const today = new Date().toISOString().slice(0, 10);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const rejectedId = searchParams.get("rejected");
 
   const [departmentId, setDepartmentId] = useState("");
@@ -267,7 +269,7 @@ function SubmitPageContent() {
       </div>
 
       {tab === "generate" ? (
-        <GenerateInvoiceForm />
+        <GenerateInvoiceForm guestId={guestIdFromUrl} />
       ) : (
       <>
       {rejectedId && (

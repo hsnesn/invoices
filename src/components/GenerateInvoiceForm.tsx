@@ -41,7 +41,7 @@ type GuestTemplate = {
   program_id: string | null;
 };
 
-export function GenerateInvoiceForm() {
+export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
   const today = new Date().toISOString().slice(0, 10);
   const router = useRouter();
   const [departmentId, setDepartmentId] = useState("");
@@ -116,6 +116,33 @@ export function GenerateInvoiceForm() {
     "/api/guest-invoice-templates",
     templatesFetcher
   );
+
+  // Auto-fill from last invitation when guestId is provided (e.g. from Invited Guests "Create invoice")
+  useEffect(() => {
+    if (!guestId?.trim()) return;
+    fetch(`/api/producer-guests/${guestId}/last-invitation`, { credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.guest_name) setGuestName(data.guest_name);
+        if (data?.guest_email) setGuestEmail(data.guest_email);
+        if (data?.program_name || data?.program_specific_topic || data?.record_date) {
+          const defaultDate = new Date().toISOString().slice(0, 10);
+          setAppearances((prev) => {
+            const first = prev[0] ?? { programmeName: "", topic: "", date: defaultDate, amount: "" };
+            return [
+              {
+                ...first,
+                programmeName: data.program_name || first.programmeName,
+                topic: data.program_specific_topic || first.topic,
+                date: data.record_date && /^\d{4}-\d{2}-\d{2}$/.test(data.record_date) ? data.record_date : first.date,
+              },
+              ...prev.slice(1),
+            ];
+          });
+        }
+      })
+      .catch(() => {});
+  }, [guestId]);
 
   const loadTemplate = (t: GuestTemplate, startEdit = false) => {
     setTitle(t.title ?? "");

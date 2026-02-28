@@ -1141,8 +1141,12 @@ export function InvitedGuestsClient({
                                   fetch(`/api/producer-guests/${g.id}/last-invitation`, { credentials: "same-origin" })
                                     .then((r) => r.json())
                                     .then((data) => {
-                                      if (data?.record_date) setAcceptanceForm((p) => ({ ...p, recording_date: data.record_date }));
-                                      if (data?.program_name && !baseForm.program_name) setAcceptanceForm((p) => ({ ...p, program_name: data.program_name }));
+                                      setAcceptanceForm((p) => ({
+                                        ...p,
+                                        ...(data?.record_date && { recording_date: data.record_date }),
+                                        ...(data?.program_name && { program_name: data.program_name }),
+                                        ...(data?.program_specific_topic && { recording_topic: data.program_specific_topic }),
+                                      }));
                                     })
                                     .catch(() => {});
                                 } else {
@@ -1185,6 +1189,12 @@ export function InvitedGuestsClient({
                             </button>
                           </td>
                           <td className="px-4 py-2 flex flex-wrap gap-1">
+                            <Link
+                              href={`/submit?guest_id=${g.id}&tab=generate`}
+                              className="text-emerald-600 hover:underline text-xs"
+                            >
+                              Create invoice
+                            </Link>
                             {g.accepted === true && g.email?.includes("@") && (
                               <button
                                 onClick={async () => {
