@@ -1,3 +1,17 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "overrides": [
+    {
+      "files": ["src/app/api/**/*.ts", "src/app/api/**/*.tsx"],
+      "rules": {
+        "no-restricted-syntax": [
+          "warn",
+          {
+            "selector": "CallExpression[callee.name='createAdminClient']",
+            "message": "Prefer createUserClient for user-facing reads. Use createAdminClient only for audit, cron, admin setup. See docs/RLS_HARDENING_REFACTOR_PLAN.md"
+          }
+        ]
+      }
+    }
+  ]
 }

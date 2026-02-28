@@ -1,5 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  getClientIp,
+  createSignedIpCookie,
+  verifyIpCookie,
+  getIpBoundCookie,
+  getIpCookieOptions,
+} from "@/lib/ip-binding";
+import { getMfaCookieName } from "@/lib/mfa-cookie";
 
 export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -31,7 +39,56 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
+
+  // IP binding: if session exists and secret is configured, bind session to IP
+  // Skip in development (localhost IP is unreliable)
+  if (session) {
+    const secret = process.env.SESSION_IP_SECRET ?? process.env.CRON_SECRET;
+    const isProduction = process.env.NODE_ENV === "production";
+    const clientIp = getClientIp(request);
+    const isLocalhost = ["127.0.0.1", "::1", "unknown"].includes(clientIp);
+
+    if (secret && isProduction && !isLocalhost) {
+      const ipBoundValue = request.cookies.get(getIpBoundCookie())?.value;
+
+      if (!ipBoundValue) {
+        // First request after login: set IP cookie
+        const signed = await createSignedIpCookie(clientIp);
+        if (signed) {
+          response.cookies.set(getIpBoundCookie(), signed, getIpCookieOptions());
+        }
+      } else {
+        // Verify IP matches
+        if (!(await verifyIpCookie(ipBoundValue, clientIp))) {
+          const redirectResponse = NextResponse.redirect(
+            new URL("/login?error=" + encodeURIComponent("Session expired. Please log in again from this device."), request.url)
+          );
+          redirectResponse.cookies.delete(getIpBoundCookie());
+          const signOutSupabase = createServerClient(url, key, {
+            cookies: {
+              getAll: () => request.cookies.getAll(),
+              setAll: (cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) => {
+                cookiesToSet.forEach(({ name, value, options }) => {
+                  redirectResponse.cookies.set(name, value, options as Parameters<typeof redirectResponse.cookies.set>[2]);
+                });
+              },
+            },
+          });
+          await signOutSupabase.auth.signOut();
+          return redirectResponse;
+        }
+      }
+    }
+  } else {
+    // No session: clear ip_bound and mfa_verified cookies
+    if (request.cookies.get(getIpBoundCookie())) {
+      response.cookies.delete(getIpBoundCookie());
+    }
+    if (request.cookies.get(getMfaCookieName())) {
+      response.cookies.delete(getMfaCookieName());
+    }
+  }
 
   return response;
 }

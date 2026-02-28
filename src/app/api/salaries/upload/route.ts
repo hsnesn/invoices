@@ -67,7 +67,7 @@ function safeFileStem(name: string): string {
 /** POST /api/salaries/upload - Upload payslip or Salaries_Paid Excel (bulk) */
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(request);
+    const rl = await checkRateLimit(request);
     if (!rl.ok) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },

@@ -201,8 +201,22 @@ export async function PATCH(
         payment_type: payment_type ?? oldDesc["payment type"] ?? "paid_guest",
       });
 
+      const producerName = producer ?? oldDesc["producer"] ?? "";
+      let producerUserId: string | null = null;
+      if (producerName.trim()) {
+        const { data: producerProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("full_name", producerName.trim())
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+        producerUserId = producerProfile?.id ?? null;
+      }
+
       const invoiceUpdate: Record<string, unknown> = {
         service_description,
+        producer_user_id: producerUserId,
         service_date_from: tx_date_1 ?? oldDesc["tx date"] ?? oldDesc["tx date 1"] ?? (existing as { service_date_from?: string | null }).service_date_from ?? null,
         service_date_to: tx_date_3 ?? tx_date_2 ?? tx_date_1 ?? oldDesc["3. tx date"] ?? oldDesc["2. tx date"] ?? oldDesc["tx date"] ?? (existing as { service_date_to?: string | null }).service_date_to ?? null,
       };

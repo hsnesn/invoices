@@ -27,7 +27,7 @@ function safeFileStem(name: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(request);
+    const rl = await checkRateLimit(request);
     if (!rl.ok) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },
@@ -40,19 +40,8 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File | null;
     const department_id = formData.get("department_id") as string | null;
     const program_id = formData.get("program_id") as string | null;
-    const useStrictUuid = process.env.DEV_BYPASS_AUTH !== "true";
-    const safeDepartmentId =
-      !useStrictUuid && department_id
-        ? null
-        : department_id && UUID_RE.test(department_id)
-        ? department_id
-        : null;
-    const safeProgramId =
-      !useStrictUuid && program_id
-        ? null
-        : program_id && UUID_RE.test(program_id)
-        ? program_id
-        : null;
+    const safeDepartmentId = department_id && UUID_RE.test(department_id) ? department_id : null;
+    const safeProgramId = program_id && UUID_RE.test(program_id) ? program_id : null;
 
     const service_description = formData.get("service_description") as string | null;
     const service_date_from = formData.get("service_date_from") as string | null;

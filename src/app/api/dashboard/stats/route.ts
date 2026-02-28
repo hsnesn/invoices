@@ -12,30 +12,15 @@ function unwrap<T>(v: T[] | T | null | undefined): T | null {
   return v;
 }
 
-function parseProducerFromServiceDesc(serviceDescription: string | null): string | null {
-  if (!serviceDescription) return null;
-  for (const line of serviceDescription.split("\n")) {
-    const l = line.trim();
-    if (l.toLowerCase().startsWith("producer:")) {
-      const val = l.slice(l.indexOf(":") + 1).trim();
-      return val || null;
-    }
-  }
-  return null;
-}
-
 function canUserSeeGuestInvoice(
-  inv: { submitter_user_id: string; department_id: string | null; program_id: string | null; service_description?: string | null; invoice_workflows: WfShape[] | WfShape | null },
+  inv: { submitter_user_id: string; producer_user_id?: string | null; department_id: string | null; program_id: string | null; invoice_workflows: WfShape[] | WfShape | null },
   userId: string,
   role: string,
-  userFullName: string | null
+  _userFullName: string | null
 ): boolean {
   if (role === "admin" || role === "viewer" || role === "operations") return true;
   if (inv.submitter_user_id === userId) return true;
-  if (userFullName) {
-    const producer = parseProducerFromServiceDesc(inv.service_description ?? null);
-    if (producer && producer.trim().toLowerCase() === userFullName.trim().toLowerCase()) return true;
-  }
+  if (inv.producer_user_id === userId) return true;
   const wf = unwrap(inv.invoice_workflows);
   if (role === "manager") return wf?.manager_user_id === userId;
   if (role === "finance") return ["ready_for_payment", "paid", "archived"].includes(wf?.status ?? "");
@@ -71,7 +56,7 @@ export async function GET() {
 
     const { data: guestInvoicesRaw } = await supabase
       .from("invoices")
-      .select("id, created_at, submitter_user_id, department_id, program_id, service_description, invoice_workflows(status, manager_user_id)")
+      .select("id, created_at, submitter_user_id, producer_user_id, department_id, program_id, invoice_workflows(status, manager_user_id)")
       .in("invoice_type", ["guest", "salary"]);
 
     const { data: flInvoicesRaw } = await supabase

@@ -168,6 +168,24 @@ function buildFreelancerDetailsHtml(d: FreelancerEmailDetails): string {
 /* ------------------------------------------------------------------ */
 /* Core send function                                                  */
 /* ------------------------------------------------------------------ */
+/* MFA OTP                                                             */
+/* ------------------------------------------------------------------ */
+
+export async function sendMfaOtpEmail(to: string, code: string): Promise<{ success: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    return { success: false, error: "Email not configured" };
+  }
+  const html = await wrapWithLogo(
+    "Verification Code",
+    `<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">Your verification code is:</p>
+<p style="margin:0 0 24px;font-size:28px;font-weight:700;color:#1e293b;letter-spacing:4px;font-family:monospace">${code}</p>
+<p style="margin:0;font-size:13px;color:#94a3b8">This code expires in 10 minutes. If you did not request this, please contact your administrator.</p>`
+  );
+  const res = await sendEmail({ to, subject: `${APP_NAME} Verification Code`, html });
+  return res.success ? { success: true } : { success: false, error: typeof res.error === "string" ? res.error : "Failed to send" };
+}
+
+/* ------------------------------------------------------------------ */
 
 export async function sendEmail(params: {
   to: string | string[];

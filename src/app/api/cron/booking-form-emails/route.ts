@@ -4,18 +4,14 @@
  */
 import { NextResponse } from "next/server";
 import { processPendingBookingFormEmails } from "@/lib/booking-form/process-pending-emails";
+import { validateCronAuth } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  // Vercel Cron sends Authorization: Bearer <CRON_SECRET>
-  // If CRON_SECRET is not set, allow unauthenticated (for external cron services)
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = validateCronAuth(request);
+  if (authError) return authError;
 
   try {
     const { processed, errors } = await processPendingBookingFormEmails();

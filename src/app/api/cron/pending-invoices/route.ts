@@ -4,16 +4,14 @@
  */
 import { NextResponse } from "next/server";
 import { runSlaReminders, runPendingDigest } from "@/lib/pending-invoices-cron";
+import { validateCronAuth } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = validateCronAuth(request);
+  if (authError) return authError;
 
   try {
     const [slaResult, digestResult] = await Promise.all([

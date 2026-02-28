@@ -1,29 +1,13 @@
 /**
  * Shared invoice access control. Used by API routes and pages.
+ * Producer access uses producer_user_id (secure); no text parsing from service_description.
  */
-
-function parseProducerFromServiceDesc(serviceDescription: string | null): string | null {
-  if (!serviceDescription) return null;
-  for (const line of serviceDescription.split("\n")) {
-    const l = line.trim();
-    if (l.toLowerCase().startsWith("producer:")) {
-      const val = l.slice(l.indexOf(":") + 1).trim();
-      return val || null;
-    }
-  }
-  return null;
-}
-
-function producerNameMatches(invoiceProducer: string | null, userFullName: string | null): boolean {
-  if (!invoiceProducer || !userFullName) return false;
-  return invoiceProducer.trim().toLowerCase() === userFullName.trim().toLowerCase();
-}
 
 export type SupabaseAdmin = Awaited<ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>>;
 
 /**
  * Check if a user can access an invoice (view, download PDF, files, notes, etc.).
- * Producers can see invoices where they are the producer (e.g. admin uploaded on their behalf).
+ * Producers can see invoices where producer_user_id = self (admin uploaded on their behalf).
  */
 export async function canAccessInvoice(
   supabase: SupabaseAdmin,
@@ -52,19 +36,15 @@ export async function canAccessInvoice(
 
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("submitter_user_id, service_description, department_id, program_id")
+    .select("submitter_user_id, producer_user_id, department_id, program_id")
     .eq("id", invoiceId)
     .single();
 
   if (!invoice) return false;
   if (invoice.submitter_user_id === userId) return true;
 
-  // Producer: see invoices where they are the producer (admin uploaded on their behalf)
-  const userFullName = overrideProfile?.full_name ?? (profile as { full_name?: string | null }).full_name ?? null;
-  if (userFullName) {
-    const producer = parseProducerFromServiceDesc(invoice.service_description ?? null);
-    if (producerNameMatches(producer, userFullName)) return true;
-  }
+  // Producer: use producer_user_id (secure column; no text parsing)
+  if ((invoice as { producer_user_id?: string | null }).producer_user_id === userId) return true;
 
   const { data: wf } = await supabase
     .from("invoice_workflows")

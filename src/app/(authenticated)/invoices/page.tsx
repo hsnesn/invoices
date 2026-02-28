@@ -5,22 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function parseProducerFromServiceDesc(serviceDescription: string | null): string | null {
-  if (!serviceDescription) return null;
-  for (const line of serviceDescription.split("\n")) {
-    const l = line.trim();
-    if (l.toLowerCase().startsWith("producer:")) {
-      const val = l.slice(l.indexOf(":") + 1).trim();
-      return val || null;
-    }
-  }
-  return null;
-}
-
 function canUserSeeInvoice(
   inv: {
     submitter_user_id: string;
-    service_description?: string | null;
+    producer_user_id?: string | null;
     department_id: string | null;
     program_id: string | null;
     invoice_workflows:
@@ -30,20 +18,15 @@ function canUserSeeInvoice(
   },
   userId: string,
   role: string,
-  userDepartmentId: string | null,
-  userProgramIds: string[] | null,
-  userFullName: string | null
+  _userDepartmentId: string | null,
+  _userProgramIds: string[] | null,
+  _userFullName: string | null
 ): boolean {
   if (role === "admin" || role === "viewer" || role === "operations") return true;
   if (inv.submitter_user_id === userId) return true;
 
-  // Producer: see invoices where they are the producer (e.g. admin uploaded on their behalf)
-  if (userFullName) {
-    const producer = parseProducerFromServiceDesc(inv.service_description ?? null);
-    if (producer && producer.trim().toLowerCase() === userFullName.trim().toLowerCase()) {
-      return true;
-    }
-  }
+  // Producer: use producer_user_id (secure column)
+  if (inv.producer_user_id === userId) return true;
 
   const wfRaw = inv.invoice_workflows;
   const wf = Array.isArray(wfRaw) ? wfRaw[0] : wfRaw;
@@ -77,6 +60,7 @@ export default async function InvoicesPage({
       id,
       storage_path,
       service_description,
+      producer_user_id,
       currency,
       created_at,
       service_date_from,

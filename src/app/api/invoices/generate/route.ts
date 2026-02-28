@@ -64,7 +64,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(request);
+    const rl = await checkRateLimit(request);
     if (!rl.ok) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },
@@ -101,9 +101,8 @@ export async function POST(request: NextRequest) {
       producer: string;
     };
 
-    const useStrictUuid = process.env.DEV_BYPASS_AUTH !== "true";
-    const safeDepartmentId = !useStrictUuid && data.department_id ? null : data.department_id && UUID_RE.test(data.department_id) ? data.department_id : null;
-    const safeProgramId = !useStrictUuid && data.program_id ? null : data.program_id && UUID_RE.test(data.program_id) ? data.program_id : null;
+    const safeDepartmentId = data.department_id && UUID_RE.test(data.department_id) ? data.department_id : null;
+    const safeProgramId = data.program_id && UUID_RE.test(data.program_id) ? data.program_id : null;
 
     if (!data.invNo?.trim()) return NextResponse.json({ error: "INV NO is required" }, { status: 400 });
     if (!data.guestName?.trim()) return NextResponse.json({ error: "Guest name is required" }, { status: 400 });

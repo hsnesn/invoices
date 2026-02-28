@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { InvoiceDetail } from "@/components/InvoiceDetail";
 
@@ -14,8 +13,7 @@ export default async function InvoicePage({
 }) {
   const { id } = await params;
   const { session, profile } = await requireAuth();
-  const supabase =
-    process.env.DEV_BYPASS_AUTH === "true" ? createAdminClient() : await createClient();
+  const supabase = await createClient();
 
   const { data: invoice } = await supabase
     .from("invoices")

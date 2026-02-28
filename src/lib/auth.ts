@@ -1,7 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import type { Profile, PageKey } from "@/lib/types";
+import { roleRequiresMfa } from "@/lib/mfa";
+import { verifyMfaCookie, getMfaCookieName } from "@/lib/mfa-cookie";
 
 export async function getSession() {
   const supabase = await createClient();
@@ -30,27 +33,6 @@ export async function getProfile(): Promise<Profile | null> {
 
 /** Require auth + active profile. Redirects to /login if not. */
 export async function requireAuth(): Promise<{ session: { user: { id: string } }; profile: Profile }> {
-  if (process.env.DEV_BYPASS_AUTH === "true") {
-    const now = new Date().toISOString();
-    const bypassUserId =
-      process.env.DEV_BYPASS_USER_ID ??
-      "54cc311f-9a5f-4e19-a94b-1ef7ed9c2266";
-    return {
-      session: { user: { id: bypassUserId } },
-      profile: {
-        id: bypassUserId,
-        full_name: "Dev Admin",
-        role: "admin",
-        department_id: null,
-        program_ids: [],
-        allowed_pages: null,
-        is_active: true,
-        created_at: now,
-        updated_at: now,
-      },
-    };
-  }
-
   const supabase = await createClient();
   const {
     data: { session },
@@ -69,7 +51,17 @@ export async function requireAuth(): Promise<{ session: { user: { id: string } }
     redirect("/login?error=deactivated");
   }
 
-  return { session, profile: profile as Profile };
+  const profileTyped = profile as Profile;
+
+  if (roleRequiresMfa(profileTyped.role)) {
+    const cookieStore = await cookies();
+    const mfaCookie = cookieStore.get(getMfaCookieName())?.value;
+    if (!mfaCookie || !(await verifyMfaCookie(mfaCookie, session.user.id))) {
+      redirect("/auth/mfa-verify");
+    }
+  }
+
+  return { session, profile: profileTyped };
 }
 
 /** Require admin role. Redirects if not admin. */

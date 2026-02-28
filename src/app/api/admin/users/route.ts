@@ -34,7 +34,16 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { profile } = await requireAdmin();
+    let profile: { id: string; role: string };
+    try {
+      const result = await requireAdmin();
+      profile = result.profile;
+    } catch (e) {
+      if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      throw e;
+    }
     const body = await request.json();
     const { user_id, role, is_active, department_id, program_ids, allowed_pages } = body;
 

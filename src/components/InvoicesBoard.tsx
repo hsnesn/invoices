@@ -16,6 +16,7 @@ import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 import { useExportLocale } from "@/contexts/ExportLocaleContext";
 import { ExportLocaleSelector } from "./ExportLocaleSelector";
 import { departmentBadgeStyle, programmeBadgeStyle, GUEST_SECTION_COLORS } from "@/lib/colors";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 
 function parseInvoiceDate(s: string): Date | null {
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -1801,7 +1802,7 @@ export function InvoicesBoard({
         const arrayBuf = await blob.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuf });
         setPreviewUrl(null);
-        setPreviewHtml(result.value);
+        setPreviewHtml(sanitizeHtml(result.value));
       } else if (mime.includes("sheet") || mime.includes("excel") || fileUrl.includes(".xlsx") || fileUrl.includes(".xls") || pathLower.endsWith(".xlsx") || pathLower.endsWith(".xls")) {
         const XLSX = await import("xlsx");
         const arrayBuf = await blob.arrayBuffer();
@@ -1813,7 +1814,7 @@ export function InvoicesBoard({
           html += XLSX.utils.sheet_to_html(ws, { editable: false });
         }
         setPreviewUrl(null);
-        setPreviewHtml(html);
+        setPreviewHtml(sanitizeHtml(html));
       } else {
         const blobUrl = URL.createObjectURL(blob);
         setPreviewHtml(null);
@@ -3640,7 +3641,7 @@ export function InvoicesBoard({
                 </div>
               )}
               {previewUrl && !previewLoading && <iframe src={previewUrl} className="h-full w-full border-0" title="File preview" />}
-              {previewHtml && !previewLoading && <div className="h-full w-full overflow-auto p-6 prose prose-sm max-w-none dark:prose-invert [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-1.5 [&_td]:text-sm [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-3 [&_th]:py-2 [&_th]:text-sm [&_th]:font-semibold dark:[&_td]:border-gray-600 dark:[&_th]:border-gray-600 dark:[&_th]:bg-gray-800" dangerouslySetInnerHTML={{ __html: previewHtml }} />}
+              {previewHtml && !previewLoading && <div className="h-full w-full overflow-auto p-6 prose prose-sm max-w-none dark:prose-invert [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-1.5 [&_td]:text-sm [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-3 [&_th]:py-2 [&_th]:text-sm [&_th]:font-semibold dark:[&_td]:border-gray-600 dark:[&_th]:border-gray-600 dark:[&_th]:bg-gray-800" dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }} />}
             </div>
           </div>
         </div>

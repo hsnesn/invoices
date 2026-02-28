@@ -12,6 +12,7 @@ import { ExportLocaleSelector } from "./ExportLocaleSelector";
 import { LogoLoader } from "./LogoLoader";
 import { UploadOverlay } from "./UploadOverlay";
 import { triggerPaidAnimation } from "./PaidIconOverlay";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 
 function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
@@ -470,7 +471,7 @@ export function OtherInvoicesBoard({
         const mammoth = await import("mammoth");
         const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
         setPreviewUrl(null);
-        setPreviewHtml(result.value);
+        setPreviewHtml(sanitizeHtml(result.value));
       } else if (mime.includes("sheet") || mime.includes("excel") || fileUrl.includes(".xlsx") || fileUrl.includes(".xls")) {
         const XLSX = await import("xlsx");
         const wb = XLSX.read(await blob.arrayBuffer(), { type: "array" });
@@ -481,7 +482,7 @@ export function OtherInvoicesBoard({
           html += XLSX.utils.sheet_to_html(ws, { editable: false });
         }
         setPreviewUrl(null);
-        setPreviewHtml(html);
+        setPreviewHtml(sanitizeHtml(html));
       } else {
         setPreviewHtml(null);
         setPreviewUrl(URL.createObjectURL(blob));
@@ -994,7 +995,7 @@ export function OtherInvoicesBoard({
             <div className="overflow-auto max-h-[calc(90vh-52px)] p-4">
               {previewLoading && <p className="text-slate-400">Loading...</p>}
               {previewUrl && !previewLoading && <iframe src={previewUrl} className="w-full h-[80vh] rounded" title="Preview" />}
-              {previewHtml && !previewLoading && <div className="rounded-lg border border-slate-600 bg-white p-4 text-slate-900" dangerouslySetInnerHTML={{ __html: previewHtml }} />}
+              {previewHtml && !previewLoading && <div className="rounded-lg border border-slate-600 bg-white p-4 text-slate-900" dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }} />}
             </div>
           </div>
         </div>

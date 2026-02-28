@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 import { fireApprovalConfetti } from "@/lib/action-animations";
 import { triggerPaidAnimation } from "@/components/PaidIconOverlay";
 
@@ -127,7 +128,7 @@ export function InvoiceDetail({
           html += `<h3 style="margin:16px 0 8px;font-weight:bold;font-size:14px;">${name}</h3>`;
           html += XLSX.utils.sheet_to_html(ws, { editable: false });
         }
-        setExcelPreview({ name: fileName ?? "Spreadsheet", html });
+        setExcelPreview({ name: fileName ?? "Spreadsheet", html: sanitizeHtml(html) });
       } catch {
         window.open(d.url, "_blank", "noopener,noreferrer");
       }
@@ -752,7 +753,7 @@ export function InvoiceDetail({
               <button onClick={() => setExcelPreview(null)} className="rounded-lg px-3 py-1 text-sm text-slate-400 hover:bg-slate-700 hover:text-slate-200">Close</button>
             </div>
             <div className="max-h-[calc(90vh-4rem)] overflow-auto p-4">
-              <div className="overflow-x-auto rounded-lg border border-slate-600 bg-white p-4 text-slate-900" dangerouslySetInnerHTML={{ __html: excelPreview.html }} />
+              <div className="overflow-x-auto rounded-lg border border-slate-600 bg-white p-4 text-slate-900" dangerouslySetInnerHTML={{ __html: sanitizeHtml(excelPreview.html) }} />
             </div>
           </div>
         </div>
