@@ -36,7 +36,7 @@ export function ModalOverlay({ onClose, children, className, ariaLabel }: ModalO
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
@@ -44,7 +44,7 @@ export function ModalOverlay({ onClose, children, className, ariaLabel }: ModalO
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={className ?? "mx-4 w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"}>
+      <div className={className ?? "mx-3 sm:mx-4 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"}>
         {children}
       </div>
     </div>

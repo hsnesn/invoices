@@ -21,9 +21,23 @@ export const DEFAULT_METRIC_ORDER: MetricKey[] = [
   "other_pending",
 ];
 
+export type HiddenSectionKey =
+  | "alerts"
+  | "pending_actions"
+  | "producer_stats"
+  | "metrics"
+  | "charts"
+  | "quick_overview";
+
+export type ChartKey = "invoices" | "projects" | "office_requests" | "assignments";
+
 export interface DashboardLayout {
   metricOrder: MetricKey[];
   pageOrderByGroup: Record<PageGroup, string[]>;
+  hiddenSections?: HiddenSectionKey[];
+  hiddenMetrics?: MetricKey[];
+  hiddenPages?: string[];
+  chartExpanded?: Partial<Record<ChartKey, boolean>>;
 }
 
 const STORAGE_KEY_PREFIX = "dashboard_layout_";
@@ -44,7 +58,12 @@ function loadLayout(userId: string | undefined): DashboardLayout | null {
       Array.isArray((parsed as DashboardLayout).metricOrder) &&
       typeof (parsed as DashboardLayout).pageOrderByGroup === "object"
     ) {
-      return parsed as DashboardLayout;
+      const layout = parsed as DashboardLayout;
+      if (!Array.isArray(layout.hiddenSections)) layout.hiddenSections = [];
+      if (!Array.isArray(layout.hiddenMetrics)) layout.hiddenMetrics = [];
+      if (!Array.isArray(layout.hiddenPages)) layout.hiddenPages = [];
+      if (!layout.chartExpanded || typeof layout.chartExpanded !== "object") layout.chartExpanded = {};
+      return layout;
     }
   } catch {
     // ignore parse errors
@@ -79,6 +98,10 @@ export function useDashboardLayout(userId: string | undefined) {
             operations: [] as string[],
             admin: [] as string[],
           },
+          hiddenSections: [] as HiddenSectionKey[],
+          hiddenMetrics: [] as MetricKey[],
+          hiddenPages: [] as string[],
+          chartExpanded: {} as Partial<Record<ChartKey, boolean>>,
         };
         const next = updater(base);
         saveLayout(userId, next);
@@ -94,11 +117,77 @@ export function useDashboardLayout(userId: string | undefined) {
     operations: [],
     admin: [],
   };
+  const hiddenSections = layout?.hiddenSections ?? [];
+  const hiddenMetrics = layout?.hiddenMetrics ?? [];
+  const hiddenPages = layout?.hiddenPages ?? [];
+  const chartExpanded = layout?.chartExpanded ?? {};
+
+  const resetLayout = useCallback(() => {
+    if (!userId) return;
+    try {
+      localStorage.removeItem(getStorageKey(userId));
+    } catch {
+      // ignore
+    }
+    setLayoutState(null);
+  }, [userId]);
+
+  const toggleSection = useCallback(
+    (key: HiddenSectionKey) => {
+      setLayout((prev) => {
+        const current = prev.hiddenSections ?? [];
+        const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+        return { ...prev, hiddenSections: next };
+      });
+    },
+    [setLayout]
+  );
+
+  const toggleMetric = useCallback(
+    (key: MetricKey) => {
+      setLayout((prev) => {
+        const current = prev.hiddenMetrics ?? [];
+        const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+        return { ...prev, hiddenMetrics: next };
+      });
+    },
+    [setLayout]
+  );
+
+  const togglePage = useCallback(
+    (key: string) => {
+      setLayout((prev) => {
+        const current = prev.hiddenPages ?? [];
+        const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+        return { ...prev, hiddenPages: next };
+      });
+    },
+    [setLayout]
+  );
+
+  const setChartExpanded = useCallback(
+    (key: ChartKey, expanded: boolean) => {
+      setLayout((prev) => ({
+        ...prev,
+        chartExpanded: { ...(prev.chartExpanded ?? {}), [key]: expanded },
+      }));
+    },
+    [setLayout]
+  );
 
   return {
     metricOrder,
     pageOrderByGroup,
+    hiddenSections,
+    hiddenMetrics,
+    hiddenPages,
+    chartExpanded,
     setLayout,
+    resetLayout,
+    toggleSection,
+    toggleMetric,
+    togglePage,
+    setChartExpanded,
     hasCustomLayout: layout !== null,
   };
 }

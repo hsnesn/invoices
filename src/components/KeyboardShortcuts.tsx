@@ -106,7 +106,7 @@ export function KeyboardShortcuts() {
       onClick={() => setShowHelp(false)}
     >
       <div
-        className="max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="max-w-md w-full max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900 mx-2"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Keyboard shortcuts</h2>

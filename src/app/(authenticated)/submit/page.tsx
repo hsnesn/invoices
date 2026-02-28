@@ -374,11 +374,11 @@ function SubmitPageContent() {
   return (
     <>
       {loading && <UploadOverlay message="Submitting..." />}
-    <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-white p-8 text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-5xl font-bold tracking-tight text-sky-700">TRT<span className="text-slate-800 dark:text-slate-200">WORLD</span></h1>
-          <h2 className="mt-4 text-5xl font-semibold text-slate-900 dark:text-slate-100">Guest Invoice Submission</h2>
+    <div className="mx-auto max-w-4xl rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 md:p-8 text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 min-w-0">
+      <div className="mb-6 sm:mb-8 flex items-center justify-between min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-sky-700">TRT<span className="text-slate-800 dark:text-slate-200">WORLD</span></h1>
+          <h2 className="mt-2 sm:mt-4 text-xl sm:text-4xl md:text-5xl font-semibold text-slate-900 dark:text-slate-100">Guest Invoice Submission</h2>
         </div>
       </div>
 

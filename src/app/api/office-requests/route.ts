@@ -19,9 +19,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const mine = searchParams.get("mine") === "true";
 
-    let query = supabase
-      .from("office_requests")
-      .select(`
+    const baseSelect = `
         id,
         title,
         description,
@@ -37,11 +35,17 @@ export async function GET(request: NextRequest) {
         cost_estimate,
         created_at,
         updated_at,
-        office_request_todos(id, assignee_user_id, due_date, status, completed_at, completion_notes),
+        office_request_todos(id, assignee_user_id, due_date, status, completed_at, completion_notes)
+      `;
+    const extendedSelect = `${baseSelect},
         project_id,
         vendor_id,
         linked_invoice_id
-      `)
+      `;
+
+    let query = supabase
+      .from("office_requests")
+      .select(extendedSelect)
       .order("created_at", { ascending: false });
 
     if (profile.role !== "admin" && profile.role !== "operations") {
@@ -51,7 +55,16 @@ export async function GET(request: NextRequest) {
     }
     if (status) query = query.eq("status", status);
 
-    const { data: rows, error } = await query;
+    let { data: rows, error } = await query;
+    if (error && (String(error.message).includes("project_id") || String(error.message).includes("vendor_id") || String(error.message).includes("schema cache"))) {
+      let fallbackQuery = supabase.from("office_requests").select(baseSelect).order("created_at", { ascending: false });
+      if (profile.role !== "admin" && profile.role !== "operations") fallbackQuery = fallbackQuery.eq("requester_user_id", session.user.id);
+      else if (mine) fallbackQuery = fallbackQuery.eq("requester_user_id", session.user.id);
+      if (status) fallbackQuery = fallbackQuery.eq("status", status);
+      const fallback = await fallbackQuery;
+      rows = fallback.data as typeof rows;
+      error = fallback.error;
+    }
     if (error) throw error;
 
     const userIds = new Set<string>();
@@ -105,24 +118,24 @@ export async function POST(request: NextRequest) {
     const category = CATEGORIES.includes((body.category as (typeof CATEGORIES)[number]) ?? "other") ? body.category : "other";
     const priority = PRIORITIES.includes((body.priority as (typeof PRIORITIES)[number]) ?? "normal") ? body.priority : "normal";
     const costEstimate = typeof body.cost_estimate === "number" ? body.cost_estimate : null;
-    const projectId = typeof body.project_id === "string" && body.project_id.trim() ? body.project_id.trim() : null;
     const vendorId = typeof body.vendor_id === "string" && body.vendor_id.trim() ? body.vendor_id.trim() : null;
 
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const insertData: Record<string, unknown> = {
+      title,
+      description: description || null,
+      category,
+      priority,
+      cost_estimate: costEstimate,
+      requester_user_id: session.user.id,
+    };
+    if (vendorId) insertData.vendor_id = vendorId;
+
     const { data, error } = await supabase
       .from("office_requests")
-      .insert({
-        title,
-        description: description || null,
-        category,
-        priority,
-        cost_estimate: costEstimate,
-        project_id: projectId,
-        vendor_id: vendorId,
-        requester_user_id: session.user.id,
-      })
+      .insert(insertData)
       .select()
       .single();
 

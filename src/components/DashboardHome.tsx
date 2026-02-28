@@ -27,6 +27,8 @@ import {
   useDashboardLayout,
   type MetricKey,
   type PageGroup as LayoutPageGroup,
+  type HiddenSectionKey,
+  type ChartKey,
   DEFAULT_METRIC_ORDER,
 } from "@/hooks/useDashboardLayout";
 
@@ -429,10 +431,29 @@ function getInitials(name: string | null): string {
     .slice(0, 2);
 }
 
+const SECTION_OPTIONS: { key: HiddenSectionKey; label: string }[] = [
+  { key: "alerts", label: "Alerts" },
+  { key: "pending_actions", label: "Pending Actions" },
+  { key: "producer_stats", label: "Your Guests" },
+  { key: "metrics", label: "Metric Cards" },
+  { key: "charts", label: "Charts" },
+  { key: "quick_overview", label: "Quick Overview" },
+];
+
+const METRIC_OPTIONS: { key: MetricKey; label: string }[] = [
+  { key: "guest_pending", label: "Guest Pending" },
+  { key: "guest_paid", label: "Guest Paid" },
+  { key: "contr_pending", label: "Contractor Pending" },
+  { key: "contr_paid", label: "Contractor Paid" },
+  { key: "rejected", label: "Rejected" },
+  { key: "other_pending", label: "Other Pending" },
+];
+
 export function DashboardHome({ profile }: { profile: Profile }) {
   const logos = useLogos();
   const [editLayoutMode, setEditLayoutMode] = useState(false);
-  const { metricOrder, pageOrderByGroup, setLayout } = useDashboardLayout(profile?.id);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const { metricOrder, pageOrderByGroup, hiddenSections, hiddenMetrics, hiddenPages, chartExpanded, setLayout, resetLayout, toggleSection, toggleMetric, togglePage, setChartExpanded } = useDashboardLayout(profile?.id);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -458,10 +479,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     statsFetcher,
     { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
-  const [chartOpen, setChartOpen] = useState(isAdmin || isOperations);
-  const [projectsChartOpen, setProjectsChartOpen] = useState(false);
-  const [officeRequestsChartOpen, setOfficeRequestsChartOpen] = useState(false);
-  const [assignmentsChartOpen, setAssignmentsChartOpen] = useState(false);
+  const chartOpen = chartExpanded.invoices !== undefined ? chartExpanded.invoices : (isAdmin || isOperations);
+  const projectsChartOpen = chartExpanded.projects ?? false;
+  const officeRequestsChartOpen = chartExpanded.office_requests ?? false;
+  const assignmentsChartOpen = chartExpanded.assignments ?? false;
   const canManageAvailability = ["admin", "operations", "manager"].includes(profile?.role ?? "");
   const { data: contractorStats, mutate: mutateContractorStats, isValidating: contractorStatsValidating } = useSWR<ContractorAvailabilityStats>(
     canManageAvailability ? "/api/contractor-availability/dashboard-stats" : null,
@@ -519,17 +540,103 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             </span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setEditLayoutMode((v) => !v)}
-          className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
-        >
-          {editLayoutMode ? "Done" : "Customize layout"}
-        </button>
+        <div className="relative shrink-0 flex flex-wrap gap-1 justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setEditLayoutMode((v) => !v);
+              if (editLayoutMode) setCustomizeOpen(false);
+            }}
+            className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 touch-manipulation"
+          >
+            {editLayoutMode ? "Done" : "Customize"}
+          </button>
+          {editLayoutMode && (
+            <button
+              type="button"
+              onClick={() => setCustomizeOpen((v) => !v)}
+              className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 touch-manipulation"
+              aria-expanded={customizeOpen}
+            >
+              Options
+            </button>
+          )}
+          {customizeOpen && editLayoutMode && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setCustomizeOpen(false)} aria-hidden="true" />
+              <div className="absolute right-0 top-full z-50 mt-1 w-64 max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                <div className="px-3 py-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Show / Hide sections</p>
+                </div>
+                {SECTION_OPTIONS.map(({ key, label }) => (
+                  <label
+                    key={key}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!hiddenSections.includes(key)}
+                      onChange={() => toggleSection(key)}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                    />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">{label}</span>
+                  </label>
+                ))}
+                <div className="mt-2 border-t border-gray-200 dark:border-gray-700 px-3 pt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Hide individual metrics</p>
+                </div>
+                {METRIC_OPTIONS.map(({ key, label }) => (
+                  <label
+                    key={key}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!hiddenMetrics.includes(key)}
+                      onChange={() => toggleMetric(key)}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                    />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">{label}</span>
+                  </label>
+                ))}
+                <div className="mt-2 border-t border-gray-200 dark:border-gray-700 px-3 pt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Hide page cards</p>
+                </div>
+                {visiblePages.map((page) => (
+                  <label
+                    key={page.pageKey}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!hiddenPages.includes(page.pageKey)}
+                      onChange={() => togglePage(page.pageKey)}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                    />
+                    <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{page.title}</span>
+                  </label>
+                ))}
+                <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetLayout();
+                      setCustomizeOpen(false);
+                      setEditLayoutMode(false);
+                    }}
+                    className="w-full px-3 py-1.5 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                  >
+                    Reset to default
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Proactive Alerts */}
-      {canSeeStats && alertsData?.alerts && alertsData.alerts.length > 0 && (
+      {canSeeStats && !hiddenSections.includes("alerts") && alertsData?.alerts && alertsData.alerts.length > 0 && (
         <div className="mb-4 min-w-0">
           <h2 className="mb-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">Alerts</h2>
           <div className="flex flex-wrap gap-2">
@@ -554,7 +661,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       )}
 
       {/* Your Pending Actions — admin / manager / operations */}
-      {canSeeStats && (() => {
+      {canSeeStats && !hiddenSections.includes("pending_actions") && (() => {
         const actions: { count: number; label: string; href: string; accent?: "rose" }[] = [];
         if (stats?.guest.pending && stats.guest.pending > 0)
           actions.push({ count: stats.guest.pending, label: "guest invoices pending", href: "/invoices?group=pending" });
@@ -590,7 +697,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
                 <Link
                   key={a.href}
                   href={a.href}
-                  className={`flex min-w-[160px] shrink-0 items-center gap-3 rounded-xl border-l-4 bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200/80 transition-all hover:shadow-md dark:bg-gray-900/60 dark:ring-gray-700/60 ${a.accent === "rose" ? "border-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"}`}
+                  className={`flex min-w-0 sm:min-w-[160px] flex-1 shrink-0 items-center gap-2 sm:gap-3 rounded-xl border-l-4 bg-white px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm ring-1 ring-gray-200/80 transition-all hover:shadow-md dark:bg-gray-900/60 dark:ring-gray-700/60 ${a.accent === "rose" ? "border-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"}`}
                 >
                   <span className={`text-2xl font-bold ${a.accent === "rose" ? "text-rose-700 dark:text-rose-300" : "text-amber-700 dark:text-amber-300"}`}>{a.count}</span>
                   <span className="flex-1 text-xs font-medium text-gray-700 dark:text-gray-300">{a.label}</span>
@@ -628,7 +735,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       )}
 
       {/* Producer: Your guests this month, response rate, most frequent */}
-      {canSeeStats && producerStats && (
+      {canSeeStats && !hiddenSections.includes("producer_stats") && producerStats && (
         <div className="mb-4 min-w-0">
           <div className="mb-1.5 flex items-center justify-between">
             <h2 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Your Guests</h2>
@@ -640,7 +747,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
               Refresh
             </button>
           </div>
-          <div className="grid gap-2 grid-cols-3 min-w-0">
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-w-0">
             <div className="rounded-lg border border-violet-200/80 bg-violet-50/80 px-3 py-2 shadow-sm dark:border-violet-800/60 dark:bg-violet-950/30">
               <p className="text-[10px] font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">This month</p>
               <p className="text-lg font-bold text-violet-800 dark:text-violet-200">{producerStats.guests_this_month}</p>
@@ -672,7 +779,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
 
       {/* Metric Cards - hidden from submitters */}
-      {canSeeStats && (
+      {canSeeStats && !hiddenSections.includes("metrics") && (
         <div className="mb-4 min-w-0">
           <div className="mb-1.5 flex items-center justify-end">
             <button
@@ -685,7 +792,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             </button>
           </div>
           {!stats ? (
-            <div className="grid gap-2 grid-cols-3 lg:grid-cols-6 min-w-0">
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 min-w-0">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="rounded-lg border border-gray-200/80 bg-gray-50/80 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40 animate-pulse">
                   <div className="h-2.5 w-16 rounded bg-gray-200 dark:bg-gray-600" />
@@ -712,9 +819,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
               }}
             >
               <SortableContext items={metricOrder} strategy={rectSortingStrategy}>
-                <div className="grid gap-2 grid-cols-3 lg:grid-cols-6 min-w-0">
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 min-w-0">
                   {metricOrder
                     .filter((k) => {
+                      if (hiddenMetrics.includes(k)) return false;
                       if (k === "other_pending") return stats.other != null;
                       return true;
                     })
@@ -788,11 +896,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       )}
 
       {/* Mini Charts - collapsible, hidden from submitters */}
-      {canSeeStats && stats?.monthlyTrend?.length ? (
+      {canSeeStats && !hiddenSections.includes("charts") && stats?.monthlyTrend?.length ? (
         <div className="mb-4 min-w-0">
           <button
             type="button"
-            onClick={() => setChartOpen((v) => !v)}
+            onClick={() => setChartExpanded("invoices", !chartOpen)}
             className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
           >
             <svg className={`h-3 w-3 text-gray-400 transition-transform ${chartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -818,11 +926,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       ) : null}
 
-      {canSeeStats && stats?.projectsByMonth?.length ? (
+      {canSeeStats && !hiddenSections.includes("charts") && stats?.projectsByMonth?.length ? (
         <div className="mb-4 min-w-0">
           <button
             type="button"
-            onClick={() => setProjectsChartOpen((v) => !v)}
+            onClick={() => setChartExpanded("projects", !projectsChartOpen)}
             className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
           >
             <svg className={`h-3 w-3 text-gray-400 transition-transform ${projectsChartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -847,11 +955,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       ) : null}
 
-      {canSeeStats && stats?.officeRequestsByMonth?.length ? (
+      {canSeeStats && !hiddenSections.includes("charts") && stats?.officeRequestsByMonth?.length ? (
         <div className="mb-4 min-w-0">
           <button
             type="button"
-            onClick={() => setOfficeRequestsChartOpen((v) => !v)}
+            onClick={() => setChartExpanded("office_requests", !officeRequestsChartOpen)}
             className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
           >
             <svg className={`h-3 w-3 text-gray-400 transition-transform ${officeRequestsChartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -876,11 +984,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       ) : null}
 
-      {canSeeStats && stats?.assignmentsByMonth?.length ? (
+      {canSeeStats && !hiddenSections.includes("charts") && stats?.assignmentsByMonth?.length ? (
         <div className="mb-4 min-w-0">
           <button
             type="button"
-            onClick={() => setAssignmentsChartOpen((v) => !v)}
+            onClick={() => setChartExpanded("assignments", !assignmentsChartOpen)}
             className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
           >
             <svg className={`h-3 w-3 text-gray-400 transition-transform ${assignmentsChartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -930,7 +1038,9 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         }}
       >
         {(["invoices", "operations", "admin"] as PageGroup[]).map((groupKey) => {
-          const groupPages = visiblePages.filter((p) => p.group === groupKey);
+          const groupPages = visiblePages
+            .filter((p) => p.group === groupKey)
+            .filter((p) => !hiddenPages.includes(p.pageKey));
           if (groupPages.length === 0) return null;
           const savedOrder = pageOrderByGroup[groupKey as LayoutPageGroup] ?? [];
           const orderedPages =
@@ -981,11 +1091,13 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       </DndContext>
 
       {/* Quick Overview */}
-      <div className="mt-4 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
-        <p className="text-[11px] text-gray-500 dark:text-gray-400">
-          Navigate to Invoices to view statistics, apply filters and generate reports.
-        </p>
-      </div>
+      {!hiddenSections.includes("quick_overview") && (
+        <div className="mt-4 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">
+            Navigate to Invoices to view statistics, apply filters and generate reports.
+          </p>
+        </div>
+      )}
 
     </div>
   );

@@ -79,7 +79,7 @@ export function NotificationDropdown({ profile }: { profile: Profile }) {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+        <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
           {/* Pending Actions – pinned top section */}
           {pendingActions.length > 0 && (
             <div className="rounded-t-xl bg-amber-50 border-b border-amber-200 dark:bg-amber-950/40 dark:border-amber-800">

@@ -72,10 +72,10 @@ export async function GET() {
       });
     }
 
-    // Projects at risk (deadline within 7 days)
+    // Projects at risk (deadline within 7 days) — skip if projects table missing (schema cache)
     const canSeeProjects = ["admin", "operations", "manager", "finance", "viewer"].includes(profile.role);
     if (canSeeProjects) {
-      const { data: projects } = await supabase
+      const { data: projects, error: projectsErr } = await supabase
         .from("projects")
         .select("id, name, deadline")
         .eq("status", "active")
@@ -85,7 +85,7 @@ export async function GET() {
         .order("deadline", { ascending: true })
         .limit(10);
 
-      if (projects && projects.length > 0) {
+      if (!projectsErr && projects && projects.length > 0) {
         alerts.push({
           type: "projects",
           title: "Projects at risk (deadline soon)",

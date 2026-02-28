@@ -19,22 +19,51 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, from_month, to_month, department_id, program_id, role } = body as {
-      action: "copy_from_prev" | "clear" | "clear_role" | "copy_to_next";
+    const { action, from_month, to_month, department_id, program_id, role, items } = body as {
+      action: "copy_from_prev" | "clear" | "clear_role" | "clear_roles_bulk" | "copy_to_next";
       from_month?: string;
       to_month?: string;
       department_id?: string;
       program_id?: string;
       role?: string;
+      items?: { to_month: string; department_id: string; program_id?: string; role: string }[];
     };
 
     const deptId = department_id && /^[0-9a-f-]{36}$/i.test(department_id) ? department_id : null;
     const progId = program_id && /^[0-9a-f-]{36}$/i.test(program_id) ? program_id : null;
+
+    const supabase = createAdminClient();
+
+    if (action === "clear_roles_bulk" && Array.isArray(items) && items.length > 0) {
+      let cleared = 0;
+      for (const it of items) {
+        const toMonth = it?.to_month;
+        const deptIdIt = it?.department_id;
+        const progIdIt = it?.program_id;
+        const roleIt = it?.role;
+        if (!toMonth || !/^\d{4}-\d{2}$/.test(toMonth) || !deptIdIt || !/^[0-9a-f-]{36}$/i.test(deptIdIt) || !roleIt || typeof roleIt !== "string" || !roleIt.trim()) continue;
+        const [y, m] = toMonth.split("-").map(Number);
+        const start = new Date(y, m - 1, 1).toISOString().slice(0, 10);
+        const end = new Date(y, m, 0).toISOString().slice(0, 10);
+        let delQuery = supabase
+          .from("contractor_availability_requirements")
+          .delete()
+          .eq("department_id", deptIdIt)
+          .eq("role", roleIt.trim())
+          .gte("date", start)
+          .lte("date", end);
+        if (progIdIt && /^[0-9a-f-]{36}$/i.test(progIdIt)) delQuery = delQuery.eq("program_id", progIdIt);
+        else delQuery = delQuery.is("program_id", null);
+        const { error } = await delQuery;
+        if (error) throw error;
+        cleared++;
+      }
+      return NextResponse.json({ ok: true, count: cleared });
+    }
+
     if (!deptId) {
       return NextResponse.json({ error: "department_id is required." }, { status: 400 });
     }
-
-    const supabase = createAdminClient();
 
     if (action === "clear_role" && to_month && /^\d{4}-\d{2}$/.test(to_month) && role && typeof role === "string" && role.trim()) {
       const [y, m] = to_month.split("-").map(Number);

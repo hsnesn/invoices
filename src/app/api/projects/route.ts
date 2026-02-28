@@ -9,6 +9,11 @@ export const dynamic = "force-dynamic";
 
 const STATUSES = ["active", "on_hold", "completed", "cancelled"] as const;
 
+function isProjectsTableError(e: unknown): boolean {
+  const msg = String((e as Error)?.message ?? "");
+  return msg.includes("schema cache") || msg.includes("public.projects");
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
@@ -26,10 +31,14 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      if (isProjectsTableError(error)) return NextResponse.json([]);
+      throw error;
+    }
     return NextResponse.json(data ?? []);
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
+    if (isProjectsTableError(e)) return NextResponse.json([]);
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
@@ -68,6 +77,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    const msg = (e as Error).message ?? "";
+    if (msg.includes("schema cache") || msg.includes("public.projects")) {
+      return NextResponse.json(
+        { error: "Projects table not found. Run database migrations: supabase db push" },
+        { status: 503 }
+      );
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

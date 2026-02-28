@@ -135,7 +135,6 @@ export function OfficeRequestsClient() {
   const [reminders, setReminders] = useState<{ id: string; title: string; next_due_date: string; frequency_months: number; assignee_name?: string | null }[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>(() => statusFromUrl || "");
   const [showMineOnly, setShowMineOnly] = useState(false);
@@ -147,7 +146,6 @@ export function OfficeRequestsClient() {
   const [newPriority, setNewPriority] = useState("normal");
   const [newCost, setNewCost] = useState("");
   const [newVendorId, setNewVendorId] = useState("");
-  const [newProjectId, setNewProjectId] = useState("");
   const [profile, setProfile] = useState<{ id: string; role: string } | null>(null);
   const [approveModal, setApproveModal] = useState<RequestRow | null>(null);
   const [completeModal, setCompleteModal] = useState<RequestRow | null>(null);
@@ -191,7 +189,6 @@ export function OfficeRequestsClient() {
 
   useEffect(() => {
     fetch("/api/vendors").then((r) => r.json()).then((d) => setVendors(Array.isArray(d) ? d : [])).catch(() => setVendors([]));
-    fetch("/api/projects").then((r) => r.json()).then((d) => setProjects(Array.isArray(d) ? d : [])).catch(() => setProjects([]));
   }, []);
 
   useEffect(() => {
@@ -214,7 +211,6 @@ export function OfficeRequestsClient() {
           priority: newPriority,
           cost_estimate: newCost ? parseFloat(newCost) : null,
           vendor_id: newVendorId || null,
-          project_id: newProjectId || null,
         }),
       });
       if (res.ok) {
@@ -226,7 +222,6 @@ export function OfficeRequestsClient() {
         setNewPriority("normal");
         setNewCost("");
         setNewVendorId("");
-        setNewProjectId("");
         fetchRequests();
       } else {
         const d = await res.json();
@@ -521,15 +516,6 @@ export function OfficeRequestsClient() {
                   <option value="">—</option>
                   {vendors.map((v) => (
                     <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Project (optional)</label>
-                <select value={newProjectId} onChange={(e) => setNewProjectId(e.target.value)} className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-                  <option value="">—</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>

@@ -137,26 +137,28 @@ export async function GET() {
       return { month: label, guest: guestCount, freelancer: flCount, total: guestCount + flCount };
     });
 
-    // Projects by month (created)
+    // Projects by month (created) — skip if projects table missing (schema cache)
     let projectsByMonth: { month: string; count: number }[] = [];
     if (canSeeProjects) {
-      const { data: projects } = await supabase
+      const { data: projects, error: projectsErr } = await supabase
         .from("projects")
         .select("created_at")
         .order("created_at", { ascending: true });
-      projectsByMonth = monthKeys.map((key) => {
-        const [y, m] = key.split("-").map(Number);
-        const start = new Date(y, m - 1, 1);
-        const end = new Date(y, m, 0, 23, 59, 59);
-        const label = start.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
-        const count = (projects ?? []).filter((p) => {
-          const created = (p as { created_at?: string }).created_at;
-          if (!created) return false;
-          const dt = new Date(created);
-          return dt >= start && dt <= end;
-        }).length;
-        return { month: label, count };
-      });
+      if (!projectsErr) {
+        projectsByMonth = monthKeys.map((key) => {
+          const [y, m] = key.split("-").map(Number);
+          const start = new Date(y, m - 1, 1);
+          const end = new Date(y, m, 0, 23, 59, 59);
+          const label = start.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+          const count = (projects ?? []).filter((p) => {
+            const created = (p as { created_at?: string }).created_at;
+            if (!created) return false;
+            const dt = new Date(created);
+            return dt >= start && dt <= end;
+          }).length;
+          return { month: label, count };
+        });
+      }
     }
 
     // Office requests by month (created)
@@ -217,21 +219,21 @@ export async function GET() {
       { pending: 0, paid: 0, rejected: 0 }
     );
 
-    // Projects at risk (deadline within 7 days)
+    // Projects at risk (deadline within 7 days) — skip if projects table missing (schema cache)
     let projectsAtRisk = 0;
     if (canSeeProjects) {
       const projectRisk = new Date();
       projectRisk.setDate(projectRisk.getDate() + 7);
       const projectRiskStr = projectRisk.toISOString().slice(0, 10);
       const today = new Date().toISOString().slice(0, 10);
-      const { count } = await supabase
+      const { count, error: projectsErr } = await supabase
         .from("projects")
         .select("id", { count: "exact", head: true })
         .eq("status", "active")
         .not("deadline", "is", null)
         .gte("deadline", today)
         .lte("deadline", projectRiskStr);
-      projectsAtRisk = count ?? 0;
+      if (!projectsErr) projectsAtRisk = count ?? 0;
     }
 
     // Office requests pending approval (admin/operations only)

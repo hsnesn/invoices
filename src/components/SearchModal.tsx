@@ -171,13 +171,13 @@ export function SearchModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-[15vh] animate-in fade-in duration-150"
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-[5vh] sm:pt-[15vh] px-2 sm:px-4 animate-in fade-in duration-150 overflow-y-auto"
       onClick={close}
     >
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
       <div
-        className="relative z-10 w-full max-w-lg rounded-xl bg-white shadow-2xl ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700"
+        className="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-xl bg-white shadow-2xl ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
@@ -208,7 +208,7 @@ export function SearchModal() {
           </kbd>
         </div>
 
-        <div className="max-h-80 overflow-y-auto p-2">
+        <div className="max-h-[min(20rem,60vh)] overflow-y-auto p-2 flex-1 min-h-0">
           {loading && (
             <p className="px-3 py-6 text-center text-sm text-gray-400 dark:text-slate-500">
               Searching...

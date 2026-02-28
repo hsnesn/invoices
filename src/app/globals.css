@@ -4,6 +4,15 @@
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area insets for notched devices */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 @layer utilities {
@@ -68,4 +77,11 @@ body {
   min-width: 1.25rem;
   min-height: 1.25rem;
   accent-color: #0891b2;
+}
+
+/* Touch-friendly: remove tap delay on mobile */
+@media (hover: none) and (pointer: coarse) {
+  button, a, [role="button"], input[type="submit"], input[type="button"] {
+    touch-action: manipulation;
+  }
 }
