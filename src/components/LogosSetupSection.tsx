@@ -17,9 +17,10 @@ export function LogosSetupSection() {
   const [saving, setSaving] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [previewStamp, setPreviewStamp] = useState(() => Date.now());
 
   const fetchLogos = () => {
-    fetch("/api/admin/app-settings")
+    fetch(`/api/admin/app-settings?_=${Date.now()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         const v: Record<string, string> = {};
@@ -53,6 +54,7 @@ export function LogosSetupSection() {
       });
       const data = await res.json();
       if (res.ok) {
+        setPreviewStamp(Date.now());
         setMessage({ type: "success", text: "Saved and applied." });
         window.dispatchEvent(new CustomEvent("logos-updated"));
         router.refresh();
@@ -85,6 +87,7 @@ export function LogosSetupSection() {
 
       if (res.ok) {
         setValues((prev) => ({ ...prev, [key]: data.value }));
+        setPreviewStamp(Date.now());
         setMessage({ type: "success", text: "Logo uploaded and applied." });
         window.dispatchEvent(new CustomEvent("logos-updated"));
         router.refresh();
@@ -139,7 +142,12 @@ export function LogosSetupSection() {
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex h-12 w-24 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800 overflow-hidden shrink-0">
                   <img
-                    src={values[key]?.startsWith("http") ? values[key] : `/${(values[key] || "").replace(/^\//, "")}`}
+                    src={(() => {
+                      const v = values[key] || "";
+                      const base = v.startsWith("http") ? v : `/${v.replace(/^\//, "")}`;
+                      const sep = base.includes("?") ? "&" : "?";
+                      return `${base}${sep}_p=${previewStamp}`;
+                    })()}
                     alt={label}
                     className="max-h-10 max-w-full object-contain"
                     onError={(e) => {

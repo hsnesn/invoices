@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     await requireAdmin();
@@ -12,7 +14,9 @@ export async function GET() {
     for (const row of data ?? []) {
       map[(row as { key: string }).key] = (row as { value: unknown }).value;
     }
-    return NextResponse.json(map);
+    return NextResponse.json(map, {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

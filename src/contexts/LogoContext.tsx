@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 
 export type LogoUrls = {
   logo_trt: string;
@@ -14,47 +14,39 @@ const defaults: LogoUrls = {
   logo_email: "/logo.png",
 };
 
-function addCacheBust(url: string | undefined, stamp: number): string {
-  const u = url || "";
-  if (!u) return "";
-  const sep = u.includes("?") ? "&" : "?";
-  return `${u}${sep}v=${stamp}`;
-}
-
 const LogoContext = createContext<LogoUrls>(defaults);
 
 export function LogoProvider({ children }: { children: React.ReactNode }) {
   const [urls, setUrls] = useState<LogoUrls>(defaults);
-  const [stamp, setStamp] = useState(() => Date.now());
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/settings/logos?_=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
+      if (!res.ok) return;
+      const d = await res.json();
+      if (d && typeof d === "object") {
+        const next: LogoUrls = {
+          logo_trt: d.logo_trt || defaults.logo_trt,
+          logo_trt_world: d.logo_trt_world || defaults.logo_trt_world,
+          logo_email: d.logo_email || defaults.logo_email,
+        };
+        setUrls(next);
+      }
+    } catch {
+      /* network error — keep current */
+    }
+  }, []);
 
   useEffect(() => {
-    const load = () => {
-      fetch(`/api/settings/logos?t=${Date.now()}`, { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d && typeof d === "object") {
-            setUrls({
-              logo_trt: d.logo_trt || defaults.logo_trt,
-              logo_trt_world: d.logo_trt_world || defaults.logo_trt_world,
-              logo_email: d.logo_email || defaults.logo_email,
-            });
-            setStamp(Date.now());
-          }
-        })
-        .catch(() => {});
-    };
     load();
     window.addEventListener("logos-updated", load);
     return () => window.removeEventListener("logos-updated", load);
-  }, []);
+  }, [load]);
 
-  const urlsWithCacheBust: LogoUrls = {
-    logo_trt: addCacheBust(urls.logo_trt, stamp),
-    logo_trt_world: addCacheBust(urls.logo_trt_world, stamp),
-    logo_email: addCacheBust(urls.logo_email, stamp),
-  };
-
-  return <LogoContext.Provider value={urlsWithCacheBust}>{children}</LogoContext.Provider>;
+  return <LogoContext.Provider value={urls}>{children}</LogoContext.Provider>;
 }
 
 export function useLogos() {
