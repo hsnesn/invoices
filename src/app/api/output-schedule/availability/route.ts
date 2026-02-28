@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { profile } = await requireAuth();
+    const { session, profile } = await requireAuth();
     const body = await request.json();
     const { dates, role } = body as { dates: string[]; role?: string };
 
@@ -88,6 +88,22 @@ export async function POST(request: NextRequest) {
       const rows = valid.map((date) => ({ user_id: profile.id, date, role: roleVal }));
       const { error: insErr } = await supabase.from("output_schedule_availability").insert(rows);
       if (insErr) throw insErr;
+    }
+
+    const userEmail = (session.user as { email?: string }).email;
+    if (userEmail && valid.length > 0) {
+      const [y, m] = minDate.split("-").map(Number);
+      const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+      const { sendContractorAvailabilitySubmittedEmail } = await import("@/lib/email");
+      await sendContractorAvailabilitySubmittedEmail({
+        to: "london.operations@trtworld.com",
+        replyTo: userEmail,
+        personName: profile.full_name ?? "Unknown",
+        personEmail: userEmail,
+        role: roleVal ?? "",
+        monthLabel,
+        dates: valid.sort(),
+      });
     }
 
     return NextResponse.json({ ok: true, count: valid.length });

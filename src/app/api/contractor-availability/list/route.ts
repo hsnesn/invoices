@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month");
 
-    const isAdminOrOps = profile.role === "admin" || profile.role === "operations";
+    const isAdminOrOps = ["admin", "operations", "manager"].includes(profile.role);
 
     let query = supabase
       .from("output_schedule_availability")
@@ -37,7 +37,13 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     if (!isAdminOrOps) {
-      return NextResponse.json({ records: rows ?? [] });
+      const monthLabel = month
+        ? new Date(parseInt(month.slice(0, 4), 10), parseInt(month.slice(5, 7), 10) - 1).toLocaleString("en-GB", {
+            month: "long",
+            year: "numeric",
+          })
+        : null;
+      return NextResponse.json({ month: month ?? null, monthLabel, records: rows ?? [] });
     }
 
     const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
@@ -71,7 +77,33 @@ export async function GET(request: NextRequest) {
       u.dates.sort();
     }
 
-    return NextResponse.json({ records: rows ?? [], byUser: Object.entries(byUser).map(([id, v]) => ({ userId: id, ...v })) });
+    const monthLabel = month
+      ? new Date(parseInt(month.slice(0, 4), 10), parseInt(month.slice(5, 7), 10) - 1).toLocaleString("en-GB", {
+          month: "long",
+          year: "numeric",
+        })
+      : null;
+
+    let requirements: { date: string; role: string; count_needed: number }[] = [];
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [y, m] = month.split("-").map(Number);
+      const start = new Date(y, m - 1, 1).toISOString().slice(0, 10);
+      const end = new Date(y, m, 0).toISOString().slice(0, 10);
+      const { data: reqRows } = await supabase
+        .from("contractor_availability_requirements")
+        .select("date, role, count_needed")
+        .gte("date", start)
+        .lte("date", end);
+      requirements = (reqRows ?? []) as { date: string; role: string; count_needed: number }[];
+    }
+
+    return NextResponse.json({
+      month: month ?? null,
+      monthLabel,
+      requirements,
+      records: rows ?? [],
+      byUser: Object.entries(byUser).map(([id, v]) => ({ userId: id, ...v })),
+    });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

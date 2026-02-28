@@ -108,7 +108,7 @@ export async function requirePageAccess(pageKey: PageKey) {
     redirect("/dashboard");
   }
   if (pageKey === "contractor_availability") {
-    if (["admin", "operations"].includes(profile.role)) return { session, profile };
+    if (["admin", "operations", "manager"].includes(profile.role)) return { session, profile };
     if (profile.allowed_pages?.includes("contractor_availability")) return { session, profile };
     if (!profile.allowed_pages || profile.allowed_pages.length === 0) return { session, profile };
     redirect("/dashboard");

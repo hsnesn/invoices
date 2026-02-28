@@ -256,6 +256,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.adminOnly && !isAdmin) return false;
     if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
     if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (profile?.role === "manager") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "contractor_availability", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
     if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "messages"].includes(p.pageKey);
     if (["submitter", "manager"].includes(role) && p.pageKey === "invited_guests") return true;
     if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));

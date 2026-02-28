@@ -660,6 +660,71 @@ export async function sendSalaryPaymentConfirmationEmail(params: {
 }
 
 /* ------------------------------------------------------------------ */
+/* Contractor availability submitted → London Operations               */
+/* ------------------------------------------------------------------ */
+
+const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
+
+export async function sendContractorAvailabilitySubmittedEmail(params: {
+  to: string;
+  replyTo: string;
+  personName: string;
+  personEmail: string;
+  role: string;
+  monthLabel: string;
+  dates: string[];
+}) {
+  const datesList = params.dates.length > 0
+    ? params.dates.map((d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })).join(", ")
+    : "—";
+  return sendEmail({
+    to: params.to,
+    replyTo: params.replyTo,
+    subject: `Contractor availability: ${params.personName} — ${params.monthLabel}`,
+    html: await wrapWithLogo("Contractor Availability Submitted", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A contractor has submitted their availability.</p>
+      <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">Name</td><td style="padding:8px 12px;color:#1e293b">${params.personName}</td></tr>
+          <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Email (reply to)</td><td style="padding:8px 12px;color:#1e293b"><a href="mailto:${params.personEmail}">${params.personEmail}</a></td></tr>
+          <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Role</td><td style="padding:8px 12px;color:#1e293b">${params.role || "—"}</td></tr>
+          <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Month</td><td style="padding:8px 12px;color:#1e293b">${params.monthLabel}</td></tr>
+          <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Available days</td><td style="padding:8px 12px;color:#1e293b">${datesList}</td></tr>
+        </table>
+      </div>
+      <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Reply to this email to contact the contractor directly.</p>
+    `),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Contractor assignment confirmed → person gets email                */
+/* ------------------------------------------------------------------ */
+
+export async function sendContractorAssignmentConfirmedEmail(params: {
+  to: string;
+  personName: string;
+  monthLabel: string;
+  dates: string[];
+}) {
+  const datesList = params.dates.length > 0
+    ? params.dates.map((d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })).join(", ")
+    : "—";
+  return sendEmail({
+    to: params.to,
+    subject: `Your schedule is confirmed — ${params.monthLabel}`,
+    html: await wrapWithLogo("Schedule Confirmed", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your schedule for <strong>${params.monthLabel}</strong> has been confirmed. You are booked for the following days:</p>
+      <div style="margin:16px 0;padding:16px;background:#ecfdf5;border-radius:8px;border-left:4px solid #10b981">
+        <p style="margin:0;font-size:14px;font-weight:600;color:#065f46">${datesList}</p>
+      </div>
+      <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">If you have any questions, please contact London Operations.</p>
+    `),
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Password reset                                                      */
 /* ------------------------------------------------------------------ */
 
