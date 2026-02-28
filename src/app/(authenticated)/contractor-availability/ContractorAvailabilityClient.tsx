@@ -208,13 +208,17 @@ export function ContractorAvailabilityClient() {
   };
 
   const handleSaveAvailability = async () => {
+    if (!selectedRole?.trim()) {
+      setMessage({ type: "error", text: "Please select a role before saving." });
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
       const res = await fetch("/api/output-schedule/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dates: Array.from(selectedDates), role: selectedRole || undefined }),
+        body: JSON.stringify({ dates: Array.from(selectedDates), role: selectedRole.trim() }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -316,7 +320,7 @@ export function ContractorAvailabilityClient() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role <span className="text-red-500">*</span></label>
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
@@ -428,7 +432,7 @@ export function ContractorAvailabilityClient() {
             <button
               type="button"
               onClick={handleSaveAvailability}
-              disabled={saving}
+              disabled={saving || !selectedRole?.trim()}
               className="rounded-lg bg-sky-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Availability"}

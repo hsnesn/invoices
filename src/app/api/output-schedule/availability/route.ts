@@ -72,6 +72,9 @@ export async function POST(request: NextRequest) {
     }
 
     const roleVal = typeof role === "string" && role.trim() ? role.trim() : null;
+    if (!roleVal) {
+      return NextResponse.json({ error: "Role is required. Please select a role." }, { status: 400 });
+    }
 
     const supabase = createAdminClient();
 
