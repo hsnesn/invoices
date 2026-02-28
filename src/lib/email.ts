@@ -218,6 +218,8 @@ export async function sendEmail(params: {
   html: string;
   replyTo?: string | string[];
   bcc?: string | string[];
+  fromName?: string;
+  fromEmail?: string;
   attachments?: { filename: string; content: Buffer | string }[];
 }) {
   if (!process.env.RESEND_API_KEY) {
@@ -227,6 +229,24 @@ export async function sendEmail(params: {
   const to = Array.isArray(params.to) ? params.to : [params.to];
   const resend = getResend();
   if (!resend) return { success: false, error: "Email not configured" };
+
+  let from = FROM_EMAIL;
+  const configMatch = FROM_EMAIL.match(/<([^>]+)>/);
+  const configEmail = configMatch ? configMatch[1] : FROM_EMAIL;
+  const configDomain = configEmail.split("@")[1]?.toLowerCase();
+
+  if (params.fromEmail?.trim() && params.fromEmail.includes("@")) {
+    const reqDomain = params.fromEmail.trim().split("@")[1]?.toLowerCase();
+    if (reqDomain === configDomain) {
+      const displayName = params.fromName?.trim() || params.fromEmail.trim();
+      from = `${displayName} <${params.fromEmail.trim()}>`;
+    } else if (params.fromName?.trim()) {
+      from = `${params.fromName.trim()} <${configEmail}>`;
+    }
+  } else if (params.fromName?.trim()) {
+    from = `${params.fromName.trim()} <${configEmail}>`;
+  }
+
   const sendParams: {
     from: string;
     to: string[];
@@ -236,7 +256,7 @@ export async function sendEmail(params: {
     bcc?: string | string[];
     attachments?: { filename: string; content: Buffer }[];
   } = {
-    from: FROM_EMAIL,
+    from,
     to,
     subject: params.subject,
     html: params.html,

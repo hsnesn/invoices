@@ -141,6 +141,8 @@ export async function POST(request: NextRequest) {
       html,
       replyTo: producerEmail || undefined,
       bcc: bccProducer ? [producerEmail!] : undefined,
+      fromName: producerName,
+      fromEmail: producerEmail || undefined,
       attachments: attachments.length ? attachments : undefined,
     });
 
