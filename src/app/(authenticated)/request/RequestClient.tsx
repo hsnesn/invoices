@@ -172,6 +172,8 @@ export function RequestClient() {
         else next[dateStr][role] = count;
         return next;
       });
+    } catch (err) {
+      setMessage({ type: "error", text: (err as Error).message || "Failed to save." });
     } finally {
       setReqSaving(false);
     }
