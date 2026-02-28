@@ -109,7 +109,7 @@ const PAGES: PageCard[] = [
     ),
   },
   {
-    title: "Contractor Availability",
+    title: "My Availability",
     description: "Submit your availability by role and days. Admin sees all records.",
     href: "/contractor-availability",
     color: "text-sky-500",

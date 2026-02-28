@@ -120,7 +120,7 @@ export function RequestClient() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: `AI suggested ${data.count ?? 0} assignments. Go to Contractor Availability to review and approve.` });
+        setMessage({ type: "success", text: `AI suggested ${data.count ?? 0} assignments. Go to My Availability to review and approve.` });
       } else {
         setMessage({ type: "error", text: data.error || "AI suggest failed." });
       }
@@ -369,7 +369,7 @@ export function RequestClient() {
           href="/contractor-availability"
           className="rounded-lg border border-gray-300 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
         >
-          {canRunAiSuggest ? "Review & Approve in Contractor Availability →" : "View in Contractor Availability →"}
+          {canRunAiSuggest ? "Review & Approve in My Availability →" : "View in My Availability →"}
         </Link>
       </div>
     </div>

@@ -28,7 +28,7 @@ const TABS = [
   { key: "guest", label: "Guest Invoices", color: "bg-blue-500" },
   { key: "freelancer", label: "Contractor Invoices", color: "bg-teal-500" },
   { key: "guest_contacts", label: "Guest Contacts", color: "bg-violet-500" },
-  { key: "contractor_availability", label: "Contractor Availability", color: "bg-sky-500" },
+  { key: "contractor_availability", label: "My Availability", color: "bg-sky-500" },
   { key: "logos", label: "Logos", color: "bg-rose-500" },
   { key: "email", label: "Email", color: "bg-amber-500" },
   { key: "salaries", label: "Salaries", color: "bg-indigo-500" },

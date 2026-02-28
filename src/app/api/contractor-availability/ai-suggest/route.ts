@@ -90,21 +90,40 @@ export async function POST(request: NextRequest) {
     const availability = (availRows ?? []) as { user_id: string; date: string; role: string | null }[];
 
     const suggested = suggestAssignments(requirements, availability);
+    const suggestedSeen = new Set<string>();
+    const suggestedDeduped = suggested.filter((s) => {
+      const key = `${s.user_id}|${s.date}`;
+      if (suggestedSeen.has(key)) return false;
+      suggestedSeen.add(key);
+      return true;
+    });
 
     const { data: existing } = await supabase
       .from("output_schedule_assignments")
-      .select("id")
+      .select("id, user_id, date")
       .gte("date", start)
       .lte("date", end)
       .eq("status", "pending");
     const existingIds = (existing ?? []).map((r: { id: string }) => r.id);
+    const existingKeys = new Set((existing ?? []).map((r: { user_id: string; date: string }) => `${r.user_id}|${r.date}`));
 
     if (existingIds.length > 0) {
       await supabase.from("output_schedule_assignments").delete().in("id", existingIds);
     }
 
-    if (suggested.length > 0) {
-      const rows = suggested.map((s) => ({
+    const { data: confirmed } = await supabase
+      .from("output_schedule_assignments")
+      .select("user_id, date")
+      .gte("date", start)
+      .lte("date", end)
+      .eq("status", "confirmed");
+    for (const r of confirmed ?? []) {
+      existingKeys.add(`${(r as { user_id: string }).user_id}|${(r as { date: string }).date}`);
+    }
+
+    const deduped = suggestedDeduped.filter((s) => !existingKeys.has(`${s.user_id}|${s.date}`));
+    if (deduped.length > 0) {
+      const rows = deduped.map((s) => ({
         user_id: s.user_id,
         date: s.date,
         role: s.role,
@@ -119,12 +138,12 @@ export async function POST(request: NextRequest) {
       await sendContractorAssignmentsPendingEmail({
         to: "london.operations@trtworld.com",
         monthLabel,
-        count: suggested.length,
+        count: deduped.length,
         reviewUrl: `${appUrl}/contractor-availability?tab=assignments&month=${month}`,
       });
     }
 
-    return NextResponse.json({ ok: true, count: suggested.length, assignments: suggested });
+    return NextResponse.json({ ok: true, count: deduped.length, assignments: deduped });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

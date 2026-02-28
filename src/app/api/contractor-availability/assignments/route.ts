@@ -182,12 +182,27 @@ export async function POST(request: NextRequest) {
         await supabase.from("output_schedule_assignments").delete().in("id", existingIds);
       }
 
+      const { data: confirmed } = await supabase
+        .from("output_schedule_assignments")
+        .select("user_id, date")
+        .gte("date", start)
+        .lte("date", end)
+        .eq("status", "confirmed");
+      const confirmedKeys = new Set((confirmed ?? []).map((r: { user_id: string; date: string }) => `${r.user_id}|${r.date}`));
+
       const valid = assignments.filter(
         (a): a is { user_id: string; date: string; role?: string } =>
           a && typeof a.user_id === "string" && typeof a.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(a.date)
       );
-      if (valid.length > 0) {
-        const rows = valid.map((a) => ({
+      const seen = new Set<string>();
+      const deduped = valid.filter((a) => {
+        const key = `${a.user_id}|${a.date}`;
+        if (seen.has(key) || confirmedKeys.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (deduped.length > 0) {
+        const rows = deduped.map((a) => ({
           user_id: a.user_id,
           date: a.date,
           role: a.role?.trim() || null,
@@ -196,7 +211,7 @@ export async function POST(request: NextRequest) {
         const { error: insErr } = await supabase.from("output_schedule_assignments").insert(rows);
         if (insErr) throw insErr;
       }
-      return NextResponse.json({ ok: true, count: valid.length });
+      return NextResponse.json({ ok: true, count: deduped.length });
     }
 
     return NextResponse.json({ error: "Invalid action or body." }, { status: 400 });
