@@ -1,14 +1,17 @@
 "use client";
 
+import { useLogos } from "@/contexts/LogoContext";
+
 /**
  * Logo preview page – compare TRT logos used across the site.
  * Access at /logo-preview when logged in.
  */
 export default function LogoPreviewPage() {
-  const logos = [
-    { src: "/trt-logo.png", label: "TRT Logo (Nav, Dashboard, Upload overlay)" },
-    { src: "/trt-world-logo.png", label: "TRT World Logo (Booking Form PDFs)" },
-    { src: "/logo.png", label: "Logo (Emails)" },
+  const logos = useLogos();
+  const items = [
+    { src: logos.logo_trt || "/trt-logo.png", label: "TRT Logo (Nav, Dashboard, Upload overlay)" },
+    { src: logos.logo_trt_world || "/trt-world-logo.png", label: "TRT World Logo (Booking Form PDFs)" },
+    { src: logos.logo_email || "/logo.png", label: "Logo (Emails)" },
   ];
 
   return (
@@ -21,7 +24,7 @@ export default function LogoPreviewPage() {
       </div>
 
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-        {logos.map(({ src, label }) => (
+        {items.map(({ src, label }) => (
           <div
             key={src}
             className="flex flex-col items-center gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/60"

@@ -1,10 +1,13 @@
 "use client";
 
+import { useLogos } from "@/contexts/LogoContext";
+
 /**
  * Full-screen overlay with large TRT logo and spinning animation.
  * Shown during invoice/file uploads.
  */
 export function UploadOverlay({ message = "Uploading..." }: { message?: string }) {
+  const logos = useLogos();
   return (
     <div
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-900/85 backdrop-blur-md"
@@ -14,7 +17,7 @@ export function UploadOverlay({ message = "Uploading..." }: { message?: string }
     >
       <div className="relative h-56 w-56 sm:h-64 sm:w-64 flex items-center justify-center">
         <img
-          src="/trt-logo.png"
+          src={logos.logo_trt || "/trt-logo.png"}
           alt="TRT"
           className="h-36 w-36 sm:h-44 sm:w-44 object-contain z-10 mix-blend-multiply"
         />

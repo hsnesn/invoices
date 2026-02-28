@@ -1,9 +1,9 @@
 import { sendEmailWithAttachment } from "@/lib/email";
 import type { BookingFormData, ApprovalContext } from "./types";
 import { sanitizeFilenamePart } from "./pdf-generator";
+import { getLogoUrl } from "@/lib/get-logo-url";
 
 const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const fmtCurrency = (v: number) =>
   `£${v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
@@ -32,10 +32,11 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function wrapEmail(body: string): string {
+async function wrapEmail(body: string): Promise<string> {
+  const logoUrl = await getLogoUrl("logo_email");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;color:#334155;line-height:1.6">
-<div style="text-align:center;margin-bottom:20px"><img src="${APP_URL}/logo.png" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
+<div style="text-align:center;margin-bottom:20px"><img src="${logoUrl}" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
 ${body}
 <p style="margin-top:24px;font-size:12px;color:#64748b">TRT World London Operations</p>
 </body></html>`;
@@ -68,7 +69,7 @@ ${details}
   const result = await sendEmailWithAttachment({
     to,
     subject,
-    html: wrapEmail(body),
+    html: await wrapEmail(body),
     attachments: [{ filename, content: pdfBuffer }],
     idempotencyKey: `${idempotencyKey}_emailA`,
   });
@@ -114,7 +115,7 @@ ${details}
   const result = await sendEmailWithAttachment({
     to: LONDON_OPS_EMAIL,
     subject,
-    html: wrapEmail(body),
+    html: await wrapEmail(body),
     attachments: [{ filename, content: pdfBuffer }],
     idempotencyKey: `${idempotencyKey}_emailB`,
   });

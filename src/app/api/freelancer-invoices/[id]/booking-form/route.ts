@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateBookingFormPdf } from "@/lib/booking-form/pdf-generator";
+import { getLogoUrl } from "@/lib/get-logo-url";
 
 /** ASCII-only filename for Content-Disposition header (RFC 2616) */
 function asciiFilename(name: string): string {
@@ -116,22 +117,43 @@ export async function GET(
 
     const displayName = companyName !== "—" ? `${companyName} ${contractorName !== "—" ? contractorName : ""}`.trim() : contractorName;
 
-    const pdf = generateBookingFormPdf({
-      name: displayName,
-      serviceDescription: serviceDesc,
-      amount: totalAmount,
-      department: deptName,
-      department2: dept2,
-      numberOfDays: serviceDays,
-      month: displayMonth,
-      days: daysDetail,
-      serviceRatePerDay: rate,
-      additionalCost,
-      additionalCostReason,
-      approverName,
-      bookedBy,
-      approvalDate,
-    });
+    const logoUrl = await getLogoUrl("logo_trt_world");
+    let logoPathOrUrl: string | undefined;
+    let logoDataBase64: string | undefined;
+    if (logoUrl.startsWith("http")) {
+      try {
+        const res = await fetch(logoUrl);
+        if (res.ok) {
+          const buf = await res.arrayBuffer();
+          logoDataBase64 = Buffer.from(buf).toString("base64");
+        }
+      } catch {
+        /* use default */
+      }
+    } else {
+      logoPathOrUrl = logoUrl.replace(/^\//, "");
+    }
+
+    const pdf = generateBookingFormPdf(
+      {
+        name: displayName,
+        serviceDescription: serviceDesc,
+        amount: totalAmount,
+        department: deptName,
+        department2: dept2,
+        numberOfDays: serviceDays,
+        month: displayMonth,
+        days: daysDetail,
+        serviceRatePerDay: rate,
+        additionalCost,
+        additionalCostReason,
+        approverName,
+        bookedBy,
+        approvalDate,
+      },
+      logoPathOrUrl,
+      logoDataBase64
+    );
 
     const safeName = asciiFilename(`Booking_Form_${contractorName}_${displayMonth}.pdf`);
     return new NextResponse(Buffer.from(pdf), {

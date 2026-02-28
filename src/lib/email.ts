@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { getLogoUrl } from "@/lib/get-logo-url";
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -14,13 +15,18 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 /* Branded email wrapper                                               */
 /* ------------------------------------------------------------------ */
 
-const LOGO_URL = `${APP_URL}/logo.png`;
+const DEFAULT_LOGO_URL = `${APP_URL}/logo.png`;
 
-function wrap(title: string, body: string) {
+async function wrapWithLogo(title: string, body: string): Promise<string> {
+  const logoUrl = await getLogoUrl("logo_email");
+  return wrap(title, body, logoUrl);
+}
+
+function wrap(title: string, body: string, logoUrl: string = DEFAULT_LOGO_URL) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
 <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-<div style="padding:16px 32px;text-align:center;border-bottom:1px solid #e2e8f0"><img src="${LOGO_URL}" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
+<div style="padding:16px 32px;text-align:center;border-bottom:1px solid #e2e8f0"><img src="${logoUrl}" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
 <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);padding:24px 32px;text-align:center">
 <h1 style="margin:0;font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.3px">${APP_NAME}</h1>
 </div>
@@ -34,11 +40,11 @@ ${body}
 }
 
 /** Salary payment confirmation: no Invoice Approval Workflow header/footer, TRT World UK Finance Team at bottom */
-function wrapSalaryPayment(body: string) {
+function wrapSalaryPayment(body: string, logoUrl: string = DEFAULT_LOGO_URL) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
 <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-<div style="padding:16px 32px;text-align:center;border-bottom:1px solid #e2e8f0"><img src="${LOGO_URL}" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
+<div style="padding:16px 32px;text-align:center;border-bottom:1px solid #e2e8f0"><img src="${logoUrl}" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
 <div style="padding:28px 32px">
 <h2 style="margin:0 0 16px;font-size:17px;color:#1e293b;font-weight:600">Salary Payment Confirmation</h2>
 ${body}
@@ -262,7 +268,7 @@ export async function sendSubmissionEmail(params: {
   return sendEmail({
     to,
     subject,
-    html: wrap("Invoice Submitted", `
+    html: await wrapWithLogo("Invoice Submitted", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A new invoice has been submitted and is waiting for review.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -300,7 +306,7 @@ export async function sendManagerApprovedEmail(params: {
   return sendEmail({
     to,
     subject,
-    html: wrap("Invoice Approved", `
+    html: await wrapWithLogo("Invoice Approved", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Great news! The invoice has been approved${params.managerName ? ` by <strong>${params.managerName}</strong>` : ""} and is now pending review.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -331,7 +337,7 @@ export async function sendManagerRejectedEmail(params: {
   return sendEmail({
     to: params.submitterEmail,
     subject,
-    html: wrap("Invoice Rejected", `
+    html: await wrapWithLogo("Invoice Rejected", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your invoice has been rejected${params.managerName ? ` by <strong>${params.managerName}</strong>` : ""}.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -366,7 +372,7 @@ export async function sendReadyForPaymentEmail(params: {
   return sendEmail({
     to: [params.submitterEmail, ...params.financeEmails],
     subject,
-    html: wrap("Ready for Payment", `
+    html: await wrapWithLogo("Ready for Payment", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The invoice has been fully approved and is now ready for payment processing.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -397,7 +403,7 @@ export async function sendPaidEmail(params: {
   return sendEmail({
     to: [params.submitterEmail, ...params.adminEmails],
     subject,
-    html: wrap("Payment Completed", `
+    html: await wrapWithLogo("Payment Completed", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The invoice has been paid successfully.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 8px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -435,7 +441,7 @@ export async function sendManagerAssignedEmail(params: {
   return sendEmail({
     to: params.managerEmail,
     subject,
-    html: wrap("Invoice Assigned to You", `
+    html: await wrapWithLogo("Invoice Assigned to You", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">You have been assigned${params.assignedByName ? ` by <strong>${params.assignedByName}</strong>` : ""} to review this invoice.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -466,7 +472,7 @@ export async function sendResubmittedEmail(params: {
   return sendEmail({
     to: params.managerEmails,
     subject,
-    html: wrap("Invoice Resubmitted", `
+    html: await wrapWithLogo("Invoice Resubmitted", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A previously rejected invoice has been corrected and resubmitted${params.submitterName ? ` by <strong>${params.submitterName}</strong>` : ""} for your review.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -502,7 +508,7 @@ export async function sendSlaReminderEmail(params: {
   return sendEmail({
     to: params.managerEmail,
     subject: `${params.items.length} invoice(s) overdue for your approval (${params.slaDays}+ days)`,
-    html: wrap("Approval Reminder", `
+    html: await wrapWithLogo("Approval Reminder", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.managerName ? ` ${params.managerName}` : ""},</p>
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The following invoice(s) have been pending your approval for more than <strong>${params.slaDays} days</strong>. Please review and approve or reject them.</p>
       <div style="margin:16px 0">${table}</div>
@@ -529,7 +535,7 @@ export async function sendPendingDigestEmail(params: {
   return sendEmail({
     to: params.managerEmail,
     subject: `${params.periodLabel}: ${params.items.length} invoice(s) awaiting your approval`,
-    html: wrap("Pending Invoices Summary", `
+    html: await wrapWithLogo("Pending Invoices Summary", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.managerName ? ` ${params.managerName}` : ""},</p>
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Here is your ${params.periodLabel.toLowerCase()} summary of invoices awaiting your approval.</p>
       <div style="margin:16px 0">${table}</div>
@@ -560,7 +566,7 @@ export async function sendAdminApprovedEmail(params: {
   return sendEmail({
     to: [params.submitterEmail, ...params.financeEmails],
     subject,
-    html: wrap("Admin Approved", `
+    html: await wrapWithLogo("Admin Approved", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The invoice has been approved by admin${params.adminName ? ` (<strong>${params.adminName}</strong>)` : ""} and is now ready for payment.</p>
       ${params.invoiceNumber && !params.freelancerDetails && !params.guestDetails ? `<p style="margin:0 0 12px;font-size:14px;color:#334155"><strong>Invoice:</strong> #${params.invoiceNumber}</p>` : ""}
       ${detailsBlock}
@@ -623,12 +629,14 @@ export async function sendSalaryPaymentConfirmationEmail(params: {
 <table style="width:100%;border-collapse:collapse;font-size:13px">${tableRows}</table>
 </div>`;
 
+  const logoUrl = await getLogoUrl("logo_email");
   const html = wrapSalaryPayment(
     `
     <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your salary payment has been processed successfully.</p>
     ${detailsBlock}
     <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Paid", "#d1fae5", "#065f46")}</p>
-  `
+  `,
+    logoUrl
   );
 
   if (params.payslipBuffer && params.payslipBuffer.length > 0) {
@@ -659,7 +667,7 @@ export async function sendPasswordResetEmail(params: { email: string; resetLink:
   return sendEmail({
     to: params.email,
     subject: `Password Reset — ${APP_NAME}`,
-    html: wrap("Reset Your Password", `
+    html: await wrapWithLogo("Reset Your Password", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">We received a request to reset your password. Click the button below to set a new password.</p>
       ${btn(params.resetLink, "Reset Password", "#6366f1")}
       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;text-align:center">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>

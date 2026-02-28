@@ -6,25 +6,42 @@ import type { BookingFormData } from "./types";
 const fmtCurrency = (v: number) =>
   `£${v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
+function getLogoDataSync(logoPathOrUrl: string): string | null {
+  try {
+    const v = logoPathOrUrl.trim();
+    if (v.startsWith("http://") || v.startsWith("https://")) {
+      return null; // URL must be fetched async
+    }
+    const filename = v.startsWith("/") ? v.slice(1) : v;
+    const fullPath = path.join(process.cwd(), "public", filename);
+    const buf = fs.readFileSync(fullPath);
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Generate Booking Form PDF with IR35-compliant field labels.
  * Fields: Service Provider, Scope of Services, Amount, Department, Department 2,
  * Service delivery days, Month, Days, Agreed daily rate, Additional fees, Additional fees reason.
+ * @param logoPathOrUrl - Filename (e.g. trt-world-logo.png) in public/, or full URL. If URL, pass logoData instead.
  */
-export function generateBookingFormPdf(data: BookingFormData): ArrayBuffer {
+export function generateBookingFormPdf(
+  data: BookingFormData,
+  logoPathOrUrl?: string,
+  logoDataBase64?: string
+): ArrayBuffer {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pw = 210;
   const mx = 20;
   const cw = pw - 2 * mx;
 
-  let logoData: string | null = null;
-  try {
-    const logoPath = path.join(process.cwd(), "public", "trt-world-logo.png");
-    const buf = fs.readFileSync(logoPath);
-    logoData = `data:image/png;base64,${buf.toString("base64")}`;
-  } catch {
-    /* logo not found */
-  }
+  let logoData: string | null = logoDataBase64
+    ? `data:image/png;base64,${logoDataBase64}`
+    : logoPathOrUrl
+    ? getLogoDataSync(logoPathOrUrl)
+    : getLogoDataSync("trt-world-logo.png");
 
   let y = 15;
 

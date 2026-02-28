@@ -10,6 +10,7 @@ import { EmailSetupSection } from "@/components/EmailSetupSection";
 import { ContractorTemplatesSection } from "@/components/ContractorTemplatesSection";
 import { SalariesSetupSection } from "@/components/SalariesSetupSection";
 import { GuestContactsSetupSection } from "@/components/GuestContactsSetupSection";
+import { LogosSetupSection } from "@/components/LogosSetupSection";
 
 interface Department {
   id: string;
@@ -26,6 +27,7 @@ const TABS = [
   { key: "guest", label: "Guest Invoices", color: "bg-blue-500" },
   { key: "freelancer", label: "Contractor Invoices", color: "bg-teal-500" },
   { key: "guest_contacts", label: "Guest Contacts", color: "bg-violet-500" },
+  { key: "logos", label: "Logos", color: "bg-rose-500" },
   { key: "email", label: "Email", color: "bg-amber-500" },
   { key: "salaries", label: "Salaries", color: "bg-indigo-500" },
 ] as const;
@@ -61,6 +63,7 @@ export default function AdminSetupPage() {
       {activeTab === "guest" && <GuestInvoiceSetup />}
       {activeTab === "freelancer" && <FreelancerSetup />}
       {activeTab === "guest_contacts" && <GuestContactsSetupSection />}
+      {activeTab === "logos" && <LogosSetupSection />}
       {activeTab === "email" && <EmailSetupSection />}
       {activeTab === "salaries" && <SalariesSetupSection />}
     </div>

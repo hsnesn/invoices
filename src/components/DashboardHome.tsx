@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLogos } from "@/contexts/LogoContext";
 import useSWR from "swr";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import type { Profile, PageKey } from "@/lib/types";
@@ -212,6 +213,7 @@ function getInitials(name: string | null): string {
 }
 
 export function DashboardHome({ profile }: { profile: Profile }) {
+  const logos = useLogos();
   const isAdmin = profile.role === "admin";
   const isViewer = profile.role === "viewer";
   const isOperations = profile.role === "operations";
@@ -253,7 +255,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       <div className="mb-8 sm:mb-12 flex flex-col items-start gap-6 sm:flex-row sm:items-end sm:justify-between min-w-0">
         <div className="flex items-center gap-4 sm:gap-5 min-w-0 w-full sm:w-auto">
           <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-white shadow-md ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
-            <img src="/trt-logo.png" alt="TRT" className="h-6 sm:h-8 object-contain dark:mix-blend-multiply" />
+            <img src={logos.logo_trt || "/trt-logo.png"} alt="TRT" className="h-6 sm:h-8 object-contain dark:mix-blend-multiply" />
           </div>
           <div className="min-w-0 flex-1 overflow-hidden">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white break-words">
