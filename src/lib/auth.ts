@@ -92,10 +92,19 @@ export async function requirePageAccess(pageKey: PageKey) {
   if (profile.role === "admin") return { session, profile };
   // Guest contacts: admin only by default; others need explicit allowed_pages grant
   if (pageKey === "guest_contacts") {
+    if (profile.role === "admin") return { session, profile };
     if (profile.allowed_pages?.includes("guest_contacts")) return { session, profile };
+    if (profile.role === "manager" || profile.role === "operations" || profile.role === "viewer") return { session, profile };
+    if (profile.role === "submitter") return { session, profile };
     redirect("/dashboard");
   }
   if (profile.role === "viewer" && ["guest_invoices", "freelancer_invoices", "reports"].includes(pageKey)) return { session, profile };
+  if (pageKey === "invited_guests") {
+    if (["admin", "viewer", "operations", "finance", "submitter", "manager"].includes(profile.role)) return { session, profile };
+    if (profile.allowed_pages?.includes("invited_guests") || profile.allowed_pages?.includes("guest_invoices")) return { session, profile };
+    if (!profile.allowed_pages || profile.allowed_pages.length === 0) return { session, profile };
+    redirect("/dashboard");
+  }
   if (pageKey === "other_invoices") {
     if (["admin", "finance", "operations"].includes(profile.role)) return { session, profile };
     if (profile.role === "viewer" && profile.allowed_pages?.includes("other_invoices")) return { session, profile };

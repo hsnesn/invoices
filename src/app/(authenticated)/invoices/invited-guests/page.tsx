@@ -5,7 +5,7 @@ import { InvitedGuestsClient } from "./InvitedGuestsClient";
 export const dynamic = "force-dynamic";
 
 export default async function InvitedGuestsPage() {
-  const { session, profile } = await requirePageAccess("guest_invoices");
+  const { session, profile } = await requirePageAccess("invited_guests");
   const supabase = createAdminClient();
 
   const [{ data: programs }, { data: producers }, { data: titles }] = await Promise.all([

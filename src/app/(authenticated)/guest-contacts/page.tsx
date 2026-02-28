@@ -30,7 +30,7 @@ export default async function GuestContactsPage({
     topicFilter: sp?.topicFilter ?? "all",
     sortBy: sp?.sortBy ?? "name",
   };
-  const { profile } = await requirePageAccess("guest_contacts");
+  const { session, profile } = await requirePageAccess("guest_contacts");
   const supabase = createAdminClient();
   const INVOICE_LIMIT = 2000;
 
@@ -47,20 +47,32 @@ export default async function GuestContactsPage({
     setCache("programs", programs, CACHE_TTL);
   }
 
+  const producerUserId = session.user.id;
+  const isProducerScopedSubmitter = profile.role === "submitter";
   const [
     { data: invoices },
     guestContactsRows,
     { data: producerGuests },
+    { data: gcSettings },
+    { data: producerVisibleGuests },
+    { data: producerVisibleInvitations },
   ] = await Promise.all([
     supabase
       .from("invoices")
-      .select("id, service_description, generated_invoice_data, created_at, department_id, program_id, invoice_extracted_fields(raw_json)")
+      .select("id, submitter_user_id, service_description, generated_invoice_data, created_at, department_id, program_id, invoice_extracted_fields(raw_json)")
       .neq("invoice_type", "freelancer")
       .neq("invoice_type", "guest_contact_scan")
       .order("created_at", { ascending: false })
       .limit(INVOICE_LIMIT),
     fetchGuestContacts(filterParams.search),
     supabase.from("producer_guests").select("guest_name, invited_at, accepted, matched_at").order("invited_at", { ascending: false }),
+    supabase.from("app_settings").select("key, value").in("key", ["guest_contacts_producer_scoped", "guest_contacts_export_restricted", "guest_contacts_export_user_ids"]),
+    isProducerScopedSubmitter
+      ? supabase.from("producer_guests").select("guest_name").eq("producer_user_id", producerUserId)
+      : Promise.resolve({ data: [] as { guest_name: string }[] }),
+    isProducerScopedSubmitter
+      ? supabase.from("guest_invitations").select("guest_name").eq("producer_user_id", producerUserId)
+      : Promise.resolve({ data: [] as { guest_name: string }[] }),
   ]);
 
   function normalizeName(s: string): string {
@@ -104,9 +116,22 @@ export default async function GuestContactsPage({
     return null;
   }
 
+  const settingsMap = new Map((gcSettings ?? []).map((r) => [(r as { key: string }).key, (r as { value: unknown }).value]));
+  const producerScoped = settingsMap.get("guest_contacts_producer_scoped") === true;
+  const exportRestricted = settingsMap.get("guest_contacts_export_restricted") === true;
+  const exportUserIdsRaw = settingsMap.get("guest_contacts_export_user_ids");
+  const exportIds: string[] = Array.isArray(exportUserIdsRaw) ? exportUserIdsRaw : [];
+  const canExport =
+    profile.role === "admin" ||
+    (!exportRestricted &&
+      profile.role !== "submitter" &&
+      (profile.allowed_pages?.includes("guest_contacts") || profile.role === "manager" || profile.role === "operations" || profile.role === "viewer")) ||
+    (exportRestricted && exportIds.includes(session.user.id));
+
   type AiContactInfo = { phone?: string | null; email?: string | null; social_media?: string[] } | null;
   type Row = {
     guest_name: string;
+    submitter_user_ids?: string[];
     title: string | null;
     title_category: string | null;
     topic: string | null;
@@ -170,12 +195,14 @@ export default async function GuestContactsPage({
 
     if (!guestName) continue;
 
-    const invTyped = inv as { department_id?: string; program_id?: string };
+    const invTyped = inv as { department_id?: string; program_id?: string; submitter_user_id?: string };
     const department_name = invTyped.department_id ? deptMap.get(invTyped.department_id) ?? null : null;
     const program_name = invTyped.program_id ? progMap.get(invTyped.program_id) ?? null : null;
+    const submitterId = invTyped.submitter_user_id ?? null;
 
     rows.push({
       guest_name: guestName,
+      submitter_user_ids: submitterId ? [submitterId] : [],
       title,
       title_category: null,
       topic: topic || null,
@@ -203,8 +230,9 @@ export default async function GuestContactsPage({
   for (const r of rows) {
     const key = normalizeKey(r.guest_name);
     const existing = seen.get(key);
+    const submitters = new Set([...(existing?.submitter_user_ids ?? []), ...(r.submitter_user_ids ?? [])]);
     if (!existing) {
-      seen.set(key, { ...r });
+      seen.set(key, { ...r, submitter_user_ids: Array.from(submitters) });
     } else {
       const existingDate = new Date(existing.last_appearance_date).getTime();
       const rDate = new Date(r.last_appearance_date).getTime();
@@ -212,6 +240,7 @@ export default async function GuestContactsPage({
       if (rDate > existingDate) {
         seen.set(key, {
           ...existing,
+          submitter_user_ids: Array.from(submitters),
           last_appearance_date: r.last_appearance_date,
           appearance_count: count,
           department_name: r.department_name ?? existing.department_name,
@@ -224,6 +253,7 @@ export default async function GuestContactsPage({
       } else {
         seen.set(key, {
           ...existing,
+          submitter_user_ids: Array.from(submitters),
           appearance_count: count,
           department_name: existing.department_name ?? r.department_name,
           program_name: existing.program_name ?? r.program_name,
@@ -259,6 +289,7 @@ export default async function GuestContactsPage({
     const aiAssessment = gcData.ai_assessment ?? null;
     const merged: Row = {
       guest_name: gc.guest_name ?? "",
+      submitter_user_ids: existing?.submitter_user_ids ?? [],
       title: existing?.title ?? gc.title ?? null,
       title_category: gcData.title_category ?? existing?.title_category ?? null,
       topic: existing?.topic ?? (gc as { topic?: string | null }).topic ?? null,
@@ -285,7 +316,7 @@ export default async function GuestContactsPage({
       last_invited_at: gcData.last_invited_at ?? existing?.last_invited_at ?? null,
     };
     if (!existing) {
-      seen.set(key, { ...merged, phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined, title_category: gcData.title_category ?? null, topic_category: gcData.topic_category ?? null, appearance_count: 0 });
+      seen.set(key, { ...merged, submitter_user_ids: [], phone: gc.phone ?? null, email: gc.email ?? null, invoice_id: null, guest_contact_id: gcId ?? undefined, title_category: gcData.title_category ?? null, topic_category: gcData.topic_category ?? null, appearance_count: 0 });
     } else {
       const updateKey = matchKey ?? key;
       seen.set(updateKey, {
@@ -299,19 +330,36 @@ export default async function GuestContactsPage({
     }
   }
 
-  const allContacts = Array.from(seen.values())
+  let allContacts = Array.from(seen.values())
     .map((c) => ({
       ...c,
       invite_status: inviteStatusByKey.get(normalizeName(c.guest_name)) ?? undefined,
     }))
     .sort((a, b) => a.guest_name.localeCompare(b.guest_name));
 
+  if (producerScoped && profile.role === "submitter") {
+    const visibleKeys = new Set<string>();
+    for (const r of producerVisibleGuests ?? []) {
+      const k = normalizeName(r.guest_name ?? "");
+      if (k) visibleKeys.add(k);
+    }
+    for (const r of producerVisibleInvitations ?? []) {
+      const k = normalizeName((r as { guest_name?: string }).guest_name ?? "");
+      if (k) visibleKeys.add(k);
+    }
+    allContacts = allContacts.filter((c) => visibleKeys.has(normalizeName(c.guest_name)));
+  }
+
   const filtered = filterAndSortContacts(allContacts, filterParams);
   const totalCount = filtered.length;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
   const currentPage = Math.min(page, totalPages);
-  const paginatedContacts = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const filteredContacts = filtered;
+  const stripSubmitterIds = (c: Row) => {
+    const { submitter_user_ids: _, ...rest } = c;
+    return rest;
+  };
+  const paginatedContacts = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map(stripSubmitterIds);
+  const filteredContacts = filtered.map(stripSubmitterIds);
 
   const departmentNames = Array.from(new Set(allContacts.map((c) => c.department_name).filter(Boolean))) as string[];
   const programNames = Array.from(new Set(allContacts.map((c) => c.program_name).filter(Boolean))) as string[];
@@ -350,6 +398,7 @@ export default async function GuestContactsPage({
         hasEmptyTopic={hasEmptyTopic}
         similarNames={similarNames}
         isAdmin={profile.role === "admin"}
+        canExport={canExport}
       />
     </div>
   );

@@ -55,6 +55,19 @@ const PAGES: PageCard[] = [
     ),
   },
   {
+    title: "Invited Guests",
+    description: "Manage guests you invited. Send invitations, track responses, mark as accepted.",
+    href: "/invoices/invited-guests",
+    color: "text-emerald-500",
+    gradient: "from-emerald-500/20 to-emerald-600/5",
+    pageKey: "invited_guests",
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+      </svg>
+    ),
+  },
+  {
     title: "Other Invoices",
     description: "Upload any invoice. AI extracts data. Mark as paid when done.",
     href: "/other-invoices",
@@ -225,10 +238,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.viewerHidden && isViewer) return false;
     if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
-    if (isViewer) return ["guest_invoices", "freelancer_invoices", "reports", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (isOperations) return ["guest_invoices", "freelancer_invoices", "other_invoices", "reports", "salaries", "setup", "messages"].includes(p.pageKey);
-    if (profile.role === "finance") return ["guest_invoices", "freelancer_invoices", "other_invoices", "reports", "salaries", "messages"].includes(p.pageKey);
-    if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));
+    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "messages", "guest_contacts"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices"));
+    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "setup", "messages", "guest_contacts"].includes(p.pageKey);
+    if (profile.role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "messages"].includes(p.pageKey);
+    if (["submitter", "manager"].includes(profile.role) && p.pageKey === "invited_guests") return true;
+    if (p.pageKey === "guest_contacts") return isAdmin || ["manager", "operations", "viewer", "submitter"].includes(profile.role) || (!!userPages && userPages.includes("guest_contacts"));
     if (userPages && userPages.length > 0) return userPages.includes(p.pageKey);
     return true;
   });

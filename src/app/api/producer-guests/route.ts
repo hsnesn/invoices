@@ -37,10 +37,11 @@ export async function GET(request: NextRequest) {
     let invQuery = supabase
       .from("guest_invitations")
       .select("producer_user_id, guest_name, guest_email, program_name, sent_at")
-      .not("producer_user_id", "is", null)
       .order("sent_at", { ascending: false });
     if (!isAdmin) {
-      invQuery = invQuery.eq("producer_user_id", session.user.id);
+      invQuery = invQuery.or(`producer_user_id.eq.${session.user.id},producer_user_id.is.null`);
+    } else {
+      invQuery = invQuery.not("producer_user_id", "is", null);
     }
     const { data: invitations } = await invQuery;
 
@@ -50,7 +51,8 @@ export async function GET(request: NextRequest) {
     const seenInvKeys = new Set<string>();
     const extraFromInv: typeof guests = [];
     for (const inv of invitations ?? []) {
-      const pid = (inv as { producer_user_id?: string | null }).producer_user_id;
+      let pid = (inv as { producer_user_id?: string | null }).producer_user_id;
+      if (!pid && !isAdmin) pid = session.user.id;
       const gname = (inv as { guest_name?: string }).guest_name ?? "";
       const gemail = (inv as { guest_email?: string }).guest_email ?? "";
       if (!pid || !gname.trim()) continue;
