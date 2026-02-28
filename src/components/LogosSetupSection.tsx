@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 
 const LOGO_OPTIONS = [
-  { key: "logo_trt", label: "TRT Logo", desc: "Nav, Dashboard, Upload overlay, LogoLoader" },
-  { key: "logo_trt_world", label: "TRT World Logo", desc: "Booking Form PDFs" },
-  { key: "logo_email", label: "Email Logo", desc: "Emails (invoice notifications, etc.)" },
+  { key: "logo_trt", label: "TRT Logo", desc: "Nav, Dashboard, Upload overlay, LogoLoader", default: "/trt-logo.png" },
+  { key: "logo_trt_world", label: "TRT World Logo", desc: "Booking Form PDFs", default: "/trt-world-logo.png" },
+  { key: "logo_email", label: "Email Logo", desc: "Emails (invoice notifications, etc.)", default: "/logo.png" },
 ] as const;
 
 export function LogosSetupSection() {
@@ -46,8 +46,8 @@ export function LogosSetupSection() {
     fetchLogos();
   }, []);
 
-  const savePath = async (key: string) => {
-    const val = values[key]?.trim();
+  const savePath = async (key: string, overrideValue?: string) => {
+    const val = (overrideValue ?? values[key])?.trim();
     if (!val) {
       setMessage({ type: "error", text: "Enter a filename (e.g. trt-logo.png) or full URL." });
       return;
@@ -62,6 +62,7 @@ export function LogosSetupSection() {
       });
       const data = await res.json();
       if (res.ok) {
+        setValues((prev) => ({ ...prev, [key]: val }));
         setPreviewStamp(Date.now());
         setMessage({ type: "success", text: "Saved and applied." });
         window.dispatchEvent(new CustomEvent("logos-updated"));
@@ -172,7 +173,7 @@ export function LogosSetupSection() {
         )}
 
         <div className="space-y-6">
-          {LOGO_OPTIONS.map(({ key, label, desc }) => (
+          {LOGO_OPTIONS.map(({ key, label, desc, default: defaultPath }) => (
             <div key={key} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-gray-900 dark:text-white">{label}</p>
@@ -226,6 +227,15 @@ export function LogosSetupSection() {
                     className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
                   >
                     {saving === key ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void savePath(key, defaultPath)}
+                    disabled={saving === key}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+                    title="Restore default logo"
+                  >
+                    Restore default
                   </button>
                 </div>
               </div>
