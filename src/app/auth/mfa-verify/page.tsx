@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function MfaVerifyPage() {
   const [code, setCode] = useState("");
@@ -15,10 +14,7 @@ export default function MfaVerifyPage() {
 
   useEffect(() => {
     setMounted(true);
-    createClient().auth.getSession().then(({ data: { session } }) => {
-      if (!session) router.replace("/login");
-    });
-  }, [router]);
+  }, []);
 
   const sendCode = async () => {
     setSending(true);

@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
   // IP binding: if session exists and secret is configured, bind session to IP
   // Skip in development (localhost IP is unreliable)
   if (session) {
-    const secret = process.env.SESSION_IP_SECRET ?? process.env.CRON_SECRET;
+    const secret = process.env.SESSION_IP_SECRET;
     const isProduction = process.env.NODE_ENV === "production";
     const clientIp = getClientIp(request);
     const isLocalhost = ["127.0.0.1", "::1", "unknown"].includes(clientIp);
@@ -53,14 +53,18 @@ export async function middleware(request: NextRequest) {
       const ipBoundValue = request.cookies.get(getIpBoundCookie())?.value;
 
       if (!ipBoundValue) {
-        // First request after login: set IP cookie
-        const signed = await createSignedIpCookie(clientIp);
-        if (signed) {
-          response.cookies.set(getIpBoundCookie(), signed, getIpCookieOptions());
+        // First request after login: set IP cookie (only when we have a real IP)
+        if (clientIp !== "unknown") {
+          const signed = await createSignedIpCookie(clientIp);
+          if (signed) {
+            response.cookies.set(getIpBoundCookie(), signed, getIpCookieOptions());
+          }
         }
       } else {
-        // Verify IP matches
-        if (!(await verifyIpCookie(ipBoundValue, clientIp))) {
+        // Skip verification when we cannot reliably get current IP (e.g. proxy not forwarding headers)
+        if (clientIp === "unknown") {
+          // Allow request - blocking would cause "Session expired" on every click for some deployments
+        } else if (!(await verifyIpCookie(ipBoundValue, clientIp))) {
           const redirectResponse = NextResponse.redirect(
             new URL("/login?error=" + encodeURIComponent("Session expired. Please log in again from this device."), request.url)
           );

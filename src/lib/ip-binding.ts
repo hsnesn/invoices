@@ -7,7 +7,7 @@ const COOKIE_NAME = "ip_bound";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 function getSecret(): string | null {
-  return process.env.SESSION_IP_SECRET ?? process.env.CRON_SECRET ?? null;
+  return process.env.SESSION_IP_SECRET ?? null;
 }
 
 export function getClientIp(request: Request): string {

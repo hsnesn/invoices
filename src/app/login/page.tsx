@@ -36,7 +36,8 @@ function LoginPageContent() {
         setMessage({ type: "error", text: error.message });
         return;
       }
-      // Full redirect so server sees fresh auth cookies
+      // Brief delay so Supabase can persist session to cookies before redirect
+      await new Promise((r) => setTimeout(r, 150));
       window.location.href = "/dashboard";
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed. Please try again.";
