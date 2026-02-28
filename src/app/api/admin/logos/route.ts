@@ -29,11 +29,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const { error } = await supabase
-      .from("app_settings")
-      .upsert({ key, value: value.trim(), updated_at: new Date().toISOString() }, { onConflict: "key" });
+    const { error } = await supabase.rpc("update_logo_setting", {
+      p_key: key,
+      p_value: value.trim(),
+    });
 
-    if (error) throw error;
+    if (error) {
+      return NextResponse.json({ error: `DB update failed: ${error.message}` }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
