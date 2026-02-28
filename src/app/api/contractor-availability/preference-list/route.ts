@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     if (sortedUserIds.length === 0) {
       let availQuery = supabase
         .from("output_schedule_availability")
-        .select("user_id")
+        .select("user_id, role")
         .eq("department_id", departmentId);
       if (progId) availQuery = availQuery.eq("program_id", progId);
       else availQuery = availQuery.is("program_id", null);
@@ -75,8 +75,8 @@ export async function GET(request: NextRequest) {
       const roleTrim = role.trim();
       const fromAvail = new Set(
         (availRows ?? [])
-          .filter((r: { role?: string | null }) => {
-            const rRole = (r as { role?: string | null }).role?.trim() ?? "";
+          .filter((r: { user_id: string; role?: string | null }) => {
+            const rRole = r.role?.trim() ?? "";
             return rRole === roleTrim || rRole === "";
           })
           .map((r: { user_id: string }) => r.user_id)
