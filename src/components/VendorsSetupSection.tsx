@@ -16,8 +16,16 @@ type Vendor = {
   is_preferred: boolean;
 };
 
-export function VendorsSetupSection() {
+export function VendorsSetupSection({ canDelete: canDeleteProp }: { canDelete?: boolean } = {}) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [canDelete, setCanDelete] = useState(false);
+  useEffect(() => {
+    if (canDeleteProp !== undefined) {
+      setCanDelete(canDeleteProp);
+    } else {
+      fetch("/api/profile").then((r) => r.json()).then((p) => setCanDelete(p?.role === "admin")).catch(() => setCanDelete(false));
+    }
+  }, [canDeleteProp]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -227,7 +235,7 @@ export function VendorsSetupSection() {
                     <td className="py-2 text-gray-600 dark:text-gray-400">{v.contract_end_date ? new Date(v.contract_end_date).toLocaleDateString("en-GB") : "—"}</td>
                     <td className="py-2 text-right">
                       <button onClick={() => { setEditing(v); setForm({ name: v.name, contact_person: v.contact_person || "", email: v.email || "", phone: v.phone || "", address: v.address || "", payment_terms: v.payment_terms || "", contract_end_date: v.contract_end_date || "", notes: v.notes || "", is_preferred: v.is_preferred }); setShowForm(true); }} className="text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 mr-2">Edit</button>
-                      <button onClick={() => handleDelete(v.id)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200">Delete</button>
+                      {canDelete && <button onClick={() => handleDelete(v.id)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200">Delete</button>}
                     </td>
                   </tr>
                 ))}

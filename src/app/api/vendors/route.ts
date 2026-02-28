@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { session, profile } = await requireAuth();
-    if (profile.role !== "admin" && profile.role !== "operations" && profile.role !== "finance") {
+    if (!["admin", "operations", "finance", "manager"].includes(profile.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

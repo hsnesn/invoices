@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 const CATEGORIES = [
@@ -128,13 +129,15 @@ function AttachmentsModal({ requestId, requestTitle, onClose }: { requestId: str
 }
 
 export function OfficeRequestsClient() {
+  const searchParams = useSearchParams();
+  const statusFromUrl = searchParams.get("status") ?? "";
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [reminders, setReminders] = useState<{ id: string; title: string; next_due_date: string; frequency_months: number; assignee_name?: string | null }[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>(() => statusFromUrl || "");
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -513,7 +516,7 @@ export function OfficeRequestsClient() {
                 <input type="number" step="0.01" value={newCost} onChange={(e) => setNewCost(e.target.value)} placeholder="Optional" className="mt-1 w-28 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vendor</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vendor (optional)</label>
                 <select value={newVendorId} onChange={(e) => setNewVendorId(e.target.value)} className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
                   <option value="">—</option>
                   {vendors.map((v) => (
@@ -522,7 +525,7 @@ export function OfficeRequestsClient() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Project</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Project (optional)</label>
                 <select value={newProjectId} onChange={(e) => setNewProjectId(e.target.value)} className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
                   <option value="">—</option>
                   {projects.map((p) => (

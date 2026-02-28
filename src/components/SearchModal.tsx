@@ -36,6 +36,7 @@ const SEARCH_PAGES: PageItem[] = [
   { title: "Contractor Invoices", href: "/freelancer-invoices" },
   { title: "Office Requests", href: "/office-requests" },
   { title: "Projects", href: "/projects" },
+  { title: "Vendors & Suppliers", href: "/vendors" },
   { title: "Reports", href: "/admin/reports" },
   { title: "Messages", href: "/messages" },
   { title: "Setup", href: "/admin/setup" },

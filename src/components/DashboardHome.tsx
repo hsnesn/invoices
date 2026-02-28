@@ -15,6 +15,11 @@ type Stats = {
   freelancer: { pending: number; paid: number; rejected: number; total: number };
   other?: { pending: number; paid: number; rejected: number; total: number };
   monthlyTrend: { month: string; guest: number; freelancer: number; total: number }[];
+  projectsAtRisk?: number;
+  officeRequestsPending?: number;
+  projectsByMonth?: { month: string; count: number }[];
+  officeRequestsByMonth?: { month: string; count: number }[];
+  assignmentsByMonth?: { month: string; count: number }[];
 };
 
 type SubmitterStats = {
@@ -161,6 +166,20 @@ const PAGES: PageCard[] = [
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Vendors & Suppliers",
+    description: "Manage vendor/supplier contacts, contract dates and payment terms.",
+    href: "/vendors",
+    color: "text-slate-500",
+    gradient: "from-slate-500/20 to-slate-600/5",
+    pageKey: "vendors",
+    group: "operations",
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .414.336.75.75.75z" />
       </svg>
     ),
   },
@@ -312,6 +331,9 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
   const [chartOpen, setChartOpen] = useState(isAdmin || isOperations);
+  const [projectsChartOpen, setProjectsChartOpen] = useState(false);
+  const [officeRequestsChartOpen, setOfficeRequestsChartOpen] = useState(false);
+  const [assignmentsChartOpen, setAssignmentsChartOpen] = useState(false);
   const canManageAvailability = ["admin", "operations", "manager"].includes(profile?.role ?? "");
   const { data: contractorStats, mutate: mutateContractorStats, isValidating: contractorStatsValidating } = useSWR<ContractorAvailabilityStats>(
     canManageAvailability ? "/api/contractor-availability/dashboard-stats" : null,
@@ -330,10 +352,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.viewerHidden && isViewer) return false;
     if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
-    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "office_requests", "projects", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "request", "office_requests", "projects", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (profile?.role === "manager") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "contractor_availability", "request", "office_requests", "projects", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "office_requests", "projects", "messages"].includes(p.pageKey);
+    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "office_requests", "projects", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts")) || (p.pageKey === "vendors" && !!userPages?.includes("vendors"));
+    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "request", "office_requests", "projects", "vendors", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (profile?.role === "manager") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "contractor_availability", "request", "office_requests", "projects", "vendors", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "office_requests", "projects", "vendors", "messages"].includes(p.pageKey);
     if (["submitter", "manager"].includes(role) && p.pageKey === "invited_guests") return true;
     if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));
     if (p.pageKey === "contractor_availability") return isAdmin || isOperations || (!!userPages && userPages.includes("contractor_availability")) || (!userPages || userPages.length === 0);
@@ -407,6 +429,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
           actions.push({ count: contractorStats.pendingCount, label: "assignments to review", href: "/contractor-availability" });
         if (contractorStats?.slotsShort && contractorStats.slotsShort > 0)
           actions.push({ count: contractorStats.slotsShort, label: "slots short this week", href: "/request?view=slots-short", accent: "rose" });
+        if (stats?.projectsAtRisk && stats.projectsAtRisk > 0)
+          actions.push({ count: stats.projectsAtRisk, label: "projects at risk (deadline soon)", href: "/projects", accent: "rose" });
+        if (stats?.officeRequestsPending && stats.officeRequestsPending > 0)
+          actions.push({ count: stats.officeRequestsPending, label: "office requests pending approval", href: "/office-requests?status=pending" });
         if (actions.length === 0) return null;
         return (
           <div className="mb-6 min-w-0 rounded-xl border-2 border-amber-200/80 bg-amber-50/30 p-4 dark:border-amber-800/40 dark:bg-amber-950/20">
@@ -574,7 +600,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       )}
 
-      {/* Mini Chart - collapsible, hidden from submitters */}
+      {/* Mini Charts - collapsible, hidden from submitters */}
       {canSeeStats && stats?.monthlyTrend?.length ? (
         <div className="mb-4 min-w-0">
           <button
@@ -597,6 +623,93 @@ export function DashboardHome({ profile }: { profile: Profile }) {
                     <Tooltip />
                     <Bar dataKey="guest" fill="#3b82f6" name="Guest" radius={[3, 3, 0, 0]} />
                     <Bar dataKey="freelancer" fill="#14b8a6" name="Contractor" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {canSeeStats && stats?.projectsByMonth?.length ? (
+        <div className="mb-4 min-w-0">
+          <button
+            type="button"
+            onClick={() => setProjectsChartOpen((v) => !v)}
+            className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
+          >
+            <svg className={`h-3 w-3 text-gray-400 transition-transform ${projectsChartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Projects by Month</span>
+          </button>
+          {projectsChartOpen && (
+            <div className="mt-1 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+              <div className="h-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.projectsByMonth}>
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} width={30} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#6366f1" name="Projects" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {canSeeStats && stats?.officeRequestsByMonth?.length ? (
+        <div className="mb-4 min-w-0">
+          <button
+            type="button"
+            onClick={() => setOfficeRequestsChartOpen((v) => !v)}
+            className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
+          >
+            <svg className={`h-3 w-3 text-gray-400 transition-transform ${officeRequestsChartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Office Requests by Month</span>
+          </button>
+          {officeRequestsChartOpen && (
+            <div className="mt-1 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+              <div className="h-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.officeRequestsByMonth}>
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} width={30} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#f43f5e" name="Requests" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {canSeeStats && stats?.assignmentsByMonth?.length ? (
+        <div className="mb-4 min-w-0">
+          <button
+            type="button"
+            onClick={() => setAssignmentsChartOpen((v) => !v)}
+            className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
+          >
+            <svg className={`h-3 w-3 text-gray-400 transition-transform ${assignmentsChartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Assignments by Month</span>
+          </button>
+          {assignmentsChartOpen && (
+            <div className="mt-1 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+              <div className="h-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.assignmentsByMonth}>
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} width={30} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#0ea5e9" name="Assignments" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

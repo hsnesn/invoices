@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
 type Row = {
@@ -19,8 +19,9 @@ export function SlotsShortView() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [months, setMonths] = useState(3);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     setLoading(true);
     fetch(`/api/contractor-availability/slots-short-overview?months=${months}`)
       .then((r) => r.json())
@@ -34,6 +35,38 @@ export function SlotsShortView() {
       })
       .finally(() => setLoading(false));
   }, [months]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function handleDelete(r: Row) {
+    if (!confirm(`Remove demand for ${r.role} in ${r.monthLabel} (${r.department} / ${r.program})?`)) return;
+    const rowId = `${r.month}-${r.department_id}-${r.program_id ?? "all"}-${r.role}`;
+    setDeletingId(rowId);
+    try {
+      const res = await fetch("/api/contractor-availability/requirements/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "clear_role",
+          to_month: r.month,
+          department_id: r.department_id,
+          program_id: r.program_id || undefined,
+          role: r.role,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Delete failed");
+      }
+      refresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -102,12 +135,22 @@ export function SlotsShortView() {
                         <span className="font-semibold text-rose-600 dark:text-rose-400">{r.slots_short}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Link
-                          href={`/request?month=${r.month}&dept=${r.department_id}${r.program_id ? `&program=${r.program_id}` : "&program=__all__"}`}
-                          className="text-sm font-medium text-violet-600 hover:text-violet-500 dark:text-violet-400"
-                        >
-                          Fill →
-                        </Link>
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/request?month=${r.month}&dept=${r.department_id}${r.program_id ? `&program=${r.program_id}` : "&program=__all__"}`}
+                            className="text-sm font-medium text-violet-600 hover:text-violet-500 dark:text-violet-400"
+                          >
+                            Fill →
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(r)}
+                            disabled={deletingId === `${r.month}-${r.department_id}-${r.program_id ?? "all"}-${r.role}`}
+                            className="text-sm font-medium text-rose-600 hover:text-rose-500 disabled:opacity-50 dark:text-rose-400 dark:hover:text-rose-300"
+                          >
+                            {deletingId === `${r.month}-${r.department_id}-${r.program_id ?? "all"}-${r.role}` ? "…" : "Delete"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

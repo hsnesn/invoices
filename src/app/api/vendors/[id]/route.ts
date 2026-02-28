@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { profile } = await requireAuth();
-    if (profile.role !== "admin" && profile.role !== "operations" && profile.role !== "finance") {
+    if (!["admin", "operations", "finance", "manager"].includes(profile.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -42,7 +42,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { profile } = await requireAuth();
-    if (profile.role !== "admin" && profile.role !== "operations") {
+    if (profile.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

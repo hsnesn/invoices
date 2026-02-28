@@ -102,6 +102,9 @@ export async function GET() {
       { pending: 0, paid: 0, rejected: 0 }
     );
 
+    const canSeeProjects = ["admin", "operations", "manager", "finance", "viewer"].includes(profile.role);
+    const canSeeAssignments = ["admin", "operations", "manager"].includes(profile.role);
+
     // Last 6 months trend for mini chart
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
@@ -134,6 +137,75 @@ export async function GET() {
       return { month: label, guest: guestCount, freelancer: flCount, total: guestCount + flCount };
     });
 
+    // Projects by month (created)
+    let projectsByMonth: { month: string; count: number }[] = [];
+    if (canSeeProjects) {
+      const { data: projects } = await supabase
+        .from("projects")
+        .select("created_at")
+        .order("created_at", { ascending: true });
+      projectsByMonth = monthKeys.map((key) => {
+        const [y, m] = key.split("-").map(Number);
+        const start = new Date(y, m - 1, 1);
+        const end = new Date(y, m, 0, 23, 59, 59);
+        const label = start.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+        const count = (projects ?? []).filter((p) => {
+          const created = (p as { created_at?: string }).created_at;
+          if (!created) return false;
+          const dt = new Date(created);
+          return dt >= start && dt <= end;
+        }).length;
+        return { month: label, count };
+      });
+    }
+
+    // Office requests by month (created)
+    let officeRequestsByMonth: { month: string; count: number }[] = [];
+    const { data: officeRequests } = await supabase
+      .from("office_requests")
+      .select("created_at")
+      .order("created_at", { ascending: true });
+    officeRequestsByMonth = monthKeys.map((key) => {
+      const [y, m] = key.split("-").map(Number);
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 0, 23, 59, 59);
+      const label = start.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+      const count = (officeRequests ?? []).filter((r) => {
+        const created = (r as { created_at?: string }).created_at;
+        if (!created) return false;
+        const dt = new Date(created);
+        return dt >= start && dt <= end;
+      }).length;
+      return { month: label, count };
+    });
+
+    // Assignments by month (by assignment date)
+    let assignmentsByMonth: { month: string; count: number }[] = [];
+    if (canSeeAssignments) {
+      const sixMonthsAgoStr = new Date(sixMonthsAgo).toISOString().slice(0, 10);
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() + 1);
+      const lastMonthStr = lastMonth.toISOString().slice(0, 10);
+      const { data: assignments } = await supabase
+        .from("output_schedule_assignments")
+        .select("date")
+        .gte("date", sixMonthsAgoStr)
+        .lte("date", lastMonthStr);
+      assignmentsByMonth = monthKeys.map((key) => {
+        const [y, m] = key.split("-").map(Number);
+        const start = new Date(y, m - 1, 1);
+        const end = new Date(y, m, 0);
+        const label = start.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+        const count = (assignments ?? []).filter((a) => {
+          const d = (a as { date: string }).date;
+          if (!d) return false;
+          const dt = new Date(d + "T12:00:00");
+          return dt >= start && dt <= end;
+        }).length;
+        return { month: label, count };
+      });
+    }
+
     const other = (otherInvoices ?? []).reduce(
       (acc, inv) => {
         const wf = unwrap(inv.invoice_workflows as WfShape[] | WfShape | null);
@@ -145,12 +217,44 @@ export async function GET() {
       { pending: 0, paid: 0, rejected: 0 }
     );
 
+    // Projects at risk (deadline within 7 days)
+    let projectsAtRisk = 0;
+    if (canSeeProjects) {
+      const projectRisk = new Date();
+      projectRisk.setDate(projectRisk.getDate() + 7);
+      const projectRiskStr = projectRisk.toISOString().slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      const { count } = await supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "active")
+        .not("deadline", "is", null)
+        .gte("deadline", today)
+        .lte("deadline", projectRiskStr);
+      projectsAtRisk = count ?? 0;
+    }
+
+    // Office requests pending approval (admin/operations only)
+    let officeRequestsPending = 0;
+    if (profile.role === "admin" || profile.role === "operations") {
+      const { count } = await supabase
+        .from("office_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      officeRequestsPending = count ?? 0;
+    }
+
     return NextResponse.json(
       {
         guest: { ...guest, total: guest.pending + guest.paid + guest.rejected },
         freelancer: { ...freelancer, total: freelancer.pending + freelancer.paid + freelancer.rejected },
         other: { ...other, total: other.pending + other.paid + other.rejected },
         monthlyTrend,
+        projectsAtRisk,
+        officeRequestsPending,
+        projectsByMonth,
+        officeRequestsByMonth,
+        assignmentsByMonth,
       },
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );
@@ -163,6 +267,11 @@ export async function GET() {
         freelancer: { pending: 0, paid: 0, rejected: 0, total: 0 },
         other: { pending: 0, paid: 0, rejected: 0, total: 0 },
         monthlyTrend: [],
+        projectsAtRisk: 0,
+        officeRequestsPending: 0,
+        projectsByMonth: [],
+        officeRequestsByMonth: [],
+        assignmentsByMonth: [],
       },
       { status: 200 }
     );
