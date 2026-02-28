@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   return (
@@ -18,7 +18,6 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
@@ -27,18 +26,24 @@ function LoginPageContent() {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    setLoading(false);
-    if (error) {
-      setMessage({ type: "error", text: error.message });
-      return;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) {
+        setMessage({ type: "error", text: error.message });
+        return;
+      }
+      // Full redirect so server sees fresh auth cookies
+      window.location.href = "/dashboard";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Login failed. Please try again.";
+      setMessage({ type: "error", text: msg });
+    } finally {
+      setLoading(false);
     }
-    router.push("/dashboard");
-    router.refresh();
   };
 
   const handleResetPassword = async () => {
