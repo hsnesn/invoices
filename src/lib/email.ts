@@ -954,3 +954,27 @@ export async function sendPasswordResetEmail(params: { email: string; resetLink:
     `),
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Office request completed                                            */
+/* ------------------------------------------------------------------ */
+
+export async function sendOfficeRequestCompletedEmail(params: {
+  to: string;
+  title: string;
+  description?: string | null;
+  completionNotes?: string | null;
+  link: string;
+}) {
+  return sendEmail({
+    to: params.to,
+    subject: `Request completed: ${params.title} — ${APP_NAME}`,
+    html: await wrapWithLogo("Request Completed", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your office request has been completed.</p>
+      <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#1e293b">${params.title}</p>
+      ${params.description ? `<p style="margin:0 0 12px;font-size:14px;color:#64748b">${params.description}</p>` : ""}
+      ${params.completionNotes ? `<p style="margin:0 0 12px;font-size:14px;color:#475569;background:#f8fafc;padding:12px;border-radius:8px;border-left:4px solid #10b981"><strong>Completion notes:</strong> ${params.completionNotes}</p>` : ""}
+      ${btn(params.link, "View Request")}
+    `),
+  });
+}

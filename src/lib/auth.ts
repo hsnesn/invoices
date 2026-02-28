@@ -109,6 +109,12 @@ export async function requirePageAccess(pageKey: PageKey) {
     if (["admin", "operations", "manager"].includes(profile.role)) return { session, profile };
     redirect("/dashboard");
   }
+  if (pageKey === "office_requests") {
+    if (["admin", "operations", "manager", "submitter", "finance", "viewer"].includes(profile.role)) return { session, profile };
+    if (profile.allowed_pages?.includes("office_requests")) return { session, profile };
+    if (!profile.allowed_pages || profile.allowed_pages.length === 0) return { session, profile };
+    redirect("/dashboard");
+  }
   const pages = profile.allowed_pages;
   if (!pages || pages.length === 0) return { session, profile };
   if (pages.includes(pageKey)) return { session, profile };

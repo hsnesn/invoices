@@ -8,6 +8,7 @@ import { PaidIconOverlay } from "@/components/PaidIconOverlay";
 import { SessionRefresh } from "@/components/SessionRefresh";
 import { ExportLocaleWrapper } from "@/components/ExportLocaleWrapper";
 import { SearchModal } from "@/components/SearchModal";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function AuthenticatedLayout({
       <KeyboardShortcuts />
       <SearchModal />
       <Nav profile={profile} />
+      <AnnouncementBanner />
       <main className="flex-1 p-4 sm:p-6 min-w-0 w-full max-w-full overflow-x-hidden overflow-y-auto">
         <InvoiceToastListener />
         <PaidIconOverlay />

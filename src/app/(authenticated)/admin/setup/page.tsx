@@ -13,6 +13,8 @@ import { GuestContactsSetupSection } from "@/components/GuestContactsSetupSectio
 import { LogosSetupSection } from "@/components/LogosSetupSection";
 import { ContractorAvailabilityRolesSection } from "@/components/ContractorAvailabilityRolesSection";
 import { DeletePermissionsSection } from "@/components/DeletePermissionsSection";
+import { VendorsSetupSection } from "@/components/VendorsSetupSection";
+import { AnnouncementsSetupSection } from "@/components/AnnouncementsSetupSection";
 
 interface Department {
   id: string;
@@ -36,6 +38,8 @@ const TABS = [
   { key: "logos", label: "Logos", color: "bg-rose-500" },
   { key: "email", label: "Email", color: "bg-amber-500" },
   { key: "salaries", label: "Salaries", color: "bg-indigo-500" },
+  { key: "vendors", label: "Vendors", color: "bg-slate-500" },
+  { key: "announcements", label: "Announcements", color: "bg-amber-500" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -74,6 +78,8 @@ export default function AdminSetupPage() {
       {activeTab === "logos" && <LogosSetupSection />}
       {activeTab === "email" && <EmailSetupSection />}
       {activeTab === "salaries" && <SalariesSetupSection />}
+      {activeTab === "vendors" && <VendorsSetupSection />}
+      {activeTab === "announcements" && <AnnouncementsSetupSection />}
     </div>
   );
 }

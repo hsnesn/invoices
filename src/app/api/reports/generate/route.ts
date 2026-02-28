@@ -273,6 +273,7 @@ export async function POST(req: NextRequest) {
     const report = {
       period: periodLabel, type, invoiceType: invType,
       summary: { totalInvoices, totalAmount, paidInvoices: paidInvoices.length, paidAmount, pendingAmount, rejectedCount },
+      rows: processed,
       byDepartment, byStatus, byProducer, byPaymentType,
       monthlyTrend, yoy,
       processing: { avg: avgProcessingDays, min: minProcessingDays, max: maxProcessingDays, count: processingTimes.length },

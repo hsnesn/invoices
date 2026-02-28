@@ -128,6 +128,19 @@ const PAGES: PageCard[] = [
     ),
   },
   {
+    title: "Office Requests",
+    description: "Submit requests (e.g. chair, equipment). Approve, assign to-do, get notified when done.",
+    href: "/office-requests",
+    color: "text-rose-500",
+    gradient: "from-rose-500/20 to-rose-600/5",
+    pageKey: "office_requests",
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+      </svg>
+    ),
+  },
+  {
     title: "Request",
     description: "Enter daily requirements (demand), compare with freelancer availability (supply), AI matches.",
     href: "/request",
@@ -280,10 +293,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.viewerHidden && isViewer) return false;
     if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
-    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "request", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (profile?.role === "manager") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "contractor_availability", "request", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "messages"].includes(p.pageKey);
+    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "office_requests", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "request", "office_requests", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (profile?.role === "manager") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "contractor_availability", "request", "office_requests", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "office_requests", "messages"].includes(p.pageKey);
     if (["submitter", "manager"].includes(role) && p.pageKey === "invited_guests") return true;
     if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));
     if (p.pageKey === "contractor_availability") return isAdmin || isOperations || (!!userPages && userPages.includes("contractor_availability")) || (!userPages || userPages.length === 0);
@@ -297,7 +310,15 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       {/* Hero Header */}
       <div className="mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4 min-w-0">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white shadow ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
-          <img src={logos.logo_trt || "/trt-logo.png"} alt="TRT" className="h-5 sm:h-6 object-contain dark:mix-blend-multiply" />
+          <img
+          src={logos.logo_trt || "/trt-logo.png"}
+          alt="TRT"
+          className="h-5 sm:h-6 object-contain"
+          onError={(e) => {
+            const el = e.currentTarget;
+            if (el.src !== "/trt-logo.png") el.src = "/trt-logo.png";
+          }}
+        />
         </div>
         <div className="min-w-0 flex-1 overflow-hidden">
           <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-white truncate">

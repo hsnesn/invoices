@@ -25,6 +25,7 @@ export const ALL_PAGES = [
   { key: "guest_contacts", label: "Guest Contacts" },
   { key: "messages", label: "Messages" },
   { key: "user_management", label: "User Management" },
+  { key: "office_requests", label: "Office Requests" },
 ] as const;
 
 export type PageKey = (typeof ALL_PAGES)[number]["key"];
