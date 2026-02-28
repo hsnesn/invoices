@@ -145,6 +145,8 @@ export async function POST(request: NextRequest) {
       }
 
       const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const calendarUrl = `${appUrl}/api/contractor-availability/export/ical?month=${month}`;
       const { sendContractorAssignmentConfirmedEmail, sendContractorAssignmentConfirmedToLondonOps } = await import("@/lib/email");
 
       const byPersonForLondon: { name: string; email: string; datesWithRole: { date: string; role: string }[] }[] = [];
@@ -158,6 +160,7 @@ export async function POST(request: NextRequest) {
             personName: name,
             monthLabel,
             datesWithRole: sorted,
+            calendarUrl,
           });
           byPersonForLondon.push({ name, email, datesWithRole: sorted });
         }

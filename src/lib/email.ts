@@ -743,6 +743,7 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
   personName: string;
   monthLabel: string;
   datesWithRole: { date: string; role: string }[];
+  calendarUrl?: string;
 }) {
   const rows =
     params.datesWithRole.length > 0
@@ -759,6 +760,9 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
         <table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr><th style="padding:6px 12px;text-align:left;font-weight:600;color:#065f46">Date</th><th style="padding:6px 12px;text-align:left;font-weight:600;color:#065f46">Role</th></tr></thead><tbody>${rows}</tbody></table>
       </div>`
       : "";
+  const calendarBtn = params.calendarUrl
+    ? `<div style="text-align:center;margin:20px 0"><a href="${params.calendarUrl}" style="display:inline-block;background:#10b981;color:#ffffff;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;box-shadow:0 2px 8px rgba(16,185,129,0.4)">Add to calendar (.ics)</a></div><p style="margin:0 0 12px;font-size:12px;color:#64748b;text-align:center">Download and add these dates to your calendar app</p>`
+    : "";
   return sendEmail({
     to: params.to,
     replyTo: LONDON_OPS_EMAIL,
@@ -767,6 +771,7 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your schedule for <strong>${params.monthLabel}</strong> has been confirmed. You are booked for the following days:</p>
       ${tableHtml}
+      ${calendarBtn}
       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">If you have any questions, please contact London Operations.</p>
     `),
   });
