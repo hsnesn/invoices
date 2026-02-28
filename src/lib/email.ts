@@ -747,14 +747,30 @@ export async function sendContractorAssignmentsPendingEmail(params: {
   monthLabel: string;
   count: number;
   reviewUrl: string;
+  assignments?: { personName: string; date: string; role: string }[];
 }) {
+  const tableHtml =
+    params.assignments && params.assignments.length > 0
+      ? `<div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Date</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Person</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Role</th></tr>
+          ${params.assignments
+            .map(
+              (a) =>
+                `<tr><td style="padding:8px 12px;color:#1e293b">${new Date(a.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</td><td style="padding:8px 12px;color:#1e293b">${a.personName}</td><td style="padding:8px 12px;color:#1e293b">${a.role}</td></tr>`
+            )
+            .join("")}
+        </table>
+      </div>`
+      : "";
   return sendEmail({
     to: params.to,
     replyTo: LONDON_OPS_EMAIL,
     subject: `Contractor assignments pending review — ${params.monthLabel}`,
     html: await wrapWithLogo("Assignments Pending Review", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">AI has suggested <strong>${params.count}</strong> contractor assignments for ${params.monthLabel}.</p>
-      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Please review, edit if needed, and approve to send confirmation emails to contractors.</p>
+      ${tableHtml}
+      <p style="margin:16px 0 12px;font-size:14px;color:#334155;line-height:1.6">Please review, edit if needed, and approve to send confirmation emails to contractors.</p>
       ${btn(params.reviewUrl, "Review Assignments", "#10b981")}
     `),
   });

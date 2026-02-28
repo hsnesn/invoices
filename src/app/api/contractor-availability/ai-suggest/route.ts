@@ -134,12 +134,25 @@ export async function POST(request: NextRequest) {
 
       const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const { data: profiles } = await supabase.from("profiles").select("id, full_name");
+      const nameMap = new Map<string, string>();
+      for (const p of profiles ?? []) {
+        nameMap.set((p as { id: string }).id, (p as { full_name: string | null }).full_name ?? "Unknown");
+      }
+      const assignmentsForEmail = [...deduped]
+        .sort((a, b) => a.date.localeCompare(b.date) || a.role.localeCompare(b.role))
+        .map((s) => ({
+          personName: nameMap.get(s.user_id) ?? "Unknown",
+          date: s.date,
+          role: s.role,
+        }));
       const { sendContractorAssignmentsPendingEmail } = await import("@/lib/email");
       await sendContractorAssignmentsPendingEmail({
         to: "london.operations@trtworld.com",
         monthLabel,
         count: deduped.length,
         reviewUrl: `${appUrl}/contractor-availability?tab=assignments&month=${month}`,
+        assignments: assignmentsForEmail,
       });
     }
 
