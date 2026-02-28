@@ -451,12 +451,20 @@ export default async function HelpPage() {
       </div>
 
       <div className="mt-12 border-t border-gray-200 pt-6 dark:border-gray-700">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
-        >
-          ← Back to Dashboard
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+          >
+            ← Back to Dashboard
+          </Link>
+          <Link
+            href="/logo-preview"
+            className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+          >
+            Logo preview →
+          </Link>
+        </div>
         <p className="mt-6 text-right text-sm text-gray-400 dark:text-gray-500">Hasan Esen</p>
       </div>
     </div>
