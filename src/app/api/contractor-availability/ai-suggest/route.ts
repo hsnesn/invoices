@@ -14,10 +14,12 @@ function canRunAiSuggest(role: string) {
   return role === "admin" || role === "operations";
 }
 
-/** Fair assignment: fill each (date, role) slot from available people, minimizing variance in shifts per person. */
+/** Fair assignment: fill each (date, role) slot from available people.
+ * Uses preference list (most assigned first) when multiple people available, then minimizes variance in shifts. */
 function suggestAssignments(
   requirements: { date: string; role: string; count_needed: number }[],
-  availability: { user_id: string; date: string; role: string | null }[]
+  availability: { user_id: string; date: string; role: string | null }[],
+  preferenceByRole: Map<string, Map<string, number>>
 ): { user_id: string; date: string; role: string }[] {
   const availByDateRole = new Map<string, Set<string>>();
   for (const a of availability) {
@@ -36,7 +38,12 @@ function suggestAssignments(
     const available = availByDateRole.get(key);
     if (!available || available.size === 0) continue;
 
+    const prefMap = preferenceByRole.get(req.role);
+
     const sorted = Array.from(available).sort((a, b) => {
+      const prefA = prefMap?.get(a) ?? 0;
+      const prefB = prefMap?.get(b) ?? 0;
+      if (prefB !== prefA) return prefB - prefA;
       const sa = shiftsPerUser.get(a) ?? 0;
       const sb = shiftsPerUser.get(b) ?? 0;
       return sa - sb;
@@ -95,7 +102,24 @@ export async function POST(request: NextRequest) {
     const { data: availRows } = await availQuery;
     const availability = (availRows ?? []) as { user_id: string; date: string; role: string | null }[];
 
-    const suggested = suggestAssignments(requirements, availability);
+    let prefQuery = supabase
+      .from("output_schedule_assignments")
+      .select("user_id, role")
+      .eq("department_id", departmentId);
+    if (progId) prefQuery = prefQuery.eq("program_id", progId);
+    else prefQuery = prefQuery.is("program_id", null);
+    const { data: prefRows } = await prefQuery;
+    const preferenceByRole = new Map<string, Map<string, number>>();
+    for (const r of prefRows ?? []) {
+      const uid = (r as { user_id: string }).user_id;
+      const roleKey = ((r as { role: string | null }).role ?? "").trim();
+      if (!roleKey) continue;
+      if (!preferenceByRole.has(roleKey)) preferenceByRole.set(roleKey, new Map());
+      const m = preferenceByRole.get(roleKey)!;
+      m.set(uid, (m.get(uid) ?? 0) + 1);
+    }
+
+    const suggested = suggestAssignments(requirements, availability, preferenceByRole);
     const suggestedSeen = new Set<string>();
     const suggestedDeduped = suggested.filter((s) => {
       const key = `${s.user_id}|${s.date}`;

@@ -10,6 +10,7 @@ type ProgramItem = { id: string; name: string; department_id: string };
 type ByUserItem = { userId: string; name: string; email: string; role: string; dates: string[] };
 type ReqItem = { date: string; role: string; count_needed: number };
 type AssignItem = { id: string; user_id: string; date: string; role: string | null; status: string; notes?: string | null };
+type PreferenceUser = { user_id: string; full_name: string; assignment_count: number };
 type RecurringItem = { id: string; day_of_week: number; role: string; count_needed: number; dayLabel?: string };
 
 function getDaysInMonth(year: number, month: number): Date[] {
@@ -79,6 +80,11 @@ export function ContractorAvailabilityClient() {
   const [assignNameMap, setAssignNameMap] = useState<Record<string, string>>({});
   const [assignEditable, setAssignEditable] = useState<AssignItem[]>([]);
   const [coverage, setCoverage] = useState<{ slotsFilled: number; slotsShort: number } | null>(null);
+  const [addDate, setAddDate] = useState("");
+  const [addRole, setAddRole] = useState("");
+  const [addUserId, setAddUserId] = useState("");
+  const [preferenceList, setPreferenceList] = useState<PreferenceUser[]>([]);
+  const [preferenceLoading, setPreferenceLoading] = useState(false);
 
   const canManage = profile?.role === "admin" || profile?.role === "operations" || profile?.role === "manager";
   const [canApprove, setCanApprove] = useState(false);
@@ -231,6 +237,25 @@ export function ContractorAvailabilityClient() {
       .catch(() => setAssignments([]))
       .finally(() => setAssignLoading(false));
   }, [canManage, tab, assignMonth, listDepartment, listProgram]);
+
+  useEffect(() => {
+    if (!canManage || !listDepartment || !addRole?.trim()) {
+      setPreferenceList([]);
+      return;
+    }
+    setPreferenceLoading(true);
+    const params = new URLSearchParams({
+      department_id: listDepartment,
+      role: addRole.trim(),
+    });
+    if (listProgram) params.set("program_id", listProgram);
+    if (addDate && /^\d{4}-\d{2}-\d{2}$/.test(addDate)) params.set("date", addDate);
+    fetch(`/api/contractor-availability/preference-list?${params}`)
+      .then((r) => r.json())
+      .then((d) => setPreferenceList(d.users ?? []))
+      .catch(() => setPreferenceList([]))
+      .finally(() => setPreferenceLoading(false));
+  }, [canManage, listDepartment, listProgram, addRole, addDate]);
 
   useEffect(() => {
     if (!canManage || tab !== "requirements" || !listDepartment) return;
@@ -1031,6 +1056,102 @@ export function ContractorAvailabilityClient() {
               }`}
             >
               {message.text}
+            </div>
+          )}
+          {canApprove && (
+            <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
+              <h3 className="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">Add assignment (preference list)</h3>
+              <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                {listDepartment ? "Select role and date above. People are listed by most requested first. With a date, only available people are shown." : "Select department and program above first."}
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
+                  <select
+                    value={addDate}
+                    onChange={(e) => { setAddDate(e.target.value); setAddUserId(""); }}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="">Select date...</option>
+                    {getDaysInMonth(
+                      parseInt(assignMonth.split("-")[0], 10),
+                      parseInt(assignMonth.split("-")[1], 10)
+                    ).map((d) => {
+                      const dateStr = toYMD(d);
+                      return (
+                        <option key={dateStr} value={dateStr}>
+                          {d.toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Role</label>
+                  <select
+                    value={addRole}
+                    onChange={(e) => { setAddRole(e.target.value); setAddUserId(""); }}
+                    disabled={!listDepartment}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white disabled:opacity-50"
+                  >
+                    <option value="">{listDepartment ? "Select role..." : "Select dept first"}</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.value}>{r.value}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Person</label>
+                  <select
+                    value={addUserId}
+                    onChange={(e) => setAddUserId(e.target.value)}
+                    disabled={preferenceLoading || !addRole?.trim() || !listDepartment}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white min-w-[160px]"
+                  >
+                    <option value="">
+                      {preferenceLoading ? "Loading..." : !listDepartment ? "Select dept first" : !addRole?.trim() ? "Select role first" : preferenceList.length === 0 ? "No one available" : "Select person..."}
+                    </option>
+                    {preferenceList.map((u) => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.full_name} ({u.assignment_count}×)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!addDate || !addRole?.trim() || !addUserId) {
+                      setMessage({ type: "error", text: "Select date, role and person." });
+                      setTimeout(() => setMessage(null), 3000);
+                      return;
+                    }
+                    const existingKey = `${addUserId}|${addDate}`;
+                    const alreadyAssigned = assignEditable.some((a) => `${a.user_id}|${a.date}` === existingKey);
+                    if (alreadyAssigned) {
+                      setMessage({ type: "error", text: "This person is already assigned for that date." });
+                      setTimeout(() => setMessage(null), 3000);
+                      return;
+                    }
+                    const newItem: AssignItem = {
+                      id: `temp-${Date.now()}`,
+                      user_id: addUserId,
+                      date: addDate,
+                      role: addRole.trim(),
+                      status: "pending",
+                    };
+                    setAssignEditable((prev) => [...prev, newItem].sort((a, b) => a.date.localeCompare(b.date) || (a.role ?? "").localeCompare(b.role ?? "")));
+                    setAssignNameMap((prev) => ({ ...prev, [addUserId]: preferenceList.find((u) => u.user_id === addUserId)?.full_name ?? "Unknown" }));
+                    setAddUserId("");
+                    setMessage({ type: "success", text: "Assignment added. Click Save Changes to persist." });
+                    setTimeout(() => setMessage(null), 3000);
+                  }}
+                  disabled={!addDate || !addRole?.trim() || !addUserId}
+                  className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
             </div>
           )}
           {assignLoading ? (

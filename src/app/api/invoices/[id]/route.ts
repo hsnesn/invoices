@@ -405,9 +405,13 @@ export async function DELETE(
       .single();
     const status = (wf?.status as string) ?? "submitted";
 
+    const isGuestOrSalary =
+      (invoice as { invoice_type?: string }).invoice_type === "guest" ||
+      (invoice as { invoice_type?: string }).invoice_type === "salary";
     const canDelete =
       isAdmin ||
       (isOtherInvoice && (isFinance || isOperations)) ||
+      (isGuestOrSalary && (isFinance || isOperations)) ||
       (isSubmitter && PENDING_STATUSES_FOR_SUBMITTER_DELETE.includes(status));
 
     if (!canDelete) {

@@ -1006,6 +1006,16 @@ function InvoiceTable({
                     );
                   }
 
+                  if (currentRole === "operations" || currentRole === "finance") {
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
+                          {actionLoadingId === r.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    );
+                  }
+
                   if (r.status === "rejected") {
                     return (
                       <span className="text-xs font-medium text-red-600" title={r.rejectionReason}>
@@ -1870,7 +1880,12 @@ export function InvoicesBoard({
       });
       if (res.ok) {
         window.location.reload();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error ?? "Delete failed");
       }
+    } catch {
+      toast.error("Delete failed");
     } finally {
       setActionLoadingId(null);
     }
