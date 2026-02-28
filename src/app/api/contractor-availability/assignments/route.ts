@@ -62,11 +62,15 @@ export async function GET(request: NextRequest) {
     }
 
     const isManager = canManage(profile.role);
-    if (!isManager || !userId) {
+    if (!isManager) {
       query = query.eq("user_id", profile.id);
     } else if (userId) {
       query = query.eq("user_id", userId);
+    } else if (!departmentId) {
+      // Manager on My Availability form: show own bookings only
+      query = query.eq("user_id", profile.id);
     }
+    // else: manager with department_id → show all assignments for that department
 
     const { data, error } = await query;
     if (error) throw error;
