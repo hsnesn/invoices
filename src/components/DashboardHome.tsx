@@ -278,7 +278,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   const userPages = Array.isArray(profile?.allowed_pages) ? profile.allowed_pages : null;
   const isSubmitter = profile.role === "submitter";
   const canSeeStats = !isSubmitter;
-  const { data: stats, mutate, isValidating: statsValidating } = useSWR<Stats>(
+  const { data: stats, mutate: mutateStats, isValidating: statsValidating } = useSWR<Stats>(
     canSeeStats ? "/api/dashboard/stats" : null,
     statsFetcher,
     { revalidateOnFocus: false, dedupingInterval: 2000 }
@@ -295,10 +295,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   );
   const [chartOpen, setChartOpen] = useState(false);
   const canManageAvailability = ["admin", "operations", "manager"].includes(profile?.role ?? "");
-  const { data: contractorStats } = useSWR<ContractorAvailabilityStats>(
+  const { data: contractorStats, mutate: mutateContractorStats, isValidating: contractorStatsValidating } = useSWR<ContractorAvailabilityStats>(
     canManageAvailability ? "/api/contractor-availability/dashboard-stats" : null,
     statsFetcher,
-    { revalidateOnFocus: false, dedupingInterval: 3000 }
+    { revalidateOnFocus: true, dedupingInterval: 2000 }
   );
 
   const role = profile?.role ?? "";
@@ -357,11 +357,24 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         if (contractorStats?.pendingCount && contractorStats.pendingCount > 0)
           actions.push({ count: contractorStats.pendingCount, label: "assignments to review", href: "/contractor-availability" });
         if (contractorStats?.slotsShort && contractorStats.slotsShort > 0)
-          actions.push({ count: contractorStats.slotsShort, label: "slots short this week", href: "/request", accent: "rose" });
+          actions.push({ count: contractorStats.slotsShort, label: "slots short this week", href: "/request?view=slots-short", accent: "rose" });
         if (actions.length === 0) return null;
         return (
           <div className="mb-4 min-w-0">
-            <h2 className="mb-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">Your Pending Actions</h2>
+            <div className="mb-1.5 flex items-center justify-between">
+              <h2 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Your Pending Actions</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  void mutateStats(undefined, { revalidate: true });
+                  void mutateContractorStats(undefined, { revalidate: true });
+                }}
+                disabled={statsValidating || contractorStatsValidating}
+                className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+              >
+                {contractorStatsValidating ? "…" : "Refresh"}
+              </button>
+            </div>
             <div className="flex gap-2 overflow-x-auto pb-1 min-w-0">
               {actions.map((a) => (
                 <Link
@@ -454,7 +467,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
           <div className="mb-1.5 flex items-center justify-end">
             <button
               type="button"
-              onClick={() => void mutate(undefined, { revalidate: true })}
+              onClick={() => void mutateStats(undefined, { revalidate: true })}
               disabled={statsValidating}
               className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
             >

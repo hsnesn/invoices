@@ -4,10 +4,16 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { RequestClient } from "./RequestClient";
 import { PreferenceListTab } from "@/components/PreferenceListTab";
+import { SlotsShortView } from "./SlotsShortView";
 
 export function RequestPageClient() {
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "requirements";
+  const view = searchParams.get("view");
+
+  if (view === "slots-short") {
+    return <SlotsShortView />;
+  }
 
   return (
     <div className="space-y-6">
