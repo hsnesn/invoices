@@ -35,6 +35,8 @@ type ContractorAvailabilityStats = {
   slotsShort: number;
 };
 
+type PageGroup = "invoices" | "operations" | "admin";
+
 interface PageCard {
   title: string;
   description: string;
@@ -43,6 +45,7 @@ interface PageCard {
   color: string;
   gradient: string;
   pageKey: PageKey;
+  group: PageGroup;
   adminOnly?: boolean;
   viewerHidden?: boolean;
 }
@@ -55,6 +58,7 @@ const PAGES: PageCard[] = [
     color: "text-blue-500",
     gradient: "from-blue-500/20 to-blue-600/5",
     pageKey: "guest_invoices",
+    group: "invoices",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
@@ -68,6 +72,7 @@ const PAGES: PageCard[] = [
     color: "text-emerald-500",
     gradient: "from-emerald-500/20 to-emerald-600/5",
     pageKey: "invited_guests",
+    group: "invoices",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
@@ -81,6 +86,7 @@ const PAGES: PageCard[] = [
     color: "text-orange-500",
     gradient: "from-orange-500/20 to-orange-600/5",
     pageKey: "other_invoices",
+    group: "invoices",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -94,6 +100,7 @@ const PAGES: PageCard[] = [
     color: "text-teal-500",
     gradient: "from-teal-500/20 to-teal-600/5",
     pageKey: "freelancer_invoices",
+    group: "invoices",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
@@ -107,6 +114,7 @@ const PAGES: PageCard[] = [
     color: "text-indigo-500",
     gradient: "from-indigo-500/20 to-indigo-600/5",
     pageKey: "salaries",
+    group: "invoices",
     viewerHidden: true,
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -121,6 +129,7 @@ const PAGES: PageCard[] = [
     color: "text-sky-500",
     gradient: "from-sky-500/20 to-sky-600/5",
     pageKey: "contractor_availability",
+    group: "operations",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
@@ -134,6 +143,7 @@ const PAGES: PageCard[] = [
     color: "text-rose-500",
     gradient: "from-rose-500/20 to-rose-600/5",
     pageKey: "office_requests",
+    group: "operations",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -147,6 +157,7 @@ const PAGES: PageCard[] = [
     color: "text-indigo-500",
     gradient: "from-indigo-500/20 to-indigo-600/5",
     pageKey: "projects",
+    group: "operations",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
@@ -160,6 +171,7 @@ const PAGES: PageCard[] = [
     color: "text-violet-500",
     gradient: "from-violet-500/20 to-violet-600/5",
     pageKey: "request",
+    group: "operations",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
@@ -173,6 +185,7 @@ const PAGES: PageCard[] = [
     color: "text-amber-500",
     gradient: "from-amber-500/20 to-amber-600/5",
     pageKey: "setup",
+    group: "admin",
     adminOnly: true,
     viewerHidden: true,
     icon: (
@@ -189,6 +202,7 @@ const PAGES: PageCard[] = [
     color: "text-violet-500",
     gradient: "from-violet-500/20 to-violet-600/5",
     pageKey: "guest_contacts",
+    group: "invoices",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
@@ -202,6 +216,7 @@ const PAGES: PageCard[] = [
     color: "text-indigo-500",
     gradient: "from-indigo-500/20 to-indigo-600/5",
     pageKey: "messages",
+    group: "operations",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
@@ -215,6 +230,7 @@ const PAGES: PageCard[] = [
     color: "text-cyan-500",
     gradient: "from-cyan-500/20 to-cyan-600/5",
     pageKey: "reports",
+    group: "invoices",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -228,6 +244,7 @@ const PAGES: PageCard[] = [
     color: "text-amber-500",
     gradient: "from-amber-500/20 to-amber-600/5",
     pageKey: "audit_log",
+    group: "admin",
     adminOnly: true,
     viewerHidden: true,
     icon: (
@@ -243,6 +260,7 @@ const PAGES: PageCard[] = [
     color: "text-purple-500",
     gradient: "from-purple-500/20 to-purple-600/5",
     pageKey: "user_management",
+    group: "admin",
     adminOnly: true,
     viewerHidden: true,
     icon: (
@@ -293,12 +311,18 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     statsFetcher,
     { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
-  const [chartOpen, setChartOpen] = useState(false);
+  const [chartOpen, setChartOpen] = useState(isAdmin || isOperations);
   const canManageAvailability = ["admin", "operations", "manager"].includes(profile?.role ?? "");
   const { data: contractorStats, mutate: mutateContractorStats, isValidating: contractorStatsValidating } = useSWR<ContractorAvailabilityStats>(
     canManageAvailability ? "/api/contractor-availability/dashboard-stats" : null,
     statsFetcher,
     { revalidateOnFocus: true, dedupingInterval: 2000 }
+  );
+
+  const { data: alertsData } = useSWR<{ alerts: { type: string; title: string; href: string; count?: number; items?: { title: string; due?: string }[] }[] }>(
+    canSeeStats ? "/api/dashboard/alerts" : null,
+    statsFetcher,
+    { revalidateOnFocus: true, dedupingInterval: 60000 }
   );
 
   const role = profile?.role ?? "";
@@ -347,22 +371,47 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       </div>
 
+      {/* Proactive Alerts */}
+      {canSeeStats && alertsData?.alerts && alertsData.alerts.length > 0 && (
+        <div className="mb-4 min-w-0">
+          <h2 className="mb-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">Alerts</h2>
+          <div className="flex flex-wrap gap-2">
+            {alertsData.alerts.map((a) => (
+              <Link
+                key={a.type}
+                href={a.href}
+                className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 shadow-sm hover:bg-amber-100/80 dark:border-amber-800/60 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 transition-colors"
+              >
+                <span className="text-amber-600 dark:text-amber-400">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+                  </svg>
+                </span>
+                <span className="text-sm font-medium text-amber-800 dark:text-amber-200">{a.title}</span>
+                {a.count != null && <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">{a.count}</span>}
+                <span className="text-xs text-amber-600 dark:text-amber-400">→</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Your Pending Actions — admin / manager / operations */}
       {canSeeStats && (() => {
         const actions: { count: number; label: string; href: string; accent?: "rose" }[] = [];
         if (stats?.guest.pending && stats.guest.pending > 0)
           actions.push({ count: stats.guest.pending, label: "guest invoices pending", href: "/invoices?group=pending" });
         if (stats?.freelancer.pending && stats.freelancer.pending > 0)
-          actions.push({ count: stats.freelancer.pending, label: "contractor invoices pending", href: "/freelancer-invoices" });
+          actions.push({ count: stats.freelancer.pending, label: "contractor invoices pending", href: "/freelancer-invoices?group=pending" });
         if (contractorStats?.pendingCount && contractorStats.pendingCount > 0)
           actions.push({ count: contractorStats.pendingCount, label: "assignments to review", href: "/contractor-availability" });
         if (contractorStats?.slotsShort && contractorStats.slotsShort > 0)
           actions.push({ count: contractorStats.slotsShort, label: "slots short this week", href: "/request?view=slots-short", accent: "rose" });
         if (actions.length === 0) return null;
         return (
-          <div className="mb-4 min-w-0">
-            <div className="mb-1.5 flex items-center justify-between">
-              <h2 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Your Pending Actions</h2>
+          <div className="mb-6 min-w-0 rounded-xl border-2 border-amber-200/80 bg-amber-50/30 p-4 dark:border-amber-800/40 dark:bg-amber-950/20">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-800 dark:text-gray-200">Your Pending Actions</h2>
               <button
                 type="button"
                 onClick={() => {
@@ -375,16 +424,16 @@ export function DashboardHome({ profile }: { profile: Profile }) {
                 {contractorStatsValidating ? "…" : "Refresh"}
               </button>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 min-w-0">
+            <div className="flex flex-wrap gap-3 min-w-0">
               {actions.map((a) => (
                 <Link
                   key={a.href}
                   href={a.href}
-                  className={`flex min-w-[140px] shrink-0 items-center gap-2 rounded-lg border-l-3 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 transition-colors dark:bg-gray-900/60 dark:ring-gray-700/60 ${a.accent === "rose" ? "border-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"}`}
+                  className={`flex min-w-[160px] shrink-0 items-center gap-3 rounded-xl border-l-4 bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200/80 transition-all hover:shadow-md dark:bg-gray-900/60 dark:ring-gray-700/60 ${a.accent === "rose" ? "border-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"}`}
                 >
-                  <span className={`text-lg font-bold ${a.accent === "rose" ? "text-rose-700 dark:text-rose-300" : "text-amber-700 dark:text-amber-300"}`}>{a.count}</span>
-                  <span className="text-[11px] leading-tight text-gray-600 dark:text-gray-400">{a.label}</span>
-                  <span className={`ml-auto whitespace-nowrap text-[11px] font-medium ${a.accent === "rose" ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>→</span>
+                  <span className={`text-2xl font-bold ${a.accent === "rose" ? "text-rose-700 dark:text-rose-300" : "text-amber-700 dark:text-amber-300"}`}>{a.count}</span>
+                  <span className="flex-1 text-xs font-medium text-gray-700 dark:text-gray-300">{a.label}</span>
+                  <span className={`text-sm font-medium ${a.accent === "rose" ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>→</span>
                 </Link>
               ))}
             </div>
@@ -556,27 +605,43 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       ) : null}
 
-      {/* Page Cards */}
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-        {visiblePages.map((page) => (
-          <Link
-            key={page.href}
-            href={page.href}
-            className="group flex items-center gap-2.5 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:border-gray-600"
-          >
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-50 ${page.color} dark:bg-gray-800/80 [&>svg]:h-5 [&>svg]:w-5`}>
-              {page.icon}
+      {/* Page Cards - grouped */}
+      {(["invoices", "operations", "admin"] as PageGroup[]).map((groupKey) => {
+        const groupPages = visiblePages.filter((p) => p.group === groupKey);
+        if (groupPages.length === 0) return null;
+        const groupLabels: Record<PageGroup, string> = {
+          invoices: "Invoices & Reports",
+          operations: "Operations",
+          admin: "Admin & Setup",
+        };
+        return (
+          <div key={groupKey} className="mb-6">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              {groupLabels[groupKey]}
+            </h3>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+              {groupPages.map((page) => (
+                <Link
+                  key={page.href}
+                  href={page.href}
+                  className="group flex items-center gap-2.5 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:border-gray-600"
+                >
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-50 ${page.color} dark:bg-gray-800/80 [&>svg]:h-5 [&>svg]:w-5`}>
+                    {page.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">{page.title}</h3>
+                    <p className="text-[10px] leading-tight text-gray-500 dark:text-gray-400 line-clamp-1">{page.description}</p>
+                  </div>
+                  <svg className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                </Link>
+              ))}
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">{page.title}</h3>
-              <p className="text-[10px] leading-tight text-gray-500 dark:text-gray-400 line-clamp-1">{page.description}</p>
-            </div>
-            <svg className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
-          </Link>
-        ))}
-      </div>
+          </div>
+        );
+      })}
 
       {/* Quick Overview */}
       <div className="mt-4 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">

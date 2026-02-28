@@ -21,10 +21,31 @@ interface SearchResults {
   people: PersonResult[];
 }
 
-interface FlatItem {
-  type: "invoice" | "person";
-  data: InvoiceResult | PersonResult;
+interface PageItem {
+  title: string;
+  href: string;
 }
+
+interface FlatItem {
+  type: "invoice" | "person" | "page";
+  data: InvoiceResult | PersonResult | PageItem;
+}
+
+const SEARCH_PAGES: PageItem[] = [
+  { title: "Guest Invoices", href: "/invoices" },
+  { title: "Contractor Invoices", href: "/freelancer-invoices" },
+  { title: "Office Requests", href: "/office-requests" },
+  { title: "Projects", href: "/projects" },
+  { title: "Reports", href: "/admin/reports" },
+  { title: "Messages", href: "/messages" },
+  { title: "Setup", href: "/admin/setup" },
+  { title: "Salaries", href: "/salaries" },
+  { title: "Other Invoices", href: "/other-invoices" },
+  { title: "Invited Guests", href: "/invoices/invited-guests" },
+  { title: "Request", href: "/request" },
+  { title: "My Availability", href: "/contractor-availability" },
+  { title: "Dashboard", href: "/dashboard" },
+];
 
 export function SearchModal() {
   const [open, setOpen] = useState(false);
@@ -39,12 +60,21 @@ export function SearchModal() {
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
+  const pageMatches = query.trim().length >= 1
+    ? SEARCH_PAGES.filter(
+        (p) =>
+          p.title.toLowerCase().includes(query.trim().toLowerCase()) ||
+          p.href.toLowerCase().includes(query.trim().toLowerCase())
+      ).slice(0, 5)
+    : [];
+
   const flatItems: FlatItem[] = [
+    ...pageMatches.map((p) => ({ type: "page" as const, data: p })),
     ...results.invoices.map(
-      (inv) => ({ type: "invoice", data: inv }) as FlatItem
+      (inv) => ({ type: "invoice" as const, data: inv }) as FlatItem
     ),
     ...results.people.map(
-      (p) => ({ type: "person", data: p }) as FlatItem
+      (p) => ({ type: "person" as const, data: p }) as FlatItem
     ),
   ];
 
@@ -60,6 +90,9 @@ export function SearchModal() {
       if (item.type === "invoice") {
         const inv = item.data as InvoiceResult;
         router.push(`/invoices?search=${encodeURIComponent(inv.invoice_number)}`);
+      } else if (item.type === "page") {
+        const page = item.data as PageItem;
+        router.push(page.href);
       } else {
         router.push("/admin/users");
       }
@@ -166,7 +199,7 @@ export function SearchModal() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search invoices, people..."
+            placeholder="Search pages, invoices, people..."
             className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-slate-500"
           />
           <kbd className="hidden rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 sm:inline-block dark:bg-slate-800 dark:text-slate-500">
@@ -181,10 +214,36 @@ export function SearchModal() {
             </p>
           )}
 
-          {!loading && query.trim().length >= 2 && flatItems.length === 0 && (
+          {!loading && query.trim().length >= 1 && flatItems.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-gray-400 dark:text-slate-500">
               No results found.
             </p>
+          )}
+
+          {!loading && pageMatches.length > 0 && (
+            <div>
+              <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
+                Pages
+              </p>
+              {pageMatches.map((page, i) => (
+                <button
+                  key={page.href + page.title}
+                  onClick={() => navigate({ type: "page", data: page })}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                    activeIndex === i
+                      ? "bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                      : "text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                  </span>
+                  <p className="truncate font-medium">{page.title}</p>
+                </button>
+              ))}
+            </div>
           )}
 
           {!loading && results.invoices.length > 0 && (
@@ -193,7 +252,7 @@ export function SearchModal() {
                 Invoices
               </p>
               {results.invoices.map((inv, i) => {
-                const idx = i;
+                const idx = pageMatches.length + i;
                 return (
                   <button
                     key={inv.id}
@@ -236,12 +295,12 @@ export function SearchModal() {
           )}
 
           {!loading && results.people.length > 0 && (
-            <div className={results.invoices.length > 0 ? "mt-2" : ""}>
+            <div className={results.invoices.length > 0 || pageMatches.length > 0 ? "mt-2" : ""}>
               <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
                 People
               </p>
               {results.people.map((person, i) => {
-                const idx = results.invoices.length + i;
+                const idx = pageMatches.length + results.invoices.length + i;
                 return (
                   <button
                     key={person.id}
@@ -286,9 +345,9 @@ export function SearchModal() {
             </div>
           )}
 
-          {!loading && query.trim().length < 2 && (
+          {!loading && query.trim().length < 1 && (
             <p className="px-3 py-6 text-center text-sm text-gray-400 dark:text-slate-500">
-              Type at least 2 characters to search.
+              Type to search pages, invoices, or people.
             </p>
           )}
         </div>

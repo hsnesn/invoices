@@ -4,12 +4,17 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 const SHORTCUTS = [
+  { keys: ["⌘K", "Ctrl+K"], action: "Search (invoices, people)" },
   { keys: ["?", "Shift+/"], action: "Show this help (or click footer link)" },
   { keys: ["Esc"], action: "Close modal / Cancel" },
   { keys: ["g", "d"], action: "Go to Dashboard" },
   { keys: ["g", "i"], action: "Go to Guest Invoices" },
   { keys: ["g", "c"], action: "Go to Contractor Invoices" },
+  { keys: ["g", "o"], action: "Go to Office Requests" },
+  { keys: ["g", "p"], action: "Go to Projects" },
+  { keys: ["g", "r"], action: "Go to Reports" },
   { keys: ["g", "m"], action: "Go to Messages" },
+  { keys: ["g", "s"], action: "Go to Setup (admin)" },
   { keys: ["g", "h"], action: "Go to Help" },
   { keys: ["A"], action: "Approve invoice (when expanded)" },
   { keys: ["R"], action: "Reject invoice (when expanded)" },
@@ -63,9 +68,21 @@ export function KeyboardShortcuts() {
         } else if (key === "c") {
           e.preventDefault();
           router.push("/freelancer-invoices");
+        } else if (key === "o") {
+          e.preventDefault();
+          router.push("/office-requests");
+        } else if (key === "p") {
+          e.preventDefault();
+          router.push("/projects");
+        } else if (key === "r") {
+          e.preventDefault();
+          router.push("/admin/reports");
         } else if (key === "m") {
           e.preventDefault();
           router.push("/messages");
+        } else if (key === "s") {
+          e.preventDefault();
+          router.push("/admin/setup");
         } else if (key === "h") {
           e.preventDefault();
           router.push("/help");
