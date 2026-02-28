@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const isAdmin = profile.role === "admin";
     let query = supabase
       .from("producer_guests")
-      .select("id, producer_user_id, guest_name, email, title, program_name, invited_at, accepted, matched_invoice_id, matched_at, payment_received, payment_amount, payment_currency, recording_date, recording_topic, created_at")
+      .select("id, producer_user_id, guest_name, email, title, program_name, invited_at, accepted, matched_invoice_id, matched_at, payment_received, payment_amount, payment_currency, recording_date, recording_topic, notes, is_favorite, created_at")
       .order("created_at", { ascending: false });
 
     if (!isAdmin) {

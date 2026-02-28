@@ -21,6 +21,8 @@ export async function PATCH(
       email?: string | null;
       title?: string | null;
       program_name?: string | null;
+      notes?: string | null;
+      is_favorite?: boolean | null;
     };
 
     const isAdmin = profile.role === "admin";
@@ -38,6 +40,8 @@ export async function PATCH(
     if (body.email !== undefined) updates.email = body.email?.trim() || null;
     if (body.title !== undefined) updates.title = body.title?.trim() || null;
     if (body.program_name !== undefined) updates.program_name = body.program_name?.trim() || null;
+    if (body.notes !== undefined) updates.notes = body.notes?.trim() || null;
+    if (body.is_favorite !== undefined) updates.is_favorite = body.is_favorite;
 
     const { data, error } = await supabase
       .from("producer_guests")

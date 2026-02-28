@@ -24,6 +24,8 @@ type ProducerGuest = {
   payment_currency?: string | null;
   recording_date?: string | null;
   recording_topic?: string | null;
+  notes?: string | null;
+  is_favorite?: boolean | null;
   created_at: string;
 };
 
@@ -105,6 +107,16 @@ export function InvitedGuestsClient({
   });
   const [invoiceNumberConflict, setInvoiceNumberConflict] = useState(false);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
+  const [guestSuggestions, setGuestSuggestions] = useState<{ guest_name: string; email: string | null; title: string | null; program_name: string | null }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [notesModal, setNotesModal] = useState<ProducerGuest | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [bulkImportModal, setBulkImportModal] = useState(false);
+  const [bulkImportFile, setBulkImportFile] = useState<File | null>(null);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [quickAddModal, setQuickAddModal] = useState(false);
+  const [quickAddPaste, setQuickAddPaste] = useState("");
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
   useEffect(() => {
@@ -142,6 +154,9 @@ export function InvitedGuestsClient({
       if (e.key === "Escape") {
         setInviteModal(null);
         setAcceptanceModal(null);
+        setNotesModal(null);
+        setBulkImportModal(false);
+        setQuickAddModal(false);
         setBulkInviteModal(false);
         setBulkAcceptModal(false);
         setExpandedGroupKeys(new Set());
@@ -165,11 +180,71 @@ export function InvitedGuestsClient({
     return () => clearTimeout(t);
   }, [acceptanceForm.invoice_number]);
 
+  // One-click re-invite: fetch last invitation when opening invite modal for existing guest
+  useEffect(() => {
+    if (!inviteModal || inviteModal === "new") return;
+    const guestId = inviteModal.id;
+    fetch(`/api/producer-guests/${guestId}/last-invitation`, { credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.record_date || data.program_name || data.program_specific_topic || data.record_time) {
+          setForm((p) => ({
+            ...p,
+            record_date: data.record_date || p.record_date,
+            record_time: data.record_time || p.record_time,
+            program_name: data.program_name || p.program_name,
+            program_specific_topic: data.program_specific_topic || p.program_specific_topic,
+            format: data.format === "studio" ? "studio" : data.format === "remote" ? "remote" : p.format,
+            studio_address: data.studio_address || p.studio_address,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, [inviteModal]);
+
+  // Duplicate detection when adding guest
+  useEffect(() => {
+    if (!inviteModal || inviteModal === "new") return;
+    const name = form.guest_name.trim();
+    if (name.length < 2) {
+      setDuplicateWarning(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/producer-guests/check-duplicate?name=${encodeURIComponent(name)}&email=${encodeURIComponent(form.email.trim())}`, { credentials: "same-origin" })
+        .then((r) => r.json())
+        .then((d) => setDuplicateWarning(d.exists === true))
+        .catch(() => setDuplicateWarning(false));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [inviteModal, form.guest_name, form.email]);
+
+  // Smart autocomplete: debounced search for guest suggestions
+  useEffect(() => {
+    const q = form.guest_name.trim();
+    if (q.length < 2) {
+      setGuestSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/producer-guests/search-guests?q=${encodeURIComponent(q)}&limit=8`, { credentials: "same-origin" })
+        .then((r) => r.json())
+        .then((data) => {
+          setGuestSuggestions(Array.isArray(data) ? data : []);
+          setShowSuggestions(true);
+        })
+        .catch(() => setGuestSuggestions([]));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [form.guest_name]);
+
   const router = useRouter();
   const selectedProducer = producers.find((p) => p.id === currentUserId) ?? { id: currentUserId, full_name: currentUserFullName };
 
   const filteredGuests = guests.filter((g) => {
     if (statusFilter === "all") return true;
+    if (statusFilter === "favorites") return g.is_favorite === true;
     if (statusFilter === "accepted") return g.accepted === true;
     if (statusFilter === "rejected") return g.accepted === false;
     if (statusFilter === "no_response") return g.accepted === null && g.invited_at;
@@ -184,7 +259,8 @@ export function InvitedGuestsClient({
           g.guest_name.toLowerCase().includes(searchLower) ||
           (g.email ?? "").toLowerCase().includes(searchLower) ||
           (g.program_name ?? "").toLowerCase().includes(searchLower) ||
-          (g.title ?? "").toLowerCase().includes(searchLower)
+          (g.title ?? "").toLowerCase().includes(searchLower) ||
+          (g.notes ?? "").toLowerCase().includes(searchLower)
       )
     : filteredGuests;
 
@@ -594,6 +670,7 @@ export function InvitedGuestsClient({
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           >
             <option value="all">All</option>
+            <option value="favorites">Favorites</option>
             <option value="accepted">Accepted</option>
             <option value="rejected">Rejected</option>
             <option value="no_response">No response</option>
@@ -633,6 +710,21 @@ export function InvitedGuestsClient({
             Bulk mark accepted
           </button>
         </div>
+        <button
+          onClick={() => {
+            setQuickAddModal(true);
+            setQuickAddPaste("");
+          }}
+          className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          Quick add from email
+        </button>
+        <button
+          onClick={() => setBulkImportModal(true)}
+          className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          Bulk import CSV
+        </button>
         <button
           onClick={() => {
             setInviteModal("new");
@@ -679,6 +771,7 @@ export function InvitedGuestsClient({
                   />
                 </th>
                 {isAdmin && <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Producer</th>}
+                <th className="px-4 py-2 w-8 text-center text-xs font-semibold uppercase text-gray-600 dark:text-gray-300" title="Favorite">★</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Guest</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Title</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Program</th>
@@ -689,19 +782,20 @@ export function InvitedGuestsClient({
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Accepted</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Payment</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Last appearance</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Notes</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
               {guests.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 13 : 12} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 15 : 14} className="px-4 py-8 text-center text-gray-500">
                     No invited guests yet. Click &quot;Invite Guest&quot; to add one.
                   </td>
                 </tr>
               ) : groupedList.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 13 : 12} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 15 : 14} className="px-4 py-8 text-center text-gray-500">
                     No guests match your search.
                   </td>
                 </tr>
@@ -758,10 +852,37 @@ export function InvitedGuestsClient({
                       {isAdmin && (
                         <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{first.producer_name}</td>
                       )}
+                      <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            fetch(`/api/producer-guests/${first.id}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ is_favorite: !first.is_favorite }),
+                              credentials: "same-origin",
+                            })
+                              .then((r) => r.json())
+                              .then(() => fetch("/api/producer-guests", { credentials: "same-origin" }).then((res) => res.json()))
+                              .then((list) => setGuests(Array.isArray(list) ? list : []))
+                              .catch(() => toast.error("Failed to update"));
+                          }}
+                          className={`text-lg ${first.is_favorite ? "text-amber-500" : "text-gray-300 hover:text-amber-400 dark:text-gray-500"}`}
+                          title={first.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          ★
+                        </button>
+                      </td>
                       <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
                         {first.guest_name}
                         {grp.appearanceCount > 1 && (
                           <span className="ml-1 text-gray-500">({grp.appearanceCount})</span>
+                        )}
+                        {grp.appearanceCount >= 5 && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" title="Regular contributor">Regular</span>
+                        )}
+                        {grp.appearanceCount >= 3 && grp.appearanceCount < 5 && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900/50 dark:text-sky-200" title="Frequent guest">Frequent</span>
                         )}
                       </td>
                       <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
@@ -842,6 +963,20 @@ export function InvitedGuestsClient({
                       <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
                         {grp.lastAppearanceDate ? new Date(grp.lastAppearanceDate).toLocaleDateString() : "—"}
                       </td>
+                      <td className="px-4 py-2 max-w-[120px]" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNotesModal(first);
+                            setNotesDraft(first.notes || "");
+                          }}
+                          className="text-left text-xs text-gray-600 hover:text-sky-600 dark:text-gray-400 dark:hover:text-sky-400 truncate block max-w-full"
+                          title={first.notes || "Add note"}
+                        >
+                          {first.notes ? (first.notes.length > 30 ? `${first.notes.slice(0, 30)}…` : first.notes) : "Add"}
+                        </button>
+                      </td>
                       <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                         <span className="text-gray-400 text-xs mr-1">{isExpanded ? "▼" : "▶"}</span>
                         <button
@@ -902,6 +1037,27 @@ export function InvitedGuestsClient({
                             )}
                           </td>
                           {isAdmin && <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.producer_name}</td>}
+                          <td className="px-4 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                fetch(`/api/producer-guests/${g.id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ is_favorite: !g.is_favorite }),
+                                  credentials: "same-origin",
+                                })
+                                  .then((r) => r.json())
+                                  .then(() => fetch("/api/producer-guests", { credentials: "same-origin" }).then((res) => res.json()))
+                                  .then((list) => setGuests(Array.isArray(list) ? list : []))
+                                  .catch(() => toast.error("Failed to update"));
+                              }}
+                              className={`text-sm ${g.is_favorite ? "text-amber-500" : "text-gray-300 hover:text-amber-400"}`}
+                            >
+                              ★
+                            </button>
+                          </td>
                           <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.guest_name}</td>
                           <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.title || "—"}</td>
                           <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.program_name || "—"}</td>
@@ -981,6 +1137,19 @@ export function InvitedGuestsClient({
                           </td>
                           <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                             {g.recording_date ? new Date(g.recording_date).toLocaleDateString() : "—"}
+                          </td>
+                          <td className="px-4 py-2 max-w-[120px]">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNotesModal(g);
+                                setNotesDraft(g.notes || "");
+                              }}
+                              className="text-left text-xs text-gray-600 hover:text-sky-600 truncate block max-w-full"
+                            >
+                              {g.notes ? (g.notes.length > 20 ? `${g.notes.slice(0, 20)}…` : g.notes) : "Add"}
+                            </button>
                           </td>
                           <td className="px-4 py-2 flex flex-wrap gap-1">
                             {g.accepted === true && g.email?.includes("@") && (
@@ -1073,15 +1242,44 @@ export function InvitedGuestsClient({
               </div>
             )}
             <div className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="mb-1 block text-sm font-medium">Guest name *</label>
                 <input
                   type="text"
                   value={form.guest_name}
                   onChange={(e) => setForm((p) => ({ ...p, guest_name: e.target.value }))}
+                  onFocus={() => form.guest_name.trim().length >= 2 && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                   className={inputCls}
-                  placeholder="e.g. John Smith"
+                  placeholder="e.g. John Smith (suggestions as you type)"
+                  autoComplete="off"
                 />
+                {showSuggestions && guestSuggestions.length > 0 && (
+                  <ul className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                    {guestSuggestions.map((s, i) => (
+                      <li key={i}>
+                        <button
+                          type="button"
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                          onClick={() => {
+                            setForm((p) => ({
+                              ...p,
+                              guest_name: s.guest_name,
+                              email: s.email || p.email,
+                              title: s.title || p.title,
+                              program_name: s.program_name || p.program_name,
+                            }));
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          {s.guest_name}
+                          {s.email ? ` · ${s.email}` : ""}
+                          {s.title ? ` · ${s.title}` : ""}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Email *</label>
@@ -1092,6 +1290,12 @@ export function InvitedGuestsClient({
                   className={inputCls}
                   placeholder="Enter email manually"
                 />
+                {form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Check email format (e.g. name@domain.com)</p>
+                )}
+                {duplicateWarning && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">This guest may already be in your list. You can still send to update their record.</p>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Title *</label>
@@ -1288,6 +1492,174 @@ ${selectedProducer.full_name}`}
                   {sending ? "Sending..." : "Send Invitation"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quickAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" onClick={() => setQuickAddModal(false)}>
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Quick add from email</h2>
+            <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              Paste an email or &quot;Name &lt;email@example.com&gt;&quot; from Outlook or your contacts
+            </p>
+            <textarea
+              value={quickAddPaste}
+              onChange={(e) => setQuickAddPaste(e.target.value)}
+              placeholder="e.g. john@example.com or John Smith <john@example.com>"
+              rows={3}
+              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setQuickAddModal(false)} className="rounded-lg border px-4 py-2 text-sm">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const raw = quickAddPaste.trim();
+                  if (!raw) return;
+                  let name = "";
+                  let email = "";
+                  const angleMatch = raw.match(/^(.+?)\s*<([^>]+)>$/);
+                  if (angleMatch) {
+                    name = angleMatch[1]!.trim();
+                    email = angleMatch[2]!.trim();
+                  } else {
+                    const parts = raw.split(/\s+/);
+                    const emailPart = parts.find((p) => p.includes("@"));
+                    if (emailPart) {
+                      email = emailPart;
+                      name = parts.filter((p) => p !== emailPart).join(" ").trim();
+                    } else if (raw.includes("@")) {
+                      email = raw;
+                    }
+                  }
+                  if (!email || !email.includes("@")) {
+                    toast.error("Could not find a valid email address");
+                    return;
+                  }
+                  if (!name) name = email.split("@")[0]!.replace(/[._]/g, " ");
+                  setInviteModal("new");
+                  setForm((p) => ({
+                    ...p,
+                    guest_name: name,
+                    email,
+                  }));
+                  setQuickAddModal(false);
+                  setQuickAddPaste("");
+                }}
+                className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500"
+              >
+                Add & invite
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" onClick={() => setBulkImportModal(false)}>
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Bulk import from CSV</h2>
+            <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              Upload a CSV with columns: <strong>guest_name</strong> (required), email, title, program_name
+            </p>
+            <input
+              type="file"
+              accept=".csv,.txt"
+              onChange={(e) => setBulkImportFile(e.target.files?.[0] ?? null)}
+              className="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-sky-50 file:px-4 file:py-2 file:text-sky-600 dark:file:bg-sky-950/30 dark:file:text-sky-400"
+            />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setBulkImportModal(false)} className="rounded-lg border px-4 py-2 text-sm">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!bulkImportFile || bulkImporting}
+                onClick={async () => {
+                  if (!bulkImportFile) return;
+                  setBulkImporting(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append("file", bulkImportFile);
+                    const res = await fetch("/api/producer-guests/bulk-import", {
+                      method: "POST",
+                      body: formData,
+                      credentials: "same-origin",
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      toast.success(`Imported ${data.imported} guest(s)`);
+                      if (data.errors?.length) toast.warning(data.errors.slice(0, 3).join("; "));
+                      setBulkImportModal(false);
+                      setBulkImportFile(null);
+                      const list = await fetch("/api/producer-guests", { credentials: "same-origin" }).then((r) => r.json());
+                      setGuests(Array.isArray(list) ? list : []);
+                    } else {
+                      toast.error(data.error ?? "Import failed");
+                    }
+                  } catch {
+                    toast.error("Import failed");
+                  } finally {
+                    setBulkImporting(false);
+                  }
+                }}
+                className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
+              >
+                {bulkImporting ? "Importing…" : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {notesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" onClick={() => setNotesModal(null)}>
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Guest notes</h2>
+            <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              Private notes for <strong>{notesModal.guest_name}</strong> (e.g. preferences, topics)
+            </p>
+            <textarea
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              rows={4}
+              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              placeholder="e.g. Prefers morning slots, strong on Middle East"
+            />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setNotesModal(null)} className="rounded-lg border px-4 py-2 text-sm">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/producer-guests/${notesModal.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ notes: notesDraft.trim() || null }),
+                      credentials: "same-origin",
+                    });
+                    if (res.ok) {
+                      toast.success("Notes saved");
+                      setNotesModal(null);
+                      const list = await fetch("/api/producer-guests", { credentials: "same-origin" }).then((r) => r.json());
+                      setGuests(Array.isArray(list) ? list : []);
+                    } else {
+                      toast.error("Failed to save");
+                    }
+                  } catch {
+                    toast.error("Failed to save");
+                  }
+                }}
+                className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500"
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>

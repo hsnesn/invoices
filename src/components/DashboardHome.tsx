@@ -21,6 +21,13 @@ type SubmitterStats = {
   totalPending: number;
 };
 
+type ProducerStats = {
+  guests_this_month: number;
+  response_rate: number | null;
+  most_frequent_guests: { guest_name: string; count: number }[];
+  total_invited: number;
+};
+
 interface PageCard {
   title: string;
   description: string;
@@ -208,6 +215,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     statsFetcher,
     { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
+  const { data: producerStats, mutate: mutateProducer } = useSWR<ProducerStats>(
+    canSeeStats ? "/api/dashboard/producer-stats" : null,
+    statsFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 2000 }
+  );
 
   const visiblePages = PAGES.filter((p) => {
     if (p.viewerHidden && isViewer) return false;
@@ -266,6 +278,55 @@ export function DashboardHome({ profile }: { profile: Profile }) {
               </p>
               <Link href="/invoices?group=pending" className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
                 View →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Producer: Your guests this month, response rate, most frequent */}
+      {canSeeStats && producerStats && (
+        <div className="mb-8 min-w-0">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Your Guests</h2>
+            <button
+              type="button"
+              onClick={() => void mutateProducer(undefined, { revalidate: true })}
+              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+            >
+              Refresh
+            </button>
+          </div>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
+            <div className="rounded-xl border border-violet-200/80 bg-violet-50/80 p-4 shadow-sm dark:border-violet-800/60 dark:bg-violet-950/30">
+              <p className="text-xs font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">Guests this month</p>
+              <p className="mt-1 text-2xl font-bold text-violet-800 dark:text-violet-200">{producerStats.guests_this_month}</p>
+              <Link href="/invoices/invited-guests" className="mt-2 inline-block text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                Invited Guests →
+              </Link>
+            </div>
+            <div className="rounded-xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
+              <p className="text-xs font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Response rate</p>
+              <p className="mt-1 text-2xl font-bold text-sky-800 dark:text-sky-200">
+                {producerStats.response_rate != null ? `${producerStats.response_rate}%` : "—"}
+              </p>
+              <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">
+                {producerStats.total_invited} invited total
+              </p>
+            </div>
+            <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
+              <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Most frequent guests</p>
+              <ul className="mt-1 space-y-0.5 text-sm text-amber-800 dark:text-amber-200">
+                {producerStats.most_frequent_guests.length === 0 ? (
+                  <li className="text-amber-600 dark:text-amber-400">None yet</li>
+                ) : (
+                  producerStats.most_frequent_guests.map((g, i) => (
+                    <li key={i}>{g.guest_name} <span className="text-amber-600 dark:text-amber-400">({g.count})</span></li>
+                  ))
+                )}
+              </ul>
+              <Link href="/invoices/invited-guests" className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
+                View all →
               </Link>
             </div>
           </div>
