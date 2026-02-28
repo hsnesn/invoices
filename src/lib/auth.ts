@@ -113,6 +113,10 @@ export async function requirePageAccess(pageKey: PageKey) {
     if (!profile.allowed_pages || profile.allowed_pages.length === 0) return { session, profile };
     redirect("/dashboard");
   }
+  if (pageKey === "request") {
+    if (["admin", "operations", "manager"].includes(profile.role)) return { session, profile };
+    redirect("/dashboard");
+  }
   const pages = profile.allowed_pages;
   if (!pages || pages.length === 0) return { session, profile };
   if (pages.includes(pageKey)) return { session, profile };
