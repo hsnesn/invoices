@@ -373,6 +373,12 @@ export async function PATCH(
 }
 
 const PENDING_STATUSES_FOR_SUBMITTER_DELETE = ["submitted", "pending_manager", "rejected"];
+const DEFAULT_ROLES_CAN_DELETE = ["admin", "finance", "operations", "submitter"];
+
+function getRolesCanDelete(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  return val.filter((x) => typeof x === "string" && x.length > 0);
+}
 
 export async function DELETE(
   _request: Request,
@@ -382,6 +388,15 @@ export async function DELETE(
     const { session, profile } = await requireAuth();
     const { id: invoiceId } = await params;
     const supabase = createAdminClient();
+
+    const { data: settingsRow } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "roles_can_delete_invoices")
+      .single();
+    const rolesCanDelete = getRolesCanDelete((settingsRow as { value?: unknown } | null)?.value);
+    const allowedRoles = rolesCanDelete.length > 0 ? rolesCanDelete : DEFAULT_ROLES_CAN_DELETE;
+    const roleAllowed = allowedRoles.includes(profile.role);
 
     const { data: invoice } = await supabase
       .from("invoices")
@@ -408,11 +423,16 @@ export async function DELETE(
     const isGuestOrSalary =
       (invoice as { invoice_type?: string }).invoice_type === "guest" ||
       (invoice as { invoice_type?: string }).invoice_type === "salary";
-    const canDelete =
+
+    const canDeleteBySubtype =
       isAdmin ||
+      (profile.role === "manager" && roleAllowed) ||
+      (profile.role === "viewer" && roleAllowed) ||
       (isOtherInvoice && (isFinance || isOperations)) ||
       (isGuestOrSalary && (isFinance || isOperations)) ||
       (isSubmitter && PENDING_STATUSES_FOR_SUBMITTER_DELETE.includes(status));
+
+    const canDelete = roleAllowed && canDeleteBySubtype;
 
     if (!canDelete) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

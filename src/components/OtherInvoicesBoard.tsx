@@ -127,12 +127,14 @@ export function OtherInvoicesBoard({
   currentUserId,
   canUpload,
   initialExpandedId,
+  rolesCanDelete = ["admin", "finance", "operations", "submitter"],
 }: {
   invoices: ApiRow[];
   currentRole: string;
   currentUserId?: string;
   canUpload: boolean;
   initialExpandedId?: string;
+  rolesCanDelete?: string[];
 }) {
   const router = useRouter();
 
@@ -602,7 +604,7 @@ export function OtherInvoicesBoard({
   const selectedReady = Array.from(selectedIds).filter((id) => readyIds.includes(id));
 
   const canMarkPaid = currentRole === "admin" || currentRole === "finance" || currentRole === "operations";
-  const canDelete = currentRole === "admin" || currentRole === "finance" || currentRole === "operations";
+  const canDelete = rolesCanDelete.includes(currentRole);
 
   return (
     <div className="space-y-4 text-slate-800 dark:text-slate-100 max-w-full min-w-0 overflow-x-hidden">

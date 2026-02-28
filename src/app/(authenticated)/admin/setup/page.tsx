@@ -12,6 +12,7 @@ import { SalariesSetupSection } from "@/components/SalariesSetupSection";
 import { GuestContactsSetupSection } from "@/components/GuestContactsSetupSection";
 import { LogosSetupSection } from "@/components/LogosSetupSection";
 import { ContractorAvailabilityRolesSection } from "@/components/ContractorAvailabilityRolesSection";
+import { DeletePermissionsSection } from "@/components/DeletePermissionsSection";
 
 interface Department {
   id: string;
@@ -29,6 +30,7 @@ const TABS = [
   { key: "freelancer", label: "Contractor Invoices", color: "bg-teal-500" },
   { key: "guest_contacts", label: "Guest Contacts", color: "bg-violet-500" },
   { key: "contractor_availability", label: "My Availability", color: "bg-sky-500" },
+  { key: "permissions", label: "Delete Permissions", color: "bg-red-500" },
   { key: "logos", label: "Logos", color: "bg-rose-500" },
   { key: "email", label: "Email", color: "bg-amber-500" },
   { key: "salaries", label: "Salaries", color: "bg-indigo-500" },
@@ -66,6 +68,7 @@ export default function AdminSetupPage() {
       {activeTab === "freelancer" && <FreelancerSetup />}
       {activeTab === "guest_contacts" && <GuestContactsSetupSection />}
       {activeTab === "contractor_availability" && <ContractorAvailabilityRolesSection />}
+      {activeTab === "permissions" && <DeletePermissionsSection />}
       {activeTab === "logos" && <LogosSetupSection />}
       {activeTab === "email" && <EmailSetupSection />}
       {activeTab === "salaries" && <SalariesSetupSection />}

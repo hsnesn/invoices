@@ -59,9 +59,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Sort by count DESC (most requested first)
-    const sortedUserIds = Array.from(countByUser.entries())
+    let sortedUserIds = Array.from(countByUser.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([uid]) => uid);
+
+    // Fallback: when no one has been assigned yet, use people from availability
+    if (sortedUserIds.length === 0) {
+      let availQuery = supabase
+        .from("output_schedule_availability")
+        .select("user_id")
+        .eq("department_id", departmentId);
+      if (progId) availQuery = availQuery.eq("program_id", progId);
+      else availQuery = availQuery.is("program_id", null);
+      const { data: availRows } = await availQuery;
+      const roleTrim = role.trim();
+      const fromAvail = new Set(
+        (availRows ?? [])
+          .filter((r: { role?: string | null }) => {
+            const rRole = (r as { role?: string | null }).role?.trim() ?? "";
+            return rRole === roleTrim || rRole === "";
+          })
+          .map((r: { user_id: string }) => r.user_id)
+      );
+      sortedUserIds = Array.from(fromAvail);
+    }
 
     if (sortedUserIds.length === 0) {
       return NextResponse.json({ users: [] });

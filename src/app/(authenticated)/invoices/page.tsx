@@ -89,13 +89,17 @@ export default async function InvoicesPage({
     )
   );
 
-  const [{ data: departments }, { data: programs }, { data: profiles }, { data: producerColors }, { data: orMembers }] = await Promise.all([
+  const [{ data: departments }, { data: programs }, { data: profiles }, { data: producerColors }, { data: orMembers }, { data: deletePerm }] = await Promise.all([
     supabase.from("departments").select("id,name"),
     supabase.from("programs").select("id,name"),
     supabase.from("profiles").select("id,full_name,role"),
     supabase.from("producer_colors").select("producer_name,color_hex"),
     supabase.from("operations_room_members").select("user_id").eq("user_id", session.user.id).maybeSingle(),
+    supabase.from("app_settings").select("value").eq("key", "roles_can_delete_invoices").single(),
   ]);
+
+  const rolesVal = (deletePerm as { value?: unknown } | null)?.value;
+  const rolesCanDelete = Array.isArray(rolesVal) ? rolesVal.filter((x): x is string => typeof x === "string") : ["admin", "finance", "operations", "submitter"];
 
   const allProfiles = (profiles ?? []) as { id: string; full_name: string | null; role?: string }[];
   const profilePairs = allProfiles.map((p) => [p.id, p.full_name || p.id] as [string, string]);
@@ -123,6 +127,7 @@ export default async function InvoicesPage({
       isOperationsRoomMember={isOperationsRoomMember}
       initialExpandedId={expandId ?? undefined}
       initialGroupFilter={initialGroupFilter}
+      rolesCanDelete={rolesCanDelete}
     />
   );
 }

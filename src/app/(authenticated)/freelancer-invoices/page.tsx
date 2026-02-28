@@ -73,11 +73,15 @@ export default async function FreelancerInvoicesPage({
     .order("created_at", { ascending: false })
     .limit(500);
 
-  const [{ data: departments }, { data: profiles }, { data: orMembers }] = await Promise.all([
+  const [{ data: departments }, { data: profiles }, { data: orMembers }, { data: deletePerm }] = await Promise.all([
     supabase.from("departments").select("id,name"),
     supabase.from("profiles").select("id,full_name,role"),
     supabase.from("operations_room_members").select("user_id").eq("user_id", session.user.id).maybeSingle(),
+    supabase.from("app_settings").select("value").eq("key", "roles_can_delete_invoices").single(),
   ]);
+
+  const rolesVal = (deletePerm as { value?: unknown } | null)?.value;
+  const rolesCanDelete: string[] = Array.isArray(rolesVal) ? rolesVal.filter((x): x is string => typeof x === "string") : ["admin", "finance", "operations", "submitter"];
 
   const isOperationsRoomMember = !!orMembers || profile.role === "operations";
 
@@ -109,6 +113,7 @@ export default async function FreelancerInvoicesPage({
       isOperationsRoomMember={isOperationsRoomMember}
       initialExpandedId={expandId ?? undefined}
       initialGroupFilter={initialGroupFilter}
+      rolesCanDelete={rolesCanDelete}
     />
   );
 }

@@ -99,6 +99,7 @@ export function InvoiceMobileCards({
   departmentPairs = [],
   programPairs = [],
   profilePairs = [],
+  rolesCanDelete = ["admin", "finance", "operations", "submitter"],
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -132,6 +133,7 @@ export function InvoiceMobileCards({
   departmentPairs?: [string, string][];
   programPairs?: [string, string][];
   profilePairs?: [string, string][];
+  rolesCanDelete?: string[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -168,8 +170,10 @@ export function InvoiceMobileCards({
           const canMarkPaid = (currentRole === "admin" || currentRole === "finance") && r.status === "ready_for_payment";
           const canResubmit = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
           const canEdit = (currentRole === "admin" || currentRole === "manager" || (isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status))) && onStartEdit;
-          const canDeletePending = isSubmitter && (r.status === "submitted" || r.status === "pending_manager" || r.status === "rejected") && onDeleteInvoice;
-          const canDeleteFinanceOps = (currentRole === "finance" || currentRole === "operations") && onDeleteInvoice;
+          const canDeletePending = isSubmitter && (r.status === "submitted" || r.status === "pending_manager" || r.status === "rejected") && rolesCanDelete.includes("submitter") && onDeleteInvoice;
+          const canDeleteFinanceOps = (currentRole === "finance" || currentRole === "operations") && rolesCanDelete.includes(currentRole) && onDeleteInvoice;
+          const canDeleteManagerViewer = (currentRole === "manager" || currentRole === "viewer") && rolesCanDelete.includes(currentRole) && onDeleteInvoice;
+          const canDeleteAdmin = currentRole === "admin" && rolesCanDelete.includes("admin") && onDeleteInvoice;
           const canAddFile = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status) && onAddFile;
           const canReject = ((r.status === "pending_manager" || r.status === "submitted") && canApprove) || (r.status === "ready_for_payment" && currentRole === "admin") || ((r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin");
           const canSelectRow = canBulkSelect && onToggleSelect && (currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") && (currentRole !== "submitter" || (r.submitterId === currentUserId && ["submitted", "pending_manager", "rejected"].includes(r.status)));
@@ -350,7 +354,7 @@ export function InvoiceMobileCards({
                     Edit
                   </button>
                 )}
-                {(canDeletePending || canDeleteFinanceOps) && (
+                {(canDeletePending || canDeleteFinanceOps || canDeleteManagerViewer || canDeleteAdmin) && (
                   <button
                     onClick={() => void onDeleteInvoice?.(r.id)}
                     disabled={actionLoadingId === r.id}

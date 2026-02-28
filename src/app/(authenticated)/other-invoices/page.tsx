@@ -71,6 +71,10 @@ export default async function OtherInvoicesPage({
 
   const canUpload = profile.role === "admin" || profile.role === "finance" || profile.role === "operations";
 
+  const { data: deletePerm } = await supabase.from("app_settings").select("value").eq("key", "roles_can_delete_invoices").single();
+  const rolesVal = (deletePerm as { value?: unknown } | null)?.value;
+  const rolesCanDelete = Array.isArray(rolesVal) ? rolesVal.filter((x): x is string => typeof x === "string") : ["admin", "finance", "operations", "submitter"];
+
   return (
     <OtherInvoicesBoard
       invoices={enriched as never[]}
@@ -78,6 +82,7 @@ export default async function OtherInvoicesPage({
       currentUserId={session.user.id}
       canUpload={canUpload}
       initialExpandedId={expandId ?? undefined}
+      rolesCanDelete={rolesCanDelete}
     />
   );
 }

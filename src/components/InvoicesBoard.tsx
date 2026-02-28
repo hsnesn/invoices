@@ -568,6 +568,7 @@ function InvoiceTable({
   onSaveTag,
   onRemoveTag,
   rejectInlineShakeId = null,
+  rolesCanDelete = ["admin", "finance", "operations", "submitter"],
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -613,6 +614,7 @@ function InvoiceTable({
   onSaveTag?: (invoiceId: string, newTag: string, currentTags: string[]) => Promise<void>;
   onRemoveTag?: (invoiceId: string, tag: string, currentTags: string[]) => Promise<void>;
   rejectInlineShakeId?: string | null;
+  rolesCanDelete?: string[];
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -969,7 +971,7 @@ function InvoiceTable({
                             </button>
                           </>
                         )}
-                        {currentRole === "admin" && (
+                        {currentRole === "admin" && rolesCanDelete.includes("admin") && (
                           <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
                             {actionLoadingId === r.id ? "Deleting..." : "Delete"}
                           </button>
@@ -978,7 +980,7 @@ function InvoiceTable({
                     );
                   }
 
-                  if (submitterCanEdit) {
+                  if (submitterCanEdit && rolesCanDelete.includes("submitter")) {
                     return (
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
@@ -989,7 +991,7 @@ function InvoiceTable({
                     );
                   }
 
-                  if (submitterCanResubmit) {
+                  if (submitterCanResubmit && rolesCanDelete.includes("submitter")) {
                     return (
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => onStartEdit(r)} className="rounded-lg bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 shadow-sm dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50">Edit</button>
@@ -1006,7 +1008,17 @@ function InvoiceTable({
                     );
                   }
 
-                  if (currentRole === "operations" || currentRole === "finance") {
+                  if ((currentRole === "operations" || currentRole === "finance") && rolesCanDelete.includes(currentRole)) {
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
+                          {actionLoadingId === r.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  if ((currentRole === "manager" || currentRole === "viewer") && rolesCanDelete.includes(currentRole)) {
                     return (
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => void onDeleteInvoice(r.id)} disabled={actionLoadingId === r.id} className="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 shadow-sm">
@@ -1219,6 +1231,7 @@ export function InvoicesBoard({
   isOperationsRoomMember = false,
   initialExpandedId,
   initialGroupFilter,
+  rolesCanDelete = ["admin", "finance", "operations", "submitter"],
 }: {
   invoices: InvoiceRow[];
   departmentPairs: [string, string][];
@@ -1231,6 +1244,7 @@ export function InvoicesBoard({
   isOperationsRoomMember?: boolean;
   initialExpandedId?: string;
   initialGroupFilter?: "" | DisplayRow["group"] | "pending";
+  rolesCanDelete?: string[];
 }) {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<InvoiceRow[] | null>(null);
@@ -2701,7 +2715,7 @@ export function InvoicesBoard({
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
             Guest selected
           </span>
-          {(currentRole !== "viewer") && (
+          {rolesCanDelete.includes(currentRole) && (
           <button onClick={() => void bulkDelete()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             Delete
@@ -3245,6 +3259,7 @@ export function InvoicesBoard({
                 departmentPairs={departmentPairs}
                 programPairs={programPairs}
                 profilePairs={profilePairs}
+                rolesCanDelete={rolesCanDelete}
               />
             </div>
             <div className="hidden md:block">
@@ -3293,6 +3308,7 @@ export function InvoicesBoard({
               onSaveTag={saveTag}
               onRemoveTag={removeTag}
               rejectInlineShakeId={rejectInlineShakeId}
+              rolesCanDelete={rolesCanDelete}
             />
             </div>
           </section>

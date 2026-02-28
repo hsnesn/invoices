@@ -152,6 +152,7 @@ export function FreelancerBoard({
   invoices, departmentPairs, profilePairs, managerProfilePairs, currentRole, currentUserId, isOperationsRoomMember = false,
   initialExpandedId,
   initialGroupFilter,
+  rolesCanDelete = ["admin", "finance", "operations", "submitter"],
 }: {
   invoices: FreelancerInvoiceRow[];
   departmentPairs: [string, string][];
@@ -162,6 +163,7 @@ export function FreelancerBoard({
   isOperationsRoomMember?: boolean;
   initialExpandedId?: string;
   initialGroupFilter?: "" | GroupKey | "pending";
+  rolesCanDelete?: string[];
 }) {
   const router = useRouter();
   const deptMap = useMemo(() => Object.fromEntries(departmentPairs), [departmentPairs]);
@@ -1005,7 +1007,7 @@ export function FreelancerBoard({
         );
       }
       case "actions": {
-        const canSubmitterEditDelete = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status);
+        const canSubmitterEditDelete = isSubmitter && ["submitted", "pending_manager", "rejected"].includes(r.status) && rolesCanDelete.includes("submitter");
         const canRS = r.status === "rejected" && (isSubmitter || currentRole === "admin") && currentRole !== "viewer";
         const canSendEmails = currentRole === "admin" && ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(r.status);
         return (
@@ -1133,14 +1135,14 @@ export function FreelancerBoard({
           aria-hidden
         />
       )}
-      {/* Bulk action bar - Admin: full actions; Submitter: Delete only; Others: Download only */}
+      {/* Bulk action bar - Admin: full actions; Submitter: Delete when in rolesCanDelete; Others: Download only */}
       {selectedIds.size > 0 && (currentRole === "admin" || currentRole === "submitter" || currentRole === "manager" || currentRole === "operations" || currentRole === "finance" || currentRole === "viewer") && (
         <div className="fixed bottom-6 left-1/2 z-[9999] -translate-x-1/2 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-blue-500 bg-blue-50 px-4 py-3 shadow-2xl dark:border-blue-400 dark:bg-blue-950/50" onClick={(e) => e.stopPropagation()}>
           <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">{selectedIds.size}</span>
             Contractor selected
           </span>
-          {(currentRole === "admin" || currentRole === "submitter") && (
+          {rolesCanDelete.includes(currentRole) && (
           <button onClick={() => void bulkDelete()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             Delete
