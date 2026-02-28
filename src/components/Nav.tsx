@@ -14,6 +14,14 @@ import { AssignmentsNavBadge } from "@/components/AssignmentsNavBadge";
 
 const CAN_SUBMIT_ROLES = ["submitter", "admin", "operations", "manager"];
 
+function canAccessGuestSubmit(profile: Profile): boolean {
+  if (profile.role === "admin") return true;
+  if (!CAN_SUBMIT_ROLES.includes(profile.role ?? "")) return false;
+  const pages = profile.allowed_pages;
+  if (!pages || pages.length === 0) return true;
+  return pages.includes("submit_invoice");
+}
+
 function canAccessFreelancerInvoices(profile: Profile): boolean {
   if (profile.role === "admin") return true;
   if (profile.role === "viewer") return true;
@@ -36,7 +44,7 @@ export function Nav({ profile }: { profile: Profile }) {
     router.refresh();
   };
 
-  const canSubmitGuest = CAN_SUBMIT_ROLES.includes(profile.role ?? "");
+  const canSubmitGuest = canAccessGuestSubmit(profile);
   const canSubmitFreelancer = canAccessFreelancerInvoices(profile);
 
   return (

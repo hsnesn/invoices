@@ -315,13 +315,15 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
       {/* Your Pending Actions — admin / manager / operations */}
       {canSeeStats && (() => {
-        const actions: { count: number; label: string; href: string }[] = [];
+        const actions: { count: number; label: string; href: string; accent?: "rose" }[] = [];
         if (stats?.guest.pending && stats.guest.pending > 0)
           actions.push({ count: stats.guest.pending, label: "guest invoices pending", href: "/invoices?group=pending" });
         if (stats?.freelancer.pending && stats.freelancer.pending > 0)
           actions.push({ count: stats.freelancer.pending, label: "contractor invoices pending", href: "/freelancer-invoices" });
         if (contractorStats?.pendingCount && contractorStats.pendingCount > 0)
           actions.push({ count: contractorStats.pendingCount, label: "assignments to review", href: "/contractor-availability" });
+        if (contractorStats?.slotsShort && contractorStats.slotsShort > 0)
+          actions.push({ count: contractorStats.slotsShort, label: "slots short this week", href: "/request", accent: "rose" });
         if (actions.length === 0) return null;
         return (
           <div className="mb-4 min-w-0">
@@ -331,11 +333,11 @@ export function DashboardHome({ profile }: { profile: Profile }) {
                 <Link
                   key={a.href}
                   href={a.href}
-                  className="flex min-w-[140px] shrink-0 items-center gap-2 rounded-lg border-l-3 border-amber-400 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 transition-colors hover:bg-amber-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-amber-950/30"
+                  className={`flex min-w-[140px] shrink-0 items-center gap-2 rounded-lg border-l-3 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 transition-colors dark:bg-gray-900/60 dark:ring-gray-700/60 ${a.accent === "rose" ? "border-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"}`}
                 >
-                  <span className="text-lg font-bold text-amber-700 dark:text-amber-300">{a.count}</span>
+                  <span className={`text-lg font-bold ${a.accent === "rose" ? "text-rose-700 dark:text-rose-300" : "text-amber-700 dark:text-amber-300"}`}>{a.count}</span>
                   <span className="text-[11px] leading-tight text-gray-600 dark:text-gray-400">{a.label}</span>
-                  <span className="ml-auto whitespace-nowrap text-[11px] font-medium text-amber-600 dark:text-amber-400">→</span>
+                  <span className={`ml-auto whitespace-nowrap text-[11px] font-medium ${a.accent === "rose" ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>→</span>
                 </Link>
               ))}
             </div>
@@ -411,34 +413,6 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       )}
 
-      {/* Contractor Availability Widget - admin/operations/manager */}
-      {canManageAvailability && contractorStats && (contractorStats.pendingCount > 0 || contractorStats.slotsShort > 0) && (
-        <div className="mb-4 min-w-0">
-          <h2 className="mb-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">Availability (this week)</h2>
-          <div className="flex gap-2 overflow-x-auto min-w-0">
-            {contractorStats.pendingCount > 0 && (
-              <Link
-                href="/contractor-availability?tab=assignments"
-                className="flex min-w-[160px] shrink-0 items-center gap-2 rounded-lg border-l-3 border-amber-400 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 hover:bg-amber-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-amber-950/30 transition-colors"
-              >
-                <span className="text-lg font-bold text-amber-700 dark:text-amber-300">{contractorStats.pendingCount}</span>
-                <span className="text-[11px] leading-tight text-gray-600 dark:text-gray-400">assignments pending</span>
-                <span className="ml-auto text-[11px] font-medium text-amber-600 dark:text-amber-400">→</span>
-              </Link>
-            )}
-            {contractorStats.slotsShort > 0 && (
-              <Link
-                href="/request"
-                className="flex min-w-[160px] shrink-0 items-center gap-2 rounded-lg border-l-3 border-rose-400 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 hover:bg-rose-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-rose-950/30 transition-colors"
-              >
-                <span className="text-lg font-bold text-rose-700 dark:text-rose-300">{contractorStats.slotsShort}</span>
-                <span className="text-[11px] leading-tight text-gray-600 dark:text-gray-400">slots short</span>
-                <span className="ml-auto text-[11px] font-medium text-rose-600 dark:text-rose-400">→</span>
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Metric Cards - hidden from submitters */}
       {canSeeStats && (
