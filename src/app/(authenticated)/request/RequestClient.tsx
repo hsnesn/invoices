@@ -154,8 +154,8 @@ export function RequestClient() {
   const days = getDaysInMonth(y, m);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-2 items-center">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      <div className="flex flex-wrap gap-2 items-center min-w-0">
         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Month</label>
         <select
           value={month}
@@ -205,18 +205,18 @@ export function RequestClient() {
         </div>
       )}
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-6 dark:border-amber-800 dark:bg-amber-950/20">
-        <h2 className="mb-2 font-medium text-amber-900 dark:text-amber-100">Demand</h2>
-        <p className="mb-4 text-sm text-amber-800/80 dark:text-amber-200/80">
+      <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 sm:p-6 dark:border-amber-800 dark:bg-amber-950/20 min-w-0 overflow-hidden">
+        <h2 className="mb-2 font-medium text-amber-900 dark:text-amber-100 text-sm sm:text-base">Demand</h2>
+        <p className="mb-4 text-xs sm:text-sm text-amber-800/80 dark:text-amber-200/80">
           Enter how many people per role are needed each day.
         </p>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-amber-200 dark:border-amber-800">
-                <th className="text-left py-2 px-3 font-medium text-amber-900 dark:text-amber-100">Date</th>
-                {roles.map((r) => (
-                  <th key={r.id} className="text-left py-2 px-3 font-medium text-amber-900 dark:text-amber-100">
+        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+          <table className="min-w-full text-xs sm:text-sm">
+              <thead>
+                <tr className="border-b border-amber-200 dark:border-amber-800">
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-amber-900 dark:text-amber-100">Date</th>
+                  {roles.map((r) => (
+                    <th key={r.id} className="text-left py-2 px-1 sm:px-3 font-medium text-amber-900 dark:text-amber-100">
                     {r.value}
                   </th>
                 ))}
@@ -227,7 +227,7 @@ export function RequestClient() {
                 const dateStr = toYMD(d);
                 return (
                   <tr key={dateStr} className="border-b border-amber-100 dark:border-amber-900/50">
-                    <td className="py-2 px-3 text-amber-800 dark:text-amber-200">
+                    <td className="py-2 px-2 sm:px-3 text-amber-800 dark:text-amber-200 text-xs sm:text-sm">
                       {d.getDate()} {new Date(d).toLocaleDateString("en-GB", { weekday: "short" })}
                     </td>
                     {roles.map((r) => {
@@ -235,9 +235,9 @@ export function RequestClient() {
                       const displayVal = isEditing
                         ? editingReq!.val
                         : String(reqByDate[dateStr]?.[r.value] ?? "");
-                      return (
-                        <td key={r.id} className="py-1 px-2">
-                          <input
+                    return (
+                      <td key={r.id} className="py-1 px-1 sm:px-2">
+                        <input
                             type="number"
                             min={0}
                             max={99}
@@ -258,7 +258,7 @@ export function RequestClient() {
                               setEditingReq(null);
                             }}
                             placeholder="0"
-                            className="w-14 rounded border border-amber-300 px-2 py-1 text-center text-sm dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100"
+                            className="w-10 sm:w-14 rounded border border-amber-300 px-1 sm:px-2 py-1 text-center text-xs sm:text-sm dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100"
                             disabled={reqSaving}
                           />
                         </td>
@@ -272,29 +272,29 @@ export function RequestClient() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-sky-200 bg-sky-50/30 p-6 dark:border-sky-800 dark:bg-sky-950/20">
-        <h2 className="mb-2 font-medium text-sky-900 dark:text-sky-100">Supply</h2>
-        <p className="mb-4 text-sm text-sky-800/80 dark:text-sky-200/80">
+      <div className="rounded-xl border border-sky-200 bg-sky-50/30 p-4 sm:p-6 dark:border-sky-800 dark:bg-sky-950/20 min-w-0 overflow-hidden">
+        <h2 className="mb-2 font-medium text-sky-900 dark:text-sky-100 text-sm sm:text-base">Supply</h2>
+        <p className="mb-4 text-xs sm:text-sm text-sky-800/80 dark:text-sky-200/80">
           Freelancers who submitted availability for {monthLabel}.
         </p>
         {byUser.length === 0 ? (
-          <p className="text-sm text-sky-700 dark:text-sky-300">No availability submitted for this month.</p>
+          <p className="text-xs sm:text-sm text-sky-700 dark:text-sky-300">No availability submitted for this month.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table className="min-w-full text-xs sm:text-sm">
               <thead>
                 <tr className="border-b border-sky-200 dark:border-sky-800">
-                  <th className="text-left py-2 px-3 font-medium text-sky-900 dark:text-sky-100">Name</th>
-                  <th className="text-left py-2 px-3 font-medium text-sky-900 dark:text-sky-100">Role</th>
-                  <th className="text-left py-2 px-3 font-medium text-sky-900 dark:text-sky-100">Available days</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-sky-900 dark:text-sky-100">Name</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-sky-900 dark:text-sky-100">Role</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-sky-900 dark:text-sky-100">Days</th>
                 </tr>
               </thead>
               <tbody>
                 {byUser.map((u) => (
                   <tr key={u.userId} className="border-b border-sky-100 dark:border-sky-900/50">
-                    <td className="py-2 px-3 text-sky-900 dark:text-sky-100">{u.name}</td>
-                    <td className="py-2 px-3 text-sky-700 dark:text-sky-200">{u.role || "—"}</td>
-                    <td className="py-2 px-3 text-sky-600 dark:text-sky-300">
+                    <td className="py-2 px-2 sm:px-3 text-sky-900 dark:text-sky-100 max-w-[80px] sm:max-w-[120px] truncate" title={u.name}>{u.name}</td>
+                    <td className="py-2 px-2 sm:px-3 text-sky-700 dark:text-sky-200">{u.role || "—"}</td>
+                    <td className="py-2 px-2 sm:px-3 text-sky-600 dark:text-sky-300 text-xs">
                       {u.dates.map((day) => day.slice(8)).join(", ")}
                     </td>
                   </tr>
@@ -306,20 +306,20 @@ export function RequestClient() {
       </div>
 
       {requirements.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/80">
-          <h2 className="mb-2 font-medium text-gray-900 dark:text-white">Demand vs Supply</h2>
-          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-700 dark:bg-gray-900/80 min-w-0 overflow-hidden">
+          <h2 className="mb-2 font-medium text-gray-900 dark:text-white text-sm sm:text-base">Demand vs Supply</h2>
+          <p className="mb-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             Compare required headcount with available freelancers per day and role.
           </p>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table className="min-w-full text-xs sm:text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Date</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Role</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Demand</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Supply</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Match</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Date</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Role</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Demand</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Supply</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Match</th>
                 </tr>
               </thead>
               <tbody>
@@ -328,13 +328,13 @@ export function RequestClient() {
                   const ok = supply >= r.count_needed;
                   return (
                     <tr key={`${r.date}-${r.role}`} className="border-b border-gray-100 dark:border-gray-800">
-                      <td className="py-2 px-3 text-gray-700 dark:text-gray-300">
+                      <td className="py-2 px-2 sm:px-3 text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                         {new Date(r.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })}
                       </td>
-                      <td className="py-2 px-3 text-gray-700 dark:text-gray-300">{r.role}</td>
-                      <td className="py-2 px-3 text-amber-600 dark:text-amber-400">{r.count_needed}</td>
-                      <td className="py-2 px-3 text-sky-600 dark:text-sky-400">{supply}</td>
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-2 sm:px-3 text-gray-700 dark:text-gray-300">{r.role}</td>
+                      <td className="py-2 px-2 sm:px-3 text-amber-600 dark:text-amber-400">{r.count_needed}</td>
+                      <td className="py-2 px-2 sm:px-3 text-sky-600 dark:text-sky-400">{supply}</td>
+                      <td className="py-2 px-2 sm:px-3">
                         <span
                           className={`rounded px-2 py-0.5 text-xs font-medium ${
                             ok
@@ -354,20 +354,20 @@ export function RequestClient() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-4 items-center">
+      <div className="flex flex-wrap gap-2 sm:gap-4 items-center min-w-0">
         {canRunAiSuggest && (
         <button
           type="button"
           onClick={handleAiSuggest}
           disabled={aiLoading || requirements.length === 0}
-          className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+          className="rounded-lg bg-violet-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
         >
           {aiLoading ? "Running AI..." : "AI Suggest Assignments"}
         </button>
         )}
         <Link
           href="/contractor-availability"
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          className="rounded-lg border border-gray-300 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
         >
           {canRunAiSuggest ? "Review & Approve in Contractor Availability →" : "View in Contractor Availability →"}
         </Link>

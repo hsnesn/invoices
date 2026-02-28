@@ -219,7 +219,7 @@ export function ContractorAvailabilityClient() {
   const days = getDaysInMonth(y, m);
   const firstDayOfWeek = new Date(y, m - 1, 1).getDay();
   const padStart = Array.from({ length: firstDayOfWeek }, (_, i) => (
-    <div key={`pad-${i}`} className="aspect-square min-w-[2.25rem]" />
+    <div key={`pad-${i}`} className="aspect-square min-w-[1.75rem] sm:min-w-[2.25rem]" />
   ));
 
   if (loading) {
@@ -231,12 +231,12 @@ export function ContractorAvailabilityClient() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      <div className="flex flex-wrap gap-2 -mx-1 sm:mx-0">
         <button
           type="button"
           onClick={() => setTab("form")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+          className={`rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium ${
             tab === "form"
               ? "bg-sky-600 text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
@@ -249,7 +249,7 @@ export function ContractorAvailabilityClient() {
             <button
               type="button"
               onClick={() => setTab("all")}
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
+              className={`rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium ${
                 tab === "all"
                   ? "bg-sky-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
@@ -260,7 +260,7 @@ export function ContractorAvailabilityClient() {
             <button
               type="button"
               onClick={() => setTab("requirements")}
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
+              className={`rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium ${
                 tab === "requirements"
                   ? "bg-sky-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
@@ -271,7 +271,7 @@ export function ContractorAvailabilityClient() {
             <button
               type="button"
               onClick={() => setTab("assignments")}
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
+              className={`rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium ${
                 tab === "assignments"
                   ? "bg-sky-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
@@ -284,7 +284,7 @@ export function ContractorAvailabilityClient() {
       </div>
 
       {tab === "form" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/80">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-700 dark:bg-gray-900/80 min-w-0">
           <h2 className="mb-2 font-medium text-gray-900 dark:text-white">Submit your availability</h2>
           <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
             Your name, role and available days. Each submission creates a record. Others see only their own; admin sees all.
@@ -373,8 +373,8 @@ export function ContractorAvailabilityClient() {
             </div>
           )}
 
-          <div className="max-w-md rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
-            <div className="grid grid-cols-7 gap-2 place-items-center">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-gray-50/50 p-3 sm:p-4 dark:border-gray-600 dark:bg-gray-800/50 min-w-0">
+            <div className="grid grid-cols-7 gap-1.5 sm:gap-2 place-items-center">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
                 <div key={d} className="w-full flex justify-center text-xs font-medium text-gray-500 dark:text-gray-400 py-1.5">
                   {d}
@@ -392,7 +392,7 @@ export function ContractorAvailabilityClient() {
                     type="button"
                     onClick={() => !isPast && handleToggleDate(dateStr)}
                     disabled={isPast}
-                    className={`aspect-square min-w-[2.25rem] w-full max-w-10 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                    className={`aspect-square min-w-[1.75rem] sm:min-w-[2.25rem] w-full max-w-8 sm:max-w-10 flex items-center justify-center rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                       isPast
                         ? "cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
                         : isBooked
@@ -409,12 +409,12 @@ export function ContractorAvailabilityClient() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleSaveAvailability}
               disabled={saving}
-              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+              className="rounded-lg bg-sky-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Availability"}
             </button>
@@ -426,7 +426,7 @@ export function ContractorAvailabilityClient() {
       )}
 
       {tab === "all" && canManage && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/80">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-700 dark:bg-gray-900/80 min-w-0 overflow-hidden">
           <h2 className="mb-4 font-medium text-gray-900 dark:text-white">
             All contractor availability records {monthLabel && `– ${monthLabel}`}
           </h2>
@@ -487,23 +487,23 @@ export function ContractorAvailabilityClient() {
           {byUser.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">No records for this month.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <table className="min-w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Name</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Email</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Role</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Days</th>
+                    <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Name</th>
+                    <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300 hidden sm:table-cell">Email</th>
+                    <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Role</th>
+                    <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Days</th>
                   </tr>
                 </thead>
                 <tbody>
                   {byUser.map((u) => (
                     <tr key={u.userId} className="border-b border-gray-100 dark:border-gray-800">
-                      <td className="py-2 px-3 text-gray-900 dark:text-white">{u.name}</td>
-                      <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{u.email}</td>
-                      <td className="py-2 px-3 text-gray-700 dark:text-gray-300">{u.role || "—"}</td>
-                      <td className="py-2 px-3 text-gray-600 dark:text-gray-400">
+                      <td className="py-2 px-2 sm:px-3 text-gray-900 dark:text-white max-w-[80px] sm:max-w-[200px] truncate" title={u.name}>{u.name}</td>
+                      <td className="py-2 px-2 sm:px-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">{u.email}</td>
+                      <td className="py-2 px-2 sm:px-3 text-gray-700 dark:text-gray-300">{u.role || "—"}</td>
+                      <td className="py-2 px-2 sm:px-3 text-gray-600 dark:text-gray-400 text-xs">
                         {u.dates.map((d) => d.slice(8)).join(", ")}
                       </td>
                     </tr>
@@ -516,14 +516,14 @@ export function ContractorAvailabilityClient() {
       )}
 
       {tab === "assignments" && canManage && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/80">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-700 dark:bg-gray-900/80 min-w-0 overflow-hidden">
           <h2 className="mb-2 font-medium text-gray-900 dark:text-white">
             Assignments {assignMonthLabel && `– ${assignMonthLabel}`}
           </h2>
           <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
             AI suggests assignments from requirements and availability. Review, modify if needed, then approve to send confirmation emails.
           </p>
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div className="mb-4 flex flex-wrap gap-2 min-w-0">
             <select
               value={assignMonth}
               onChange={(e) => setAssignMonth(e.target.value)}
@@ -588,7 +588,7 @@ export function ContractorAvailabilityClient() {
                 }
               }}
               disabled={assignLoading || assignSaving}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              className="rounded-lg bg-violet-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
             >
               {assignSaving ? "Running..." : "AI Suggest"}
             </button>
@@ -627,7 +627,7 @@ export function ContractorAvailabilityClient() {
                 }
               }}
               disabled={assignLoading || assignSaving}
-              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+              className="rounded-lg bg-sky-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
             >
               Save Changes
             </button>
@@ -665,7 +665,7 @@ export function ContractorAvailabilityClient() {
                 }
               }}
               disabled={assignLoading || assignSaving || assignments.filter((a) => a.status === "pending").length === 0}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
               Approve & Send Emails
             </button>
@@ -689,8 +689,8 @@ export function ContractorAvailabilityClient() {
               No assignments. Set daily requirements and availability, then click &quot;AI Suggest&quot;.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <table className="min-w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Name</th>
@@ -748,7 +748,7 @@ export function ContractorAvailabilityClient() {
       )}
 
       {tab === "requirements" && canManage && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/80">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-700 dark:bg-gray-900/80 min-w-0 overflow-hidden">
           <h2 className="mb-2 font-medium text-gray-900 dark:text-white">Daily requirements (demand)</h2>
           <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
             Set how many people per role are needed each day. AI will use this for scheduling.
@@ -792,13 +792,13 @@ export function ContractorAvailabilityClient() {
               </select>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table className="min-w-full text-xs sm:text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Date</th>
+                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Date</th>
                   {roles.map((r) => (
-                    <th key={r.id} className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">
+                    <th key={r.id} className="text-left py-2 px-1 sm:px-3 font-medium text-gray-700 dark:text-gray-300">
                       {r.value}
                     </th>
                   ))}
@@ -821,7 +821,7 @@ export function ContractorAvailabilityClient() {
                           ? editingReq!.val
                           : String(reqByDate[dateStr]?.[r.value] ?? "");
                         return (
-                          <td key={r.id} className="py-1 px-2">
+                          <td key={r.id} className="py-1 px-1 sm:px-2">
                             <input
                               type="number"
                               min={0}
@@ -843,7 +843,7 @@ export function ContractorAvailabilityClient() {
                                 setEditingReq(null);
                               }}
                               placeholder="0"
-                              className="w-14 rounded border border-gray-300 px-2 py-1 text-center text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                              className="w-10 sm:w-14 rounded border border-gray-300 px-1 sm:px-2 py-1 text-center text-xs sm:text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                               disabled={reqSaving}
                             />
                           </td>
