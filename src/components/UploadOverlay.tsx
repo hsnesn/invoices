@@ -19,7 +19,7 @@ export function UploadOverlay({ message = "Uploading..." }: { message?: string }
         <img
           src={logos.logo_trt || "/trt-logo.png"}
           alt="TRT"
-          className="h-36 w-36 sm:h-44 sm:w-44 object-contain z-10 mix-blend-multiply"
+          className="h-36 w-36 sm:h-44 sm:w-44 object-contain z-10"
         />
         <div
           className="absolute inset-0 rounded-full border-4 border-slate-500/50 border-t-white animate-spin"

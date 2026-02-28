@@ -19,11 +19,12 @@ export async function POST(
     const { id } = await context.params;
     const body = await request.json();
     const completionNotes = typeof body.completion_notes === "string" ? body.completion_notes.trim() : null;
+    const createInvoice = body.create_invoice === true;
 
     const supabase = createAdminClient();
     const { data: req, error: fetchErr } = await supabase
       .from("office_requests")
-      .select("id, title, description, status, requester_user_id")
+      .select("id, title, description, status, requester_user_id, cost_estimate, project_id")
       .eq("id", id)
       .single();
 
@@ -51,9 +52,48 @@ export async function POST(
 
     if (todoErr) throw todoErr;
 
+    let linkedInvoiceId: string | null = null;
+    if (createInvoice && canComplete) {
+      const costEst = (req as { cost_estimate?: number | null }).cost_estimate;
+      const invoiceId = crypto.randomUUID();
+      const { error: invErr } = await supabase.from("invoices").insert({
+        id: invoiceId,
+        submitter_user_id: session.user.id,
+        department_id: null,
+        program_id: null,
+        service_description: `Office request: ${(req as { title: string }).title}`,
+        currency: "GBP",
+        invoice_type: "other",
+        project_id: (req as { project_id?: string | null }).project_id ?? null,
+      });
+      if (!invErr) {
+        await supabase.from("invoice_workflows").insert({
+          invoice_id: invoiceId,
+          status: "ready_for_payment",
+          manager_user_id: null,
+        });
+        await supabase.from("invoice_extracted_fields").upsert(
+          {
+            invoice_id: invoiceId,
+            gross_amount: costEst ?? null,
+            needs_review: false,
+            manager_confirmed: true,
+            raw_json: { source: "office_request", office_request_id: id },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "invoice_id" }
+        );
+        linkedInvoiceId = invoiceId;
+      }
+    }
+
     const { error: reqErr } = await supabase
       .from("office_requests")
-      .update({ status: "completed", updated_at: new Date().toISOString() })
+      .update({
+        status: "completed",
+        linked_invoice_id: linkedInvoiceId,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id);
 
     if (reqErr) throw reqErr;

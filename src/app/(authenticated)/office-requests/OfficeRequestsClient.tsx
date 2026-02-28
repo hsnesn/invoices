@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 const CATEGORIES = [
@@ -35,14 +35,104 @@ type RequestRow = {
   created_at: string;
   office_request_todos?: { id: string; assignee_user_id?: string | null; due_date?: string | null; status: string; completion_notes?: string | null }[] | { id: string; assignee_user_id?: string | null; due_date?: string | null; status: string; completion_notes?: string | null };
   rejection_reason?: string | null;
+  project_id?: string | null;
+  vendor_id?: string | null;
+  linked_invoice_id?: string | null;
+  project_name?: string | null;
+  vendor_name?: string | null;
 };
 
 type Profile = { id: string; full_name: string | null };
+
+function AttachmentsModal({ requestId, requestTitle, onClose }: { requestId: string; requestTitle: string; onClose: () => void }) {
+  const [attachments, setAttachments] = useState<{ id: string; file_name: string; download_url: string | null }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchAttachments = useCallback(async () => {
+    const res = await fetch(`/api/office-requests/${requestId}/attachments`);
+    if (res.ok) setAttachments(await res.json());
+    setLoading(false);
+  }, [requestId]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchAttachments();
+  }, [fetchAttachments]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/office-requests/${requestId}/attachments`, { method: "POST", body: formData });
+      if (res.ok) {
+        toast.success("File uploaded");
+        fetchAttachments();
+      } else {
+        const d = await res.json();
+        toast.error(d.error || "Upload failed");
+      }
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleDelete = async (attachmentId: string) => {
+    if (!confirm("Delete this attachment?")) return;
+    try {
+      const res = await fetch(`/api/office-requests/${requestId}/attachments/${attachmentId}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Deleted");
+        fetchAttachments();
+      }
+    } catch {
+      toast.error("Delete failed");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900 shadow-xl">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Attachments: {requestTitle}</h3>
+        <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx" onChange={handleUpload} />
+        <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="mb-4 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+          {uploading ? "Uploading..." : "+ Upload file"}
+        </button>
+        {loading ? (
+          <p className="text-sm text-gray-500">Loading...</p>
+        ) : attachments.length === 0 ? (
+          <p className="text-sm text-gray-500">No attachments yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {attachments.map((a) => (
+              <li key={a.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+                <a href={a.download_url ?? "#"} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline truncate flex-1">{a.file_name}</a>
+                <button onClick={() => handleDelete(a.id)} className="ml-2 rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-500">Delete</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-4 flex justify-end">
+          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:border-gray-600 dark:text-gray-300">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function OfficeRequestsClient() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [reminders, setReminders] = useState<{ id: string; title: string; next_due_date: string; frequency_months: number; assignee_name?: string | null }[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
+  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [showMineOnly, setShowMineOnly] = useState(false);
@@ -53,6 +143,8 @@ export function OfficeRequestsClient() {
   const [newCategory, setNewCategory] = useState("other");
   const [newPriority, setNewPriority] = useState("normal");
   const [newCost, setNewCost] = useState("");
+  const [newVendorId, setNewVendorId] = useState("");
+  const [newProjectId, setNewProjectId] = useState("");
   const [profile, setProfile] = useState<{ id: string; role: string } | null>(null);
   const [approveModal, setApproveModal] = useState<RequestRow | null>(null);
   const [completeModal, setCompleteModal] = useState<RequestRow | null>(null);
@@ -60,7 +152,9 @@ export function OfficeRequestsClient() {
   const [dueDate, setDueDate] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [completionNotes, setCompletionNotes] = useState("");
+  const [createInvoiceOnComplete, setCreateInvoiceOnComplete] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [attachmentsModal, setAttachmentsModal] = useState<RequestRow | null>(null);
   const [showReminderForm, setShowReminderForm] = useState(false);
   const [remTitle, setRemTitle] = useState("");
   const [remDesc, setRemDesc] = useState("");
@@ -93,6 +187,11 @@ export function OfficeRequestsClient() {
   }, [profile?.role]);
 
   useEffect(() => {
+    fetch("/api/vendors").then((r) => r.json()).then((d) => setVendors(Array.isArray(d) ? d : [])).catch(() => setVendors([]));
+    fetch("/api/projects").then((r) => r.json()).then((d) => setProjects(Array.isArray(d) ? d : [])).catch(() => setProjects([]));
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     Promise.all([fetchRequests(), fetchReminders()]).finally(() => setLoading(false));
   }, [fetchRequests, fetchReminders]);
@@ -111,6 +210,8 @@ export function OfficeRequestsClient() {
           category: newCategory,
           priority: newPriority,
           cost_estimate: newCost ? parseFloat(newCost) : null,
+          vendor_id: newVendorId || null,
+          project_id: newProjectId || null,
         }),
       });
       if (res.ok) {
@@ -121,6 +222,8 @@ export function OfficeRequestsClient() {
         setNewCategory("other");
         setNewPriority("normal");
         setNewCost("");
+        setNewVendorId("");
+        setNewProjectId("");
         fetchRequests();
       } else {
         const d = await res.json();
@@ -191,12 +294,13 @@ export function OfficeRequestsClient() {
       const res = await fetch(`/api/office-requests/${completeModal.id}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ completion_notes: completionNotes || null }),
+        body: JSON.stringify({ completion_notes: completionNotes || null, create_invoice: createInvoiceOnComplete }),
       });
       if (res.ok) {
         toast.success("Marked complete. Requester will receive an email.");
         setCompleteModal(null);
         setCompletionNotes("");
+        setCreateInvoiceOnComplete(false);
         fetchRequests();
       } else {
         const d = await res.json();
@@ -408,6 +512,24 @@ export function OfficeRequestsClient() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cost estimate (£)</label>
                 <input type="number" step="0.01" value={newCost} onChange={(e) => setNewCost(e.target.value)} placeholder="Optional" className="mt-1 w-28 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vendor</label>
+                <select value={newVendorId} onChange={(e) => setNewVendorId(e.target.value)} className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                  <option value="">—</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Project</label>
+                <select value={newProjectId} onChange={(e) => setNewProjectId(e.target.value)} className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                  <option value="">—</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="flex gap-2">
               <button type="submit" disabled={submitting} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50">
@@ -434,7 +556,7 @@ export function OfficeRequestsClient() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Requester</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Assignee</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
-                {canApprove && <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>}
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -465,25 +587,24 @@ export function OfficeRequestsClient() {
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.requester_name}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.assignee_name ?? "—"}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{new Date(r.created_at).toLocaleDateString("en-GB")}</td>
-                      {canApprove && (
-                        <td className="px-4 py-3 text-right">
-                          {r.status === "pending" && (
-                            <button onClick={() => { setApproveModal(r); setAssigneeId(""); setDueDate(""); setRejectionReason(""); }} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 mr-1">
-                              Approve
-                            </button>
-                          )}
-                          {r.status === "approved" && (
-                            <button onClick={() => { setCompleteModal(r); setCompletionNotes(""); }} className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500">
-                              Complete
-                            </button>
-                          )}
-                          {r.status === "pending" && (
-                            <button onClick={() => { setApproveModal(r); setRejectionReason(""); }} className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500">
-                              Reject
-                            </button>
-                          )}
-                        </td>
-                      )}
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => setAttachmentsModal(r)} className="rounded bg-gray-500 px-2 py-1 text-xs font-medium text-white hover:bg-gray-400 mr-1">Attachments</button>
+                        {canApprove && r.status === "pending" && (
+                          <button onClick={() => { setApproveModal(r); setAssigneeId(""); setDueDate(""); setRejectionReason(""); }} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 mr-1">
+                            Approve
+                          </button>
+                        )}
+                        {canApprove && r.status === "approved" && (
+                          <button onClick={() => { setCompleteModal(r); setCompletionNotes(""); }} className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500">
+                            Complete
+                          </button>
+                        )}
+                        {canApprove && r.status === "pending" && (
+                          <button onClick={() => { setApproveModal(r); setRejectionReason(""); }} className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500">
+                            Reject
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -526,14 +647,31 @@ export function OfficeRequestsClient() {
         </div>
       )}
 
+      {/* Attachments modal */}
+      {attachmentsModal && (
+        <AttachmentsModal
+          requestId={attachmentsModal.id}
+          requestTitle={attachmentsModal.title}
+          onClose={() => setAttachmentsModal(null)}
+        />
+      )}
+
       {/* Complete modal */}
       {completeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Complete: {completeModal.title}</h3>
+            <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Completion notes</label>
               <textarea value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)} placeholder="Optional" rows={3} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            {canComplete && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={createInvoiceOnComplete} onChange={(e) => setCreateInvoiceOnComplete(e.target.checked)} className="rounded" />
+                Create invoice from this request (Other invoice, ready for payment)
+              </label>
+            )}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setCompleteModal(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:border-gray-600 dark:text-gray-300">Cancel</button>

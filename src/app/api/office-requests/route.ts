@@ -37,7 +37,10 @@ export async function GET(request: NextRequest) {
         cost_estimate,
         created_at,
         updated_at,
-        office_request_todos(id, assignee_user_id, due_date, status, completed_at, completion_notes)
+        office_request_todos(id, assignee_user_id, due_date, status, completed_at, completion_notes),
+        project_id,
+        vendor_id,
+        linked_invoice_id
       `)
       .order("created_at", { ascending: false });
 
@@ -102,6 +105,8 @@ export async function POST(request: NextRequest) {
     const category = CATEGORIES.includes((body.category as (typeof CATEGORIES)[number]) ?? "other") ? body.category : "other";
     const priority = PRIORITIES.includes((body.priority as (typeof PRIORITIES)[number]) ?? "normal") ? body.priority : "normal";
     const costEstimate = typeof body.cost_estimate === "number" ? body.cost_estimate : null;
+    const projectId = typeof body.project_id === "string" && body.project_id.trim() ? body.project_id.trim() : null;
+    const vendorId = typeof body.vendor_id === "string" && body.vendor_id.trim() ? body.vendor_id.trim() : null;
 
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
 
@@ -114,6 +119,8 @@ export async function POST(request: NextRequest) {
         category,
         priority,
         cost_estimate: costEstimate,
+        project_id: projectId,
+        vendor_id: vendorId,
         requester_user_id: session.user.id,
       })
       .select()

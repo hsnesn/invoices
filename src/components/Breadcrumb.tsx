@@ -22,6 +22,7 @@ const LABELS: Record<string, string> = {
   "audit-log": "Audit Log",
   "guest-contacts": "Guest Contacts",
   "invited-guests": "Invited Guests",
+  "office-requests": "Office Requests",
 };
 
 const UUID_RE = /^[0-9a-f]{8}-/;

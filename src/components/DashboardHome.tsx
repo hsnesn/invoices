@@ -141,6 +141,19 @@ const PAGES: PageCard[] = [
     ),
   },
   {
+    title: "Projects",
+    description: "Track projects and link them to requests and invoices.",
+    href: "/projects",
+    color: "text-indigo-500",
+    gradient: "from-indigo-500/20 to-indigo-600/5",
+    pageKey: "projects",
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+      </svg>
+    ),
+  },
+  {
     title: "Request",
     description: "Enter daily requirements (demand), compare with freelancer availability (supply), AI matches.",
     href: "/request",
@@ -293,10 +306,10 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     if (p.viewerHidden && isViewer) return false;
     if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
-    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "office_requests", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "request", "office_requests", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (profile?.role === "manager") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "contractor_availability", "request", "office_requests", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "office_requests", "messages"].includes(p.pageKey);
+    if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "office_requests", "projects", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "request", "office_requests", "projects", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (profile?.role === "manager") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "contractor_availability", "request", "office_requests", "projects", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "office_requests", "projects", "messages"].includes(p.pageKey);
     if (["submitter", "manager"].includes(role) && p.pageKey === "invited_guests") return true;
     if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));
     if (p.pageKey === "contractor_availability") return isAdmin || isOperations || (!!userPages && userPages.includes("contractor_availability")) || (!userPages || userPages.length === 0);

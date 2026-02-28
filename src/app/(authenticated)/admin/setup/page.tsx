@@ -15,6 +15,7 @@ import { ContractorAvailabilityRolesSection } from "@/components/ContractorAvail
 import { DeletePermissionsSection } from "@/components/DeletePermissionsSection";
 import { VendorsSetupSection } from "@/components/VendorsSetupSection";
 import { AnnouncementsSetupSection } from "@/components/AnnouncementsSetupSection";
+import { RecurringInvoicesSetupSection } from "@/components/RecurringInvoicesSetupSection";
 
 interface Department {
   id: string;
@@ -40,6 +41,7 @@ const TABS = [
   { key: "salaries", label: "Salaries", color: "bg-indigo-500" },
   { key: "vendors", label: "Vendors", color: "bg-slate-500" },
   { key: "announcements", label: "Announcements", color: "bg-amber-500" },
+  { key: "recurring_invoices", label: "Recurring Invoices", color: "bg-emerald-500" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -80,6 +82,7 @@ export default function AdminSetupPage() {
       {activeTab === "salaries" && <SalariesSetupSection />}
       {activeTab === "vendors" && <VendorsSetupSection />}
       {activeTab === "announcements" && <AnnouncementsSetupSection />}
+      {activeTab === "recurring_invoices" && <RecurringInvoicesSetupSection />}
     </div>
   );
 }

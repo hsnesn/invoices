@@ -115,6 +115,12 @@ export async function requirePageAccess(pageKey: PageKey) {
     if (!profile.allowed_pages || profile.allowed_pages.length === 0) return { session, profile };
     redirect("/dashboard");
   }
+  if (pageKey === "projects") {
+    if (["admin", "operations", "manager", "finance", "viewer"].includes(profile.role)) return { session, profile };
+    if (profile.allowed_pages?.includes("projects")) return { session, profile };
+    if (!profile.allowed_pages || profile.allowed_pages.length === 0) return { session, profile };
+    redirect("/dashboard");
+  }
   const pages = profile.allowed_pages;
   if (!pages || pages.length === 0) return { session, profile };
   if (pages.includes(pageKey)) return { session, profile };

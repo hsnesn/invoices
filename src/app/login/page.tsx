@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams } from "next/navigation";
+import { useLogos } from "@/contexts/LogoContext";
 
 export default function LoginPage() {
   return (
@@ -13,6 +14,7 @@ export default function LoginPage() {
 }
 
 function LoginPageContent() {
+  const logos = useLogos();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -76,13 +78,16 @@ function LoginPageContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-sm space-y-8 rounded-xl border border-slate-700 bg-slate-900/50 p-8 shadow-xl">
-        <div>
+        <div className="flex items-center gap-3">
+          <img src={logos.logo_trt || "/trt-logo.png"} alt="TRT" className="h-10 w-10 object-contain shrink-0" />
+          <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
             TRT UK Operations Platform
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             Invite-only access
           </p>
+          </div>
         </div>
 
         {errorParam === "deactivated" && (

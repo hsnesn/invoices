@@ -978,3 +978,27 @@ export async function sendOfficeRequestCompletedEmail(params: {
     `),
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Reminder due (office reminders: fire extinguisher, etc.)            */
+/* ------------------------------------------------------------------ */
+
+export async function sendReminderDueEmail(params: {
+  to: string;
+  title: string;
+  description?: string | null;
+  nextDueDate: string;
+  link: string;
+}) {
+  return sendEmail({
+    to: params.to,
+    subject: `Reminder due: ${params.title} — ${APP_NAME}`,
+    html: await wrapWithLogo("Reminder Due", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A reminder is due today.</p>
+      <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#1e293b">${params.title}</p>
+      ${params.description ? `<p style="margin:0 0 12px;font-size:14px;color:#64748b">${params.description}</p>` : ""}
+      <p style="margin:0 0 12px;font-size:14px;color:#475569"><strong>Due date:</strong> ${params.nextDueDate}</p>
+      ${btn(params.link, "View Reminders")}
+    `),
+  });
+}
