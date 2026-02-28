@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     let emailsSent = 0;
     if (affectedUserIds.size > 0 && (type === "availability" || type === "both")) {
-      for (const uid of affectedUserIds) {
+      for (const uid of Array.from(affectedUserIds)) {
         try {
           const { data: user } = await supabase.auth.admin.getUserById(uid);
           const email = user?.user?.email;
