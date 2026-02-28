@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const supabase = createAdminClient();
     const { data: assignments } = await supabase
       .from("output_schedule_assignments")
-      .select("user_id")
+      .select("user_id, role")
       .eq("date", dateStr)
       .eq("status", "confirmed");
 
@@ -29,7 +29,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, sent: 0, date: dateStr });
     }
 
-    const userIds = Array.from(new Set(assignments.map((a: { user_id: string }) => a.user_id)));
+    const byUser = new Map<string, string>();
+    for (const a of assignments as { user_id: string; role: string | null }[]) {
+      byUser.set(a.user_id, a.role?.trim() || "—");
+    }
+    const userIds = Array.from(byUser.keys());
     const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
     const emailMap = new Map<string, string>();
     for (const u of authData?.users ?? []) {
@@ -52,6 +56,7 @@ export async function GET(request: Request) {
           to: email,
           personName: nameMap.get(uid) ?? "",
           dateLabel,
+          role: byUser.get(uid) ?? "—",
         });
         sent++;
       }

@@ -127,10 +127,10 @@ export async function POST(request: NextRequest) {
         .in("id", ids);
       if (updErr) throw updErr;
 
-      const byUser = new Map<string, { dates: string[] }>();
-      for (const a of pending as { user_id: string; date: string }[]) {
-        if (!byUser.has(a.user_id)) byUser.set(a.user_id, { dates: [] });
-        byUser.get(a.user_id)!.dates.push(a.date);
+      const byUser = new Map<string, { datesWithRole: { date: string; role: string }[] }>();
+      for (const a of pending as { user_id: string; date: string; role: string | null }[]) {
+        if (!byUser.has(a.user_id)) byUser.set(a.user_id, { datesWithRole: [] });
+        byUser.get(a.user_id)!.datesWithRole.push({ date: a.date, role: a.role?.trim() || "—" });
       }
 
       const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
@@ -147,19 +147,19 @@ export async function POST(request: NextRequest) {
       const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
       const { sendContractorAssignmentConfirmedEmail, sendContractorAssignmentConfirmedToLondonOps } = await import("@/lib/email");
 
-      const byPersonForLondon: { name: string; email: string; dates: string[] }[] = [];
-      for (const [uid, { dates }] of Array.from(byUser.entries())) {
+      const byPersonForLondon: { name: string; email: string; datesWithRole: { date: string; role: string }[] }[] = [];
+      for (const [uid, { datesWithRole }] of Array.from(byUser.entries())) {
         const email = emailMap.get(uid);
         const name = nameMap.get(uid) ?? "Unknown";
-        if (email && dates.length > 0) {
-          const sorted = dates.sort();
+        if (email && datesWithRole.length > 0) {
+          const sorted = [...datesWithRole].sort((a, b) => a.date.localeCompare(b.date));
           await sendContractorAssignmentConfirmedEmail({
             to: email,
             personName: name,
             monthLabel,
-            dates: sorted,
+            datesWithRole: sorted,
           });
-          byPersonForLondon.push({ name, email, dates: sorted });
+          byPersonForLondon.push({ name, email, datesWithRole: sorted });
         }
       }
 

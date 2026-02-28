@@ -677,12 +677,13 @@ export async function sendContractorAvailabilitySubmittedEmail(params: {
   const datesList = params.dates.length > 0
     ? params.dates.map((d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })).join(", ")
     : "—";
+  const roleLabel = params.role?.trim() ? ` (${params.role})` : "";
   return sendEmail({
     to: params.to,
     replyTo: params.replyTo,
-    subject: `Contractor availability: ${params.personName} — ${params.monthLabel}`,
+    subject: `Contractor availability: ${params.personName} — ${params.monthLabel}${roleLabel}`,
     html: await wrapWithLogo("Contractor Availability Submitted", `
-      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A contractor has submitted their availability.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A contractor has submitted their availability for role <strong>${params.role || "—"}</strong>.</p>
       <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">Name</td><td style="padding:8px 12px;color:#1e293b">${params.personName}</td></tr>
@@ -723,14 +724,15 @@ export async function sendContractorReminderEmail(params: {
   to: string;
   personName: string;
   dateLabel: string;
+  role: string;
 }) {
   return sendEmail({
     to: params.to,
     replyTo: LONDON_OPS_EMAIL,
-    subject: `Reminder: You are booked tomorrow — ${params.dateLabel}`,
+    subject: `Reminder: You are booked tomorrow (${params.role}) — ${params.dateLabel}`,
     html: await wrapWithLogo("Schedule Reminder", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
-      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">This is a reminder that you are booked for <strong>${params.dateLabel}</strong>.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">This is a reminder that you are booked for <strong>${params.dateLabel}</strong> as <strong>${params.role}</strong>.</p>
       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">If you have any questions, please contact London Operations.</p>
     `),
   });
@@ -740,11 +742,23 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
   to: string;
   personName: string;
   monthLabel: string;
-  dates: string[];
+  datesWithRole: { date: string; role: string }[];
 }) {
-  const datesList = params.dates.length > 0
-    ? params.dates.map((d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })).join(", ")
-    : "—";
+  const rows =
+    params.datesWithRole.length > 0
+      ? params.datesWithRole
+          .map(
+            (d) =>
+              `<tr><td style="padding:6px 12px;color:#065f46">${new Date(d.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })}</td><td style="padding:6px 12px;font-weight:600;color:#065f46">${d.role}</td></tr>`
+          )
+          .join("")
+      : "";
+  const tableHtml =
+    rows.length > 0
+      ? `<div style="margin:16px 0;padding:16px;background:#ecfdf5;border-radius:8px;border-left:4px solid #10b981">
+        <table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr><th style="padding:6px 12px;text-align:left;font-weight:600;color:#065f46">Date</th><th style="padding:6px 12px;text-align:left;font-weight:600;color:#065f46">Role</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>`
+      : "";
   return sendEmail({
     to: params.to,
     replyTo: LONDON_OPS_EMAIL,
@@ -752,9 +766,7 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
     html: await wrapWithLogo("Schedule Confirmed", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your schedule for <strong>${params.monthLabel}</strong> has been confirmed. You are booked for the following days:</p>
-      <div style="margin:16px 0;padding:16px;background:#ecfdf5;border-radius:8px;border-left:4px solid #10b981">
-        <p style="margin:0;font-size:14px;font-weight:600;color:#065f46">${datesList}</p>
-      </div>
+      ${tableHtml}
       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">If you have any questions, please contact London Operations.</p>
     `),
   });
@@ -763,12 +775,12 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
 /** Copy of booking confirmation summary to London Operations. */
 export async function sendContractorAssignmentConfirmedToLondonOps(params: {
   monthLabel: string;
-  byPerson: { name: string; email: string; dates: string[] }[];
+  byPerson: { name: string; email: string; datesWithRole: { date: string; role: string }[] }[];
 }) {
   const rows = params.byPerson
     .map(
       (p) =>
-        `<tr><td style="padding:8px 12px;color:#1e293b">${p.name}</td><td style="padding:8px 12px;color:#64748b">${p.email}</td><td style="padding:8px 12px;color:#1e293b">${p.dates.map((d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })).join(", ")}</td></tr>`
+        `<tr><td style="padding:8px 12px;color:#1e293b">${p.name}</td><td style="padding:8px 12px;color:#64748b">${p.email}</td><td style="padding:8px 12px;color:#1e293b">${p.datesWithRole.map((d) => `${new Date(d.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })} (${d.role})`).join(", ")}</td></tr>`
     )
     .join("");
   return sendEmail({
@@ -778,7 +790,7 @@ export async function sendContractorAssignmentConfirmedToLondonOps(params: {
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The following contractor assignments have been confirmed for <strong>${params.monthLabel}</strong>:</p>
       <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Name</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Email</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Booked days</th></tr>
+          <tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Name</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Email</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Booked days (role)</th></tr>
           ${rows}
         </table>
       </div>
