@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       include_program_description?: boolean;
       attach_calendar?: boolean;
       bcc_producer?: boolean;
-      greeting_type?: "dear" | "mr_ms";
+      greeting_type?: "dear" | "mr_ms" | "mr" | "ms" | "mrs" | "miss";
       custom_greetings?: Record<string, string>;
       contacts?: { guest_name: string; email?: string | null }[];
       subject?: string;
@@ -125,7 +125,8 @@ export async function POST(request: NextRequest) {
       const attachCalendar = body.attach_calendar !== false;
       const bccProducer = body.bcc_producer !== false && !!producerEmail;
       const customGreetings = body.custom_greetings ?? {};
-      const greetingType = (body.greeting_type === "mr_ms" ? "mr_ms" : "dear") as GreetingType;
+      const valid: GreetingType[] = ["dear", "mr_ms", "mr", "ms", "mrs", "miss"];
+      const greetingType = valid.includes(body.greeting_type as GreetingType) ? (body.greeting_type as GreetingType) : "dear";
 
       const programDescription = includeProgramDescription ? getProgramDescription(programName) : null;
 

@@ -2132,6 +2132,10 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                 <select value={greetingType} onChange={(e) => setGreetingType(e.target.value as GreetingType)} className={inputCls}>
                   <option value="dear">Dear [full name]</option>
                   <option value="mr_ms">Dear Mr./Ms. [surname]</option>
+                  <option value="mr">Dear Mr [surname]</option>
+                  <option value="ms">Dear Ms [surname]</option>
+                  <option value="mrs">Dear Mrs [surname]</option>
+                  <option value="miss">Dear Miss [surname]</option>
                 </select>
               </div>
               <div>

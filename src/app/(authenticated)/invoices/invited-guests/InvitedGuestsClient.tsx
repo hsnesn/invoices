@@ -91,7 +91,7 @@ export function InvitedGuestsClient({
     include_program_description: true,
     attach_calendar: true,
     bcc_producer: true,
-    greeting_type: "dear" as "dear" | "mr_ms",
+    greeting_type: "dear" as "dear" | "mr_ms" | "mr" | "ms" | "mrs" | "miss",
   });
 
   const [showPreview, setShowPreview] = useState(false);
@@ -182,7 +182,7 @@ export function InvitedGuestsClient({
 
   // One-click re-invite: fetch last invitation when opening invite modal for existing guest
   useEffect(() => {
-    if (!inviteModal || inviteModal === "new") return;
+    if (!inviteModal || inviteModal === "new" || inviteModal.id.startsWith("inv-")) return;
     const guestId = inviteModal.id;
     fetch(`/api/producer-guests/${guestId}/last-invitation`, { credentials: "same-origin" })
       .then((r) => r.json())
@@ -339,7 +339,7 @@ export function InvitedGuestsClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          producer_guest_id: inviteModal && inviteModal !== "new" ? inviteModal.id : undefined,
+          producer_guest_id: inviteModal && inviteModal !== "new" && !inviteModal.id.startsWith("inv-") ? inviteModal.id : undefined,
           guest_name: form.guest_name.trim(),
           email: form.email.trim(),
           title: form.title.trim(),
@@ -395,7 +395,7 @@ export function InvitedGuestsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           guests: selectedWithEmail.map((g) => ({
-            producer_guest_id: g.id,
+            producer_guest_id: g.id.startsWith("inv-") ? undefined : g.id,
             guest_name: g.guest_name,
             email: g.email!,
             title: g.title || "Guest",
@@ -453,7 +453,9 @@ export function InvitedGuestsClient({
   };
 
   const handleBulkMarkAccepted = async () => {
-    const idsToAccept = selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).map((g) => g.id);
+    const idsToAccept = selectedGuests
+      .filter((g) => g.accepted !== true && g.email?.includes("@") && !g.id.startsWith("inv-"))
+      .map((g) => g.id);
     if (idsToAccept.length === 0) {
       toast.error("Select at least one invited guest (not yet accepted) with email");
       return;
@@ -1354,9 +1356,13 @@ export function InvitedGuestsClient({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Greeting</label>
-                <select value={form.greeting_type} onChange={(e) => setForm((p) => ({ ...p, greeting_type: e.target.value as "dear" | "mr_ms" }))} className={inputCls}>
+                <select value={form.greeting_type} onChange={(e) => setForm((p) => ({ ...p, greeting_type: e.target.value as "dear" | "mr_ms" | "mr" | "ms" | "mrs" | "miss" }))} className={inputCls}>
                   <option value="dear">Dear [full name]</option>
                   <option value="mr_ms">Dear Mr./Ms. [surname]</option>
+                  <option value="mr">Dear Mr [surname]</option>
+                  <option value="ms">Dear Ms [surname]</option>
+                  <option value="mrs">Dear Mrs [surname]</option>
+                  <option value="miss">Dear Miss [surname]</option>
                 </select>
               </div>
               <div>

@@ -32,8 +32,59 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     const producerIds = Array.from(new Set((guests ?? []).map((r) => r.producer_user_id)));
+
+    // Include guests from guest_invitations (invited via Guest Contacts bulk email) that are not in producer_guests
+    let invQuery = supabase
+      .from("guest_invitations")
+      .select("producer_user_id, guest_name, guest_email, program_name, sent_at")
+      .not("producer_user_id", "is", null)
+      .order("sent_at", { ascending: false });
+    if (!isAdmin) {
+      invQuery = invQuery.eq("producer_user_id", session.user.id);
+    }
+    const { data: invitations } = await invQuery;
+
+    const pgKeys = new Set(
+      (guests ?? []).map((r) => `${r.producer_user_id}|${normalizeName(r.guest_name)}|${(r.email ?? "").toLowerCase()}`)
+    );
+    const seenInvKeys = new Set<string>();
+    const extraFromInv: typeof guests = [];
+    for (const inv of invitations ?? []) {
+      const pid = (inv as { producer_user_id?: string | null }).producer_user_id;
+      const gname = (inv as { guest_name?: string }).guest_name ?? "";
+      const gemail = (inv as { guest_email?: string }).guest_email ?? "";
+      if (!pid || !gname.trim()) continue;
+      const key = `${pid}|${normalizeName(gname)}|${gemail.toLowerCase()}`;
+      if (pgKeys.has(key) || seenInvKeys.has(key)) continue;
+      seenInvKeys.add(key);
+      extraFromInv.push({
+        id: `inv-${(inv as { sent_at?: string }).sent_at}-${key}`,
+        producer_user_id: pid,
+        guest_name: gname,
+        email: gemail,
+        title: null,
+        program_name: (inv as { program_name?: string }).program_name ?? null,
+        invited_at: (inv as { sent_at?: string }).sent_at ?? null,
+        accepted: null,
+        matched_invoice_id: null,
+        matched_at: null,
+        payment_received: null,
+        payment_amount: null,
+        payment_currency: null,
+        recording_date: null,
+        recording_topic: null,
+        notes: null,
+        is_favorite: null,
+        created_at: (inv as { sent_at?: string }).sent_at ?? new Date().toISOString(),
+      } as (typeof guests)[number]);
+    }
+    const allGuests = [...(guests ?? []), ...extraFromInv].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    const producerIdsAll = Array.from(new Set(allGuests.map((r) => r.producer_user_id)));
     const [{ data: producers }, { data: invoicesRaw }] = await Promise.all([
-      producerIds.length ? supabase.from("profiles").select("id, full_name").in("id", producerIds) : { data: [] },
+      producerIdsAll.length ? supabase.from("profiles").select("id, full_name").in("id", producerIdsAll) : { data: [] },
       supabase
         .from("invoices")
         .select("id, created_at, service_description, invoice_extracted_fields(raw_json)")
@@ -58,7 +109,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const rows = (guests ?? []).map((r) => {
+    const rows = allGuests.map((r) => {
       const key = normalizeName(r.guest_name);
       const invs = invoiceGuestNames.get(key) ?? [];
       const invitedAt = r.invited_at ? new Date(r.invited_at).getTime() : 0;
