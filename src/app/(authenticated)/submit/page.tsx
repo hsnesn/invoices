@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { GenerateInvoiceForm } from "@/components/GenerateInvoiceForm";
+import { LogoLoader } from "@/components/LogoLoader";
 
 type DuplicateHit = {
   id: string;
@@ -532,9 +533,16 @@ function SubmitPageContent() {
         <button
           type="submit"
           disabled={loading}
-          className="ml-auto block rounded-lg bg-sky-600 px-6 py-3 font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+          className="ml-auto flex items-center justify-center gap-2 rounded-lg bg-sky-600 px-6 py-3 font-medium text-white hover:bg-sky-500 disabled:opacity-50"
         >
-          {loading ? "Submitting..." : "Submit invoice"}
+          {loading ? (
+            <>
+              <LogoLoader size="sm" variant="light" />
+              <span>Submitting...</span>
+            </>
+          ) : (
+            "Submit invoice"
+          )}
         </button>
       </form>
 

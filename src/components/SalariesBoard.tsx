@@ -8,6 +8,7 @@ import { EmptyState } from "./EmptyState";
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 import { useExportLocale } from "@/contexts/ExportLocaleContext";
 import { ExportLocaleSelector } from "./ExportLocaleSelector";
+import { LogoLoader } from "./LogoLoader";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -1522,8 +1523,15 @@ export function SalariesBoard({
               <button onClick={() => setShowUploadModal(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
                 Cancel
               </button>
-              <button onClick={handleUpload} disabled={uploading || uploadFiles.length === 0} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50">
-                {uploading ? "Uploading..." : "Upload"}
+              <button onClick={handleUpload} disabled={uploading || uploadFiles.length === 0} className="rounded-lg flex items-center justify-center gap-2 bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50">
+                {uploading ? (
+                  <>
+                    <LogoLoader size="sm" variant="light" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  "Upload"
+                )}
               </button>
             </div>
           </div>

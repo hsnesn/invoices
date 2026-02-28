@@ -1218,6 +1218,9 @@ export function InvoicesBoard({
   initialGroupFilter?: "" | DisplayRow["group"] | "pending";
 }) {
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<InvoiceRow[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [programmeFilter, setProgrammeFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState<"" | DisplayRow["group"] | "pending">(initialGroupFilter ?? "");
@@ -1263,6 +1266,31 @@ export function InvoicesBoard({
   useEffect(() => {
     if (initialGroupFilter) setGroupFilter(initialGroupFilter);
   }, [initialGroupFilter]);
+
+  // Full-text search: when search has 2+ chars, fetch from server
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setSearchResults(null);
+      return;
+    }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      searchDebounceRef.current = null;
+      setSearchLoading(true);
+      fetch(`/api/invoices/search-full?q=${encodeURIComponent(q)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) setSearchResults(data);
+          else setSearchResults([]);
+        })
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false));
+    }, 300);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [search]);
 
   useEffect(() => {
     if (!showColumnPicker) {
@@ -1397,8 +1425,14 @@ export function InvoicesBoard({
     setRecentFilters(loadFromStorage<SavedFilter["filters"][]>(RECENT_FILTERS_KEY, []));
   }, [search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField, sortDir, hydrated]);
 
+  const effectiveInvoices = useMemo(() => {
+    const q = search.trim();
+    if (q.length >= 2 && searchResults !== null) return searchResults;
+    return invoices;
+  }, [invoices, search, searchResults]);
+
   const rows = useMemo(() => {
-    return invoices.map((inv) => {
+    return effectiveInvoices.map((inv) => {
       const wfRaw = inv.invoice_workflows;
       const wf = Array.isArray(wfRaw) ? wfRaw[0] : wfRaw ?? null;
       const extRaw = inv.invoice_extracted_fields;
@@ -1508,7 +1542,7 @@ export function InvoicesBoard({
         tags: (inv as { tags?: string[] | null }).tags ?? [],
       } satisfies DisplayRow;
     });
-  }, [invoices, departmentMap, programMap, profileMap]);
+  }, [effectiveInvoices, departmentMap, programMap, profileMap]);
 
   const rowsWithAnomalies = useMemo(() => {
     const amounts = rows.filter((r) => r.amountNum != null).map((r) => r.amountNum!);
@@ -1541,6 +1575,7 @@ export function InvoicesBoard({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const useServerSearch = q.length >= 2 && searchResults !== null;
     let result = rowsWithAnomalies.filter((r) => {
       if (missingInfoFilter && !r.hasMissingInfo) return false;
       if (anomalyFilter && (!r.anomalyFlags || r.anomalyFlags.length === 0)) return false;
@@ -1557,6 +1592,7 @@ export function InvoicesBoard({
       if (tagFilter && !r.tags.includes(tagFilter)) return false;
       if (dateFrom && r.invoiceDate !== "—" && r.invoiceDate < dateFrom) return false;
       if (dateTo && r.invoiceDate !== "—" && r.invoiceDate > dateTo) return false;
+      if (useServerSearch) return true;
       if (!q) return true;
       return (
         r.guest.toLowerCase().includes(q) ||
@@ -1588,7 +1624,7 @@ export function InvoicesBoard({
     }
 
     return result;
-  }, [rowsWithAnomalies, search, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [rowsWithAnomalies, search, searchResults, departmentFilter, programmeFilter, groupFilter, missingInfoFilter, anomalyFilter, producerFilter, paymentTypeFilter, managerFilter, tagFilter, dateFrom, dateTo, sortField, sortDir]);
 
   const groupsForFilter: (DisplayRow["group"] | "pending")[] = [
     "pending",
@@ -2015,7 +2051,7 @@ export function InvoicesBoard({
   const initialExpandDoneRef = useRef(false);
   useEffect(() => {
     if (!initialExpandedId || initialExpandDoneRef.current) return;
-    const hasRow = invoices.some((inv) => inv.id === initialExpandedId);
+    const hasRow = effectiveInvoices.some((inv) => inv.id === initialExpandedId);
     if (!hasRow) return;
     initialExpandDoneRef.current = true;
     setDetailLoading(true);
@@ -2031,7 +2067,7 @@ export function InvoicesBoard({
       if (flRes.ok) flRes.json().then(setFilesData);
       if (ntRes.ok) ntRes.json().then(setNotesData);
     }).finally(() => setDetailLoading(false));
-  }, [initialExpandedId, invoices]);
+  }, [initialExpandedId, effectiveInvoices]);
   const toggleExpandRow = useCallback(async (id: string) => {
     if (expandedRowId === id) {
       setExpandedRowId(null);
@@ -2874,9 +2910,15 @@ export function InvoicesBoard({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search invoices..."
-              className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#5034FF] focus:ring-2 focus:ring-[#5034FF]/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
+              placeholder="Search invoices (full-text)..."
+              className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#5034FF] focus:ring-2 focus:ring-[#5034FF]/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
             />
+            {searchLoading && (
+              <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+            )}
           </div>
           <label className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400 cursor-pointer">
             <input type="checkbox" checked={missingInfoFilter} onChange={(e) => setMissingInfoFilter(e.target.checked)} className="rounded border-amber-500 text-amber-600" />

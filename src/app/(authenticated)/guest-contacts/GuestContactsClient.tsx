@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { PHONE_COUNTRIES, DEFAULT_PHONE_COUNTRY, inferPhoneCountry } from "@/lib/phone-country-codes";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
 import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
+import { LogoLoader } from "@/components/LogoLoader";
 
 type FilterParams = {
   search?: string;
@@ -992,9 +993,16 @@ export function GuestContactsClient({
               type="button"
               onClick={runBulkUpload}
               disabled={bulkUploading}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              className="rounded-lg flex items-center justify-center gap-2 bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              {bulkUploading ? "Processing..." : "Upload and extract contacts"}
+              {bulkUploading ? (
+                <>
+                  <LogoLoader size="sm" variant="light" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                "Upload and extract contacts"
+              )}
             </button>
             <button
               type="button"

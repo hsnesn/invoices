@@ -9,6 +9,7 @@ import { getApiErrorMessage } from "@/lib/error-messages";
 import { OtherDashboard } from "./OtherDashboard";
 import { useExportLocale } from "@/contexts/ExportLocaleContext";
 import { ExportLocaleSelector } from "./ExportLocaleSelector";
+import { LogoLoader } from "./LogoLoader";
 
 function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
@@ -644,7 +645,14 @@ export function OtherInvoicesBoard({
           {canUpload && (
             <label className="cursor-pointer rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-1.5">
               <input type="file" multiple accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={handleUpload} disabled={uploading} className="hidden" />
-              {uploading ? "Uploading..." : "Upload files"}
+              {uploading ? (
+                <>
+                  <LogoLoader size="sm" variant="light" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                "Upload files"
+              )}
             </label>
           )}
           <Link href="/dashboard" className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800">
