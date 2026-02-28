@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   return (
@@ -18,7 +18,6 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
@@ -37,9 +36,9 @@ function LoginPageContent() {
         setMessage({ type: "error", text: error.message });
         return;
       }
-      // Client-side nav keeps cookies in same document; refresh fetches fresh server state
-      router.refresh();
-      router.push("/dashboard");
+      // Full reload ensures cookies propagate; delay lets Supabase persist session
+      await new Promise((r) => setTimeout(r, 600));
+      window.location.assign("/dashboard");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed. Please try again.";
       setMessage({ type: "error", text: msg });
