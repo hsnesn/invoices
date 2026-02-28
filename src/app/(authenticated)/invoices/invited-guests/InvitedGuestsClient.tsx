@@ -666,36 +666,78 @@ export function InvitedGuestsClient({
 
   const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white";
 
+  const openInviteModal = () => {
+    setInviteModal("new");
+    setForm({
+      guest_name: "",
+      email: "",
+      title: "",
+      program_name: defaultProgramName,
+      general_topic: "",
+      program_specific_topic: "",
+      record_date: "",
+      record_time: "",
+      format: "remote",
+      studio_address: "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ",
+      include_program_description: true,
+      attach_calendar: true,
+      bcc_producer: true,
+      greeting_type: "dear",
+    });
+  };
+
+  const openBulkAcceptModal = () => {
+    setBulkAcceptModal(true);
+    setBulkAcceptForm({
+      payment_received: true,
+      payment_amount: 0,
+      payment_currency: "GBP",
+      recording_date: new Date().toISOString().slice(0, 10),
+      recording_topic: "",
+      program_name: defaultProgramName,
+    });
+  };
+
+  const btnBase = "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors";
+  const btnSecondary = "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700";
+  const btnSky = "border border-sky-500/50 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950/60";
+  const btnEmerald = "border border-emerald-500/50 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/60";
+  const btnPrimary = "bg-emerald-600 text-white hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400 shadow-sm";
+
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/invoices" className="text-sky-600 hover:underline dark:text-sky-400">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 min-w-0">
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Link href="/invoices" className="text-sm text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">
             ← Guest Invoices
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+          <h1 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white sm:text-2xl">
             {isAdmin ? "All Invited Guests" : "My Invited Guests"}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => loadGuests()}
-            disabled={loading}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
-          >
-            {loading ? "Loading…" : "Refresh"}
-          </button>
+        <button
+          onClick={openInviteModal}
+          className={`${btnBase} ${btnPrimary} shrink-0 self-start sm:self-center`}
+        >
+          <span className="text-lg">+</span> Invite Guest
+        </button>
+      </div>
+
+      {/* Search, filter & actions */}
+      <div className="mb-6 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="search"
             placeholder="Search guest, email, program..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm w-56 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm placeholder-gray-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 sm:max-w-xs"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:w-36"
           >
             <option value="all">All</option>
             <option value="favorites">Favorites</option>
@@ -705,84 +747,47 @@ export function InvitedGuestsClient({
             <option value="no_match">No match</option>
           </select>
           <button
-            onClick={exportToCsv}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+            onClick={() => loadGuests()}
+            disabled={loading}
+            className={`${btnBase} ${btnSecondary}`}
           >
+            {loading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={exportToCsv} className={`${btnBase} ${btnSecondary}`}>
             Export CSV
           </button>
           <button
-            onClick={() => {
-              setBulkInviteModal(true);
-              setForm({ ...form, guest_name: "", email: "", title: "" });
-            }}
+            onClick={() => { setBulkInviteModal(true); setForm({ ...form, guest_name: "", email: "", title: "" }); }}
             disabled={selectedWithEmail.length === 0}
-            className="rounded-xl border border-sky-600 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`${btnBase} ${btnSky} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             Bulk invite ({selectedWithEmail.length})
           </button>
           <button
-            onClick={() => {
-              setBulkAcceptModal(true);
-              setBulkAcceptForm({
-                payment_received: true,
-                payment_amount: 0,
-                payment_currency: "GBP",
-                recording_date: new Date().toISOString().slice(0, 10),
-                recording_topic: "",
-                program_name: defaultProgramName,
-              });
-            }}
+            onClick={openBulkAcceptModal}
             disabled={selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).length === 0}
-            className="rounded-xl border border-emerald-600 px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`${btnBase} ${btnEmerald} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             Bulk mark accepted
           </button>
+          <button
+            onClick={() => { setQuickAddModal(true); setQuickAddPaste(""); }}
+            className={`${btnBase} ${btnSecondary}`}
+          >
+            Quick add from email
+          </button>
+          <button onClick={() => setBulkImportModal(true)} className={`${btnBase} ${btnSecondary}`}>
+            Bulk import CSV
+          </button>
         </div>
-        <button
-          onClick={() => {
-            setQuickAddModal(true);
-            setQuickAddPaste("");
-          }}
-          className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          Quick add from email
-        </button>
-        <button
-          onClick={() => setBulkImportModal(true)}
-          className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          Bulk import CSV
-        </button>
-        <button
-          onClick={() => {
-            setInviteModal("new");
-            setForm({
-              guest_name: "",
-              email: "",
-              title: "",
-              program_name: defaultProgramName,
-              general_topic: "",
-              program_specific_topic: "",
-              record_date: "",
-              record_time: "",
-              format: "remote",
-              studio_address: "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ",
-              include_program_description: true,
-              attach_calendar: true,
-              bcc_producer: true,
-              greeting_type: "dear",
-            });
-          }}
-          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
-          + Invite Guest
-        </button>
       </div>
 
       {loading ? (
         <p className="text-gray-500">Loading...</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900/50">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
