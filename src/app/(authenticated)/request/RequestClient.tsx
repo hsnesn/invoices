@@ -202,8 +202,11 @@ export function RequestClient() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/80">
-        <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+      <div className="rounded-2xl border border-gray-200/80 bg-white/80 p-12 dark:border-gray-700/60 dark:bg-gray-900/40 shadow-sm">
+        <div className="flex items-center justify-center gap-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600 dark:border-gray-600 dark:border-t-gray-400" />
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -211,73 +214,87 @@ export function RequestClient() {
   const days = getDaysInMonth(y, m);
 
   return (
-    <div className="space-y-4 sm:space-y-6 min-w-0">
-      <div className="flex flex-wrap gap-2 items-center min-w-0">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Department <span className="text-red-500">*</span></label>
-        <select
-          value={selectedDepartment}
-          onChange={(e) => setSelectedDepartment(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          <option value="">Select department...</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Program</label>
-        <select
-          value={selectedProgram}
-          onChange={(e) => setSelectedProgram(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          <option value="">All programs</option>
-          {programs.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Month</label>
-        <select
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          {Array.from({ length: 12 }, (_, i) => {
-            const mo = String(i + 1).padStart(2, "0");
-            const yr = month.split("-")[0];
-            const label = new Date(2000, i).toLocaleString("en-GB", { month: "long" });
-            return (
-              <option key={mo} value={`${yr}-${mo}`}>
-                {label}
-              </option>
-            );
-          })}
-        </select>
-        <select
-          value={month.split("-")[0]}
-          onChange={(e) => {
-            const yr = e.target.value;
-            const mo = month.split("-")[1];
-            setMonth(`${yr}-${mo}`);
-          }}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          {Array.from({ length: 4 }, (_, i) => {
-            const yr = new Date().getFullYear() - 1 + i;
-            return (
-              <option key={yr} value={String(yr)}>
-                {yr}
-              </option>
-            );
-          })}
-        </select>
+    <div className="space-y-6 sm:space-y-8 min-w-0">
+      {/* Filters */}
+      <div className="rounded-2xl border border-gray-200/80 bg-white px-4 py-4 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40">
+        <div className="flex flex-wrap items-end gap-4 sm:gap-6">
+          <div className="min-w-[140px]">
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Department</label>
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm font-medium text-gray-900 transition-colors focus:border-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800/80 dark:text-white dark:focus:border-gray-500 dark:focus:bg-gray-800 dark:focus:ring-gray-700"
+            >
+              <option value="">Select department...</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[120px]">
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Program</label>
+            <select
+              value={selectedProgram}
+              onChange={(e) => setSelectedProgram(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm font-medium text-gray-900 transition-colors focus:border-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800/80 dark:text-white dark:focus:border-gray-500 dark:focus:bg-gray-800 dark:focus:ring-gray-700"
+            >
+              <option value="">All programs</option>
+              {programs.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <div className="min-w-[100px]">
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Month</label>
+              <select
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm font-medium text-gray-900 transition-colors focus:border-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800/80 dark:text-white dark:focus:border-gray-500 dark:focus:bg-gray-800 dark:focus:ring-gray-700"
+              >
+                {Array.from({ length: 12 }, (_, i) => {
+                  const mo = String(i + 1).padStart(2, "0");
+                  const yr = month.split("-")[0];
+                  const label = new Date(2000, i).toLocaleString("en-GB", { month: "long" });
+                  return (
+                    <option key={mo} value={`${yr}-${mo}`}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="min-w-[70px]">
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Year</label>
+              <select
+                value={month.split("-")[0]}
+                onChange={(e) => {
+                  const yr = e.target.value;
+                  const mo = month.split("-")[1];
+                  setMonth(`${yr}-${mo}`);
+                }}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm font-medium text-gray-900 transition-colors focus:border-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800/80 dark:text-white dark:focus:border-gray-500 dark:focus:bg-gray-800 dark:focus:ring-gray-700"
+              >
+                {Array.from({ length: 4 }, (_, i) => {
+                  const yr = new Date().getFullYear() - 1 + i;
+                  return (
+                    <option key={yr} value={String(yr)}>
+                      {yr}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
 
       {message && (
         <div
-          className={`rounded-lg border p-3 text-sm ${
+          className={`rounded-xl border px-4 py-3 text-sm font-medium ${
             message.type === "success"
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200"
-              : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-200"
+              ? "border-emerald-200 bg-emerald-50/80 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-200"
+              : "border-rose-200 bg-rose-50/80 text-rose-800 dark:border-rose-800/50 dark:bg-rose-950/30 dark:text-rose-200"
           }`}
         >
           {message.text}
@@ -285,15 +302,17 @@ export function RequestClient() {
       )}
 
       {canManage && (
-        <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-4 sm:p-6 dark:border-violet-800 dark:bg-violet-950/20 min-w-0 overflow-hidden">
-          <h2 className="mb-2 font-medium text-violet-900 dark:text-violet-100 text-sm sm:text-base">Recurring requirements</h2>
-          <p className="mb-3 text-xs sm:text-sm text-violet-800/80 dark:text-violet-200/80">
-            e.g. &quot;Every Monday 2 Output&quot; – applied when no explicit requirement exists. Use &quot;Apply to month&quot; to generate requirements.
-          </p>
-          <div className="flex flex-wrap gap-2 mb-3">
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">Recurring rules</h2>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Set default headcount per weekday (e.g. every Monday 2 Output). Apply to month to generate requirements.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
             <select
               id="req-rec-day"
-              className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              className="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 text-sm font-medium dark:border-gray-600 dark:bg-gray-800/80 dark:text-white"
             >
               {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => (
                 <option key={d} value={i}>{d}</option>
@@ -301,7 +320,7 @@ export function RequestClient() {
             </select>
             <select
               id="req-rec-role"
-              className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              className="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 text-sm font-medium dark:border-gray-600 dark:bg-gray-800/80 dark:text-white"
             >
               {roles.map((r) => (
                 <option key={r.id} value={r.value}>{r.value}</option>
@@ -313,7 +332,7 @@ export function RequestClient() {
               min={1}
               max={99}
               defaultValue={1}
-              className="w-14 rounded border border-gray-300 px-2 py-1.5 text-sm text-center dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              className="w-16 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 text-sm font-medium text-center dark:border-gray-600 dark:bg-gray-800/80 dark:text-white"
             />
             <button
               type="button"
@@ -357,7 +376,7 @@ export function RequestClient() {
                 }
               }}
               disabled={recurringSaving || roles.length === 0}
-              className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             >
               Add
             </button>
@@ -401,18 +420,19 @@ export function RequestClient() {
                 }
               }}
               disabled={applyRecurringLoading}
-              className="rounded-lg border border-violet-500/50 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/30 disabled:opacity-50"
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
             >
-              {applyRecurringLoading ? "Applying..." : "Apply to month"}
+              {applyRecurringLoading ? "Applying…" : "Apply to month"}
             </button>
           </div>
           {recurring.length > 0 && (
-            <ul className="space-y-1 text-sm">
+            <div className="flex flex-wrap gap-2">
               {recurring.map((r) => (
-                <li key={r.id} className="flex items-center gap-2">
-                  <span className="rounded bg-violet-100 px-2 py-0.5 dark:bg-violet-900/50">
-                    Every {(r.dayLabel ?? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][r.day_of_week])} – {r.role}: {r.count_needed}
-                  </span>
+                <span
+                  key={r.id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                >
+                  Every {(r.dayLabel ?? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][r.day_of_week])} · {r.role}: {r.count_needed}
                   <button
                     type="button"
                     onClick={async () => {
@@ -425,30 +445,32 @@ export function RequestClient() {
                       }
                     }}
                     disabled={recurringSaving}
-                    className="text-red-600 hover:text-red-700 text-xs dark:text-red-400"
+                    className="ml-0.5 -mr-1 rounded-full p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                    aria-label="Remove"
                   >
-                    Remove
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
-                </li>
+                </span>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       )}
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 sm:p-6 dark:border-amber-800 dark:bg-amber-950/20 min-w-0 overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <div className="rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 px-4 py-4 dark:border-gray-800">
           <div>
-            <h2 className="font-medium text-amber-900 dark:text-amber-100 text-sm sm:text-base">Demand</h2>
-            <p className="text-xs text-amber-800/70 dark:text-amber-200/70 mt-0.5">
-              People needed per role per day &middot; {monthLabel}
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">Demand</h2>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              People needed per role per day · {monthLabel}
             </p>
           </div>
           {roles.length > 0 && (() => {
             const weekdayCount = days.filter((d) => d.getDay() !== 0 && d.getDay() !== 6).length;
             return (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-amber-700 dark:text-amber-300">Fill weekdays:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Fill weekdays:</span>
+                <div className="flex gap-1.5">
                 {roles.map((r) => {
                   const total = days
                     .filter((d) => d.getDay() !== 0 && d.getDay() !== 6)
@@ -500,23 +522,24 @@ export function RequestClient() {
                         }
                       }}
                       disabled={reqSaving}
-                      className="rounded border border-amber-300 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-200 disabled:opacity-50 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-800/50"
+                      className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:border-gray-300 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
                       {r.value}
                     </button>
                   );
                 })}
+                </div>
               </div>
             );
           })()}
         </div>
-        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 max-h-[60vh] overflow-y-auto">
+        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 max-h-[58vh] overflow-y-auto">
           <table className="min-w-full text-xs sm:text-sm">
-            <thead className="sticky top-0 z-10">
-              <tr className="border-b-2 border-amber-300 dark:border-amber-700 bg-amber-100/90 dark:bg-amber-950/90 backdrop-blur">
-                <th className="text-left py-2 px-2 sm:px-3 font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">Date</th>
+            <thead className="sticky top-0 z-10 bg-white dark:bg-gray-900/95 backdrop-blur-sm">
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <th className="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">Date</th>
                 {roles.map((r) => (
-                  <th key={r.id} className="text-center py-2 px-1 sm:px-3 font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">
+                  <th key={r.id} className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
                     {r.value}
                   </th>
                 ))}
@@ -532,23 +555,23 @@ export function RequestClient() {
                 return (
                   <tr
                     key={dateStr}
-                    className={`border-b transition-colors ${
-                      isMonday ? "border-t-2 border-t-amber-300 dark:border-t-amber-700" : ""
+                    className={`border-b border-gray-100 transition-colors dark:border-gray-800/80 ${
+                      isMonday ? "border-t-2 border-t-gray-200 dark:border-t-gray-700" : ""
                     } ${
                       isWeekend
-                        ? "bg-gray-100/60 dark:bg-gray-800/30 border-amber-100/50 dark:border-amber-900/30"
+                        ? "bg-gray-50/80 dark:bg-gray-800/20"
                         : hasAnyValue
-                        ? "bg-amber-50/50 dark:bg-amber-950/10 border-amber-100 dark:border-amber-900/50"
-                        : "border-amber-100 dark:border-amber-900/50"
+                        ? "bg-white dark:bg-gray-900/20"
+                        : ""
                     }`}
                   >
-                    <td className={`py-1.5 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap ${
+                    <td className={`py-2 px-3 text-xs sm:text-sm whitespace-nowrap ${
                       isWeekend
                         ? "text-gray-400 dark:text-gray-500"
-                        : "text-amber-800 dark:text-amber-200 font-medium"
+                        : "text-gray-700 dark:text-gray-300 font-medium"
                     }`}>
-                      <span className="inline-block w-5 text-right mr-1">{d.getDate()}</span>
-                      <span className={isWeekend ? "" : ""}>{new Date(d).toLocaleDateString("en-GB", { weekday: "short" })}</span>
+                      <span className="inline-block w-6 text-right tabular-nums mr-2">{d.getDate()}</span>
+                      <span>{new Date(d).toLocaleDateString("en-GB", { weekday: "short" })}</span>
                     </td>
                     {roles.map((r) => {
                       const isEditing = editingReq?.date === dateStr && editingReq?.role === r.value;
@@ -559,7 +582,7 @@ export function RequestClient() {
                       const isMet = hasDemand && supply >= stored;
                       const isShort = hasDemand && supply < stored;
                       return (
-                        <td key={r.id} className="py-0.5 px-1 sm:px-2 text-center">
+                        <td key={r.id} className="py-1.5 px-2 text-center">
                           <input
                             type="number"
                             min={0}
@@ -580,17 +603,17 @@ export function RequestClient() {
                               handleSetRequirement(dateStr, r.value, Number.isNaN(v) ? 0 : Math.max(0, v));
                               setEditingReq(null);
                             }}
-                            placeholder={isWeekend ? "·" : ""}
-                            className={`w-10 sm:w-12 rounded border px-1 py-1 text-center text-xs sm:text-sm transition-colors ${
+                            placeholder={isWeekend ? "—" : "0"}
+                            className={`w-11 sm:w-12 rounded-lg border px-1.5 py-1.5 text-center text-xs sm:text-sm font-medium tabular-nums transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 ${
                               isMet
-                                ? "border-emerald-300 bg-emerald-50 text-emerald-800 font-semibold dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200"
+                                ? "border-emerald-200 bg-emerald-50/80 text-emerald-800 focus:ring-emerald-200 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200 dark:focus:ring-emerald-800/50"
                                 : isShort
-                                ? "border-rose-300 bg-rose-50 text-rose-800 font-semibold dark:border-rose-700 dark:bg-rose-950/50 dark:text-rose-200"
+                                ? "border-rose-200 bg-rose-50/80 text-rose-800 focus:ring-rose-200 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-200 dark:focus:ring-rose-800/50"
                                 : hasDemand
-                                ? "border-amber-400 bg-amber-100 text-amber-900 font-semibold dark:border-amber-600 dark:bg-amber-900/50 dark:text-amber-100"
+                                ? "border-gray-300 bg-gray-50 text-gray-900 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:ring-gray-600"
                                 : isWeekend
-                                ? "border-gray-200 bg-gray-50/50 text-gray-300 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-600"
-                                : "border-amber-200 bg-white text-gray-700 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100"
+                                ? "border-gray-200 bg-gray-50/50 text-gray-400 focus:ring-gray-100 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500 dark:focus:ring-gray-700"
+                                : "border-gray-200 bg-white text-gray-700 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800/50 dark:text-gray-200 dark:focus:ring-gray-600"
                             }`}
                             disabled={reqSaving}
                           />
@@ -602,12 +625,12 @@ export function RequestClient() {
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-amber-300 dark:border-amber-700 bg-amber-100/50 dark:bg-amber-950/50">
-                <td className="py-2 px-2 sm:px-3 text-xs font-semibold text-amber-900 dark:text-amber-100">Total</td>
+              <tr className="border-t-2 border-gray-200 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-800/50">
+                <td className="py-3 px-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Total</td>
                 {roles.map((r) => {
                   const total = days.reduce((s, d) => s + (reqByDate[toYMD(d)]?.[r.value] ?? 0), 0);
                   return (
-                    <td key={r.id} className="py-2 px-1 sm:px-2 text-center text-xs font-bold text-amber-900 dark:text-amber-100">
+                    <td key={r.id} className="py-3 px-2 text-center text-sm font-bold tabular-nums text-gray-800 dark:text-gray-200">
                       {total > 0 ? total : "—"}
                     </td>
                   );
@@ -618,29 +641,33 @@ export function RequestClient() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-sky-200 bg-sky-50/30 p-4 sm:p-6 dark:border-sky-800 dark:bg-sky-950/20 min-w-0 overflow-hidden">
-        <h2 className="mb-2 font-medium text-sky-900 dark:text-sky-100 text-sm sm:text-base">Supply</h2>
-        <p className="mb-4 text-xs sm:text-sm text-sky-800/80 dark:text-sky-200/80">
-          Freelancers who submitted availability for {monthLabel}.
-        </p>
+      <div className="rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
+        <div className="border-b border-gray-100 px-4 py-4 dark:border-gray-800">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Supply</h2>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            Contractors who submitted availability for {monthLabel}.
+          </p>
+        </div>
         {byUser.length === 0 ? (
-          <p className="text-xs sm:text-sm text-sky-700 dark:text-sky-300">No availability submitted for this month.</p>
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">No availability submitted for this month.</p>
+          </div>
         ) : (
-          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-            <table className="min-w-full text-xs sm:text-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-sky-200 dark:border-sky-800">
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-sky-900 dark:text-sky-100">Name</th>
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-sky-900 dark:text-sky-100">Role</th>
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-sky-900 dark:text-sky-100">Days</th>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Name</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Role</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Days</th>
                 </tr>
               </thead>
               <tbody>
                 {byUser.map((u) => (
-                  <tr key={u.userId} className="border-b border-sky-100 dark:border-sky-900/50">
-                    <td className="py-2 px-2 sm:px-3 text-sky-900 dark:text-sky-100 max-w-[80px] sm:max-w-[120px] truncate" title={u.name}>{u.name}</td>
-                    <td className="py-2 px-2 sm:px-3 text-sky-700 dark:text-sky-200">{u.role || "—"}</td>
-                    <td className="py-2 px-2 sm:px-3 text-sky-600 dark:text-sky-300 text-xs">
+                  <tr key={u.userId} className="border-b border-gray-100 transition-colors hover:bg-gray-50/50 dark:border-gray-800 dark:hover:bg-gray-800/30">
+                    <td className="py-2.5 px-4 font-medium text-gray-900 dark:text-white max-w-[140px] truncate" title={u.name}>{u.name}</td>
+                    <td className="py-2.5 px-4 text-gray-600 dark:text-gray-400">{u.role || "—"}</td>
+                    <td className="py-2.5 px-4 text-gray-500 dark:text-gray-500 text-xs tabular-nums">
                       {u.dates.map((day) => day.slice(8)).join(", ")}
                     </td>
                   </tr>
@@ -652,20 +679,22 @@ export function RequestClient() {
       </div>
 
       {requirements.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-700 dark:bg-gray-900/80 min-w-0 overflow-hidden">
-          <h2 className="mb-2 font-medium text-gray-900 dark:text-white text-sm sm:text-base">Demand vs Supply</h2>
-          <p className="mb-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            Compare required headcount with available freelancers per day and role.
-          </p>
-          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-            <table className="min-w-full text-xs sm:text-sm">
+        <div className="rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
+          <div className="border-b border-gray-100 px-4 py-4 dark:border-gray-800">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">Demand vs Supply</h2>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              Compare required headcount with available contractors per day and role.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Date</th>
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Role</th>
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Demand</th>
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Supply</th>
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-700 dark:text-gray-300">Match</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Date</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Role</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Demand</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Supply</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -673,19 +702,19 @@ export function RequestClient() {
                   const supply = supplyByDateRole.get(`${r.date}|${r.role}`) ?? 0;
                   const ok = supply >= r.count_needed;
                   return (
-                    <tr key={`${r.date}-${r.role}`} className="border-b border-gray-100 dark:border-gray-800">
-                      <td className="py-2 px-2 sm:px-3 text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
+                    <tr key={`${r.date}-${r.role}`} className="border-b border-gray-100 transition-colors hover:bg-gray-50/50 dark:border-gray-800 dark:hover:bg-gray-800/30">
+                      <td className="py-2.5 px-4 text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                         {new Date(r.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })}
                       </td>
-                      <td className="py-2 px-2 sm:px-3 text-gray-700 dark:text-gray-300">{r.role}</td>
-                      <td className="py-2 px-2 sm:px-3 text-amber-600 dark:text-amber-400">{r.count_needed}</td>
-                      <td className="py-2 px-2 sm:px-3 text-sky-600 dark:text-sky-400">{supply}</td>
-                      <td className="py-2 px-2 sm:px-3">
+                      <td className="py-2.5 px-4 font-medium text-gray-800 dark:text-gray-200">{r.role}</td>
+                      <td className="py-2.5 px-4 text-right tabular-nums text-gray-700 dark:text-gray-300">{r.count_needed}</td>
+                      <td className="py-2.5 px-4 text-right tabular-nums text-gray-600 dark:text-gray-400">{supply}</td>
+                      <td className="py-2.5 px-4 text-center">
                         <span
-                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                             ok
                               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200"
-                              : "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200"
+                              : "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-200"
                           }`}
                         >
                           {ok ? "OK" : "Short"}
@@ -700,22 +729,23 @@ export function RequestClient() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 sm:gap-4 items-center min-w-0">
+      <div className="flex flex-wrap gap-3 items-center min-w-0 pt-2">
         {canRunAiSuggest && (
-        <button
-          type="button"
-          onClick={handleAiSuggest}
-          disabled={aiLoading || requirements.length === 0}
-          className="rounded-lg bg-violet-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-        >
-          {aiLoading ? "Running AI..." : "AI Suggest Assignments"}
-        </button>
+          <button
+            type="button"
+            onClick={handleAiSuggest}
+            disabled={aiLoading || requirements.length === 0}
+            className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+          >
+            {aiLoading ? "Running AI…" : "AI Suggest Assignments"}
+          </button>
         )}
         <Link
           href="/contractor-availability"
-          className="rounded-lg border border-gray-300 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          className="inline-flex items-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
         >
-          {canRunAiSuggest ? "Review & Approve in My Availability →" : "View in My Availability →"}
+          {canRunAiSuggest ? "Review & Approve in My Availability" : "View in My Availability"}
+          <svg className="ml-1.5 h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
         </Link>
       </div>
     </div>
