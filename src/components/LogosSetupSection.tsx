@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 
 const LOGO_OPTIONS = [
   { key: "logo_trt", label: "TRT Logo", desc: "Nav, Dashboard, Upload overlay, LogoLoader" },
@@ -10,7 +9,6 @@ const LOGO_OPTIONS = [
 ] as const;
 
 export function LogosSetupSection() {
-  const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>({});
   const [uploadFilenames, setUploadFilenames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -18,6 +16,16 @@ export function LogosSetupSection() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [previewStamp, setPreviewStamp] = useState(() => Date.now());
+
+  useEffect(() => {
+    try {
+      const s = sessionStorage.getItem("logo-upload-result");
+      if (s) {
+        sessionStorage.removeItem("logo-upload-result");
+        setMessage(JSON.parse(s) as { type: string; text: string });
+      }
+    } catch {}
+  }, []);
 
   const fetchLogos = () => {
     fetch(`/api/admin/app-settings?_=${Date.now()}`, { cache: "no-store" })
@@ -57,7 +65,6 @@ export function LogosSetupSection() {
         setPreviewStamp(Date.now());
         setMessage({ type: "success", text: "Saved and applied." });
         window.dispatchEvent(new CustomEvent("logos-updated"));
-        router.refresh();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to save." });
       }
@@ -107,13 +114,21 @@ export function LogosSetupSection() {
           verifyMsg = " | DB check failed";
         }
 
-        setMessage({ type: "success", text: `Upload OK. New URL: ${data.value}${verifyMsg}` });
+        const msg = { type: "success", text: `Upload OK. New URL: ${data.value}${verifyMsg}` };
+        setMessage(msg);
+        try {
+          sessionStorage.setItem("logo-upload-result", JSON.stringify(msg));
+        } catch {}
         window.dispatchEvent(new CustomEvent("logos-updated"));
       } else {
-        setMessage({ type: "error", text: data.error || `Upload failed (HTTP ${res.status}). Please refresh and try again.` });
+        const errMsg = { type: "error", text: data.error || `Upload failed (HTTP ${res.status}). Please refresh and try again.` };
+        setMessage(errMsg);
+        try { sessionStorage.setItem("logo-upload-result", JSON.stringify(errMsg)); } catch {}
       }
     } catch (err) {
-      setMessage({ type: "error", text: `Upload error: ${(err as Error).message}. Please refresh the page.` });
+      const errMsg = { type: "error", text: `Upload error: ${(err as Error).message}. Please refresh the page.` };
+      setMessage(errMsg);
+      try { sessionStorage.setItem("logo-upload-result", JSON.stringify(errMsg)); } catch {}
     } finally {
       setUploading(null);
     }
