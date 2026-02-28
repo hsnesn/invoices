@@ -458,190 +458,177 @@ export function ContractorAvailabilityClient() {
       </div>
 
       {tab === "form" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-700 dark:bg-gray-900/80 min-w-0">
-          <h2 className="mb-2 font-medium text-gray-900 dark:text-white">Submit your availability</h2>
-          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-            Your name, role and available days. Each submission creates a record. Others see only their own; admin sees all.
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Submit your availability</h2>
+          <p className="mt-1 mb-4 text-sm text-gray-500 dark:text-gray-400">
+            Select department, role and month, then mark your available or blocked days.
           </p>
 
-          <div className="mb-4 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-              <input
-                type="text"
-                value={profile?.full_name ?? ""}
-                readOnly
-                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 w-full max-w-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Department <span className="text-red-500">*</span></label>
-              <select
-                value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white max-w-xs"
-              >
-                <option value="">Select department...</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Program</label>
-              <select
-                value={selectedProgram}
-                onChange={(e) => setSelectedProgram(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white max-w-xs"
-              >
-                <option value="">All programs</option>
-                {programs.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role <span className="text-red-500">*</span></label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white max-w-xs"
-              >
-                <option value="">Select role...</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.value}>
-                    {r.value}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Month</label>
-              <div className="flex gap-2">
+          <div className="mb-4 rounded-xl border border-gray-200/80 bg-gray-50/50 p-4 dark:border-gray-700/60 dark:bg-gray-800/30">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Name</label>
+                <input
+                  type="text"
+                  value={profile?.full_name ?? ""}
+                  readOnly
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Department <span className="text-red-500">*</span></label>
                 <select
-                  value={month}
-                  onChange={(e) => setMonth(e.target.value)}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 >
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const m = String(i + 1).padStart(2, "0");
-                    const y = month.split("-")[0];
-                    const label = new Date(2000, i).toLocaleString("en-GB", { month: "long" });
-                    return (
-                      <option key={m} value={`${y}-${m}`}>
-                        {label}
-                      </option>
-                    );
-                  })}
+                  <option value="">Select department...</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
                 </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Program</label>
                 <select
-                  value={month.split("-")[0]}
-                  onChange={(e) => {
-                    const y = e.target.value;
-                    const m = month.split("-")[1];
-                    setMonth(`${y}-${m}`);
-                  }}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  value={selectedProgram}
+                  onChange={(e) => setSelectedProgram(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 >
-                  {Array.from({ length: 4 }, (_, i) => {
-                    const y = new Date().getFullYear() - 1 + i;
-                    return (
-                      <option key={y} value={String(y)}>
-                        {y}
-                      </option>
-                    );
-                  })}
+                  <option value="">All programs</option>
+                  {programs.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
                 </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Role <span className="text-red-500">*</span></label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="">Select role...</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.value}>{r.value}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Month</label>
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    value={month}
+                    onChange={(e) => setMonth(e.target.value)}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white min-w-[100px]"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const m = String(i + 1).padStart(2, "0");
+                      const y = month.split("-")[0];
+                      const label = new Date(2000, i).toLocaleString("en-GB", { month: "long" });
+                      return (
+                        <option key={m} value={`${y}-${m}`}>{label}</option>
+                      );
+                    })}
+                  </select>
+                  <select
+                    value={month.split("-")[0]}
+                    onChange={(e) => {
+                      const y = e.target.value;
+                      const m = month.split("-")[1];
+                      setMonth(`${y}-${m}`);
+                    }}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white w-20"
+                  >
+                    {Array.from({ length: 4 }, (_, i) => {
+                      const y = new Date().getFullYear() - 1 + i;
+                      return <option key={y} value={String(y)}>{y}</option>;
+                    })}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!selectedDepartment) {
+                        setMessage({ type: "error", text: "Please select a department first." });
+                        return;
+                      }
+                      setCopyAvailLoading(true);
+                      setMessage(null);
+                      try {
+                        const [curY, curM] = month.split("-").map(Number);
+                        const prev = new Date(curY, curM - 2, 1);
+                        const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+                        const params = new URLSearchParams({ month: prevMonth, department_id: selectedDepartment });
+                        if (selectedProgram) params.set("program_id", selectedProgram);
+                        const res = await fetch(`/api/output-schedule/availability?${params}`);
+                        const data = await res.json();
+                        const prevDates: string[] = data.dates ?? [];
+                        const daysInCurrent = new Date(curY, curM, 0).getDate();
+                        const mapped = new Set<string>();
+                        for (const d of prevDates) {
+                          const day = parseInt(d.slice(8, 10), 10);
+                          if (day <= daysInCurrent) mapped.add(`${month}-${String(day).padStart(2, "0")}`);
+                        }
+                        setSelectedDates(mapped);
+                        if (data.role) setSelectedRole(data.role);
+                        setMessage({ type: "success", text: `Copied ${mapped.size} day${mapped.size !== 1 ? "s" : ""} from ${prevMonthLabel}.` });
+                        setTimeout(() => setMessage(null), 3000);
+                      } catch {
+                        setMessage({ type: "error", text: "Failed to copy from last month." });
+                      } finally {
+                        setCopyAvailLoading(false);
+                      }
+                    }}
+                    disabled={copyAvailLoading || !selectedDepartment}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
+                      <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
+                      <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
+                    </svg>
+                    {copyAvailLoading ? "Copying…" : `Copy from ${prevMonthLabel}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-3">
+              <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Select days</span>
+              <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 p-0.5 bg-white dark:bg-gray-800">
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!selectedDepartment) {
-                      setMessage({ type: "error", text: "Please select a department first." });
-                      return;
-                    }
-                    setCopyAvailLoading(true);
-                    setMessage(null);
-                    try {
-                      const [curY, curM] = month.split("-").map(Number);
-                      const prev = new Date(curY, curM - 2, 1);
-                      const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
-                      const params = new URLSearchParams({ month: prevMonth, department_id: selectedDepartment });
-                      if (selectedProgram) params.set("program_id", selectedProgram);
-                      const res = await fetch(`/api/output-schedule/availability?${params}`);
-                      const data = await res.json();
-                      const prevDates: string[] = data.dates ?? [];
-                      const daysInCurrent = new Date(curY, curM, 0).getDate();
-                      const mapped = new Set<string>();
-                      for (const d of prevDates) {
-                        const day = parseInt(d.slice(8, 10), 10);
-                        if (day <= daysInCurrent) {
-                          mapped.add(`${month}-${String(day).padStart(2, "0")}`);
-                        }
-                      }
-                      setSelectedDates(mapped);
-                      if (data.role) setSelectedRole(data.role);
-                      setMessage({ type: "success", text: `Copied ${mapped.size} day${mapped.size !== 1 ? "s" : ""} from ${prevMonthLabel}.` });
-                      setTimeout(() => setMessage(null), 3000);
-                    } catch {
-                      setMessage({ type: "error", text: "Failed to copy from last month." });
-                    } finally {
-                      setCopyAvailLoading(false);
-                    }
-                  }}
-                  disabled={copyAvailLoading || !selectedDepartment}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap"
+                  onClick={() => setCalendarMode("available")}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    calendarMode === "available"
+                      ? "bg-sky-600 text-white shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
-                    <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
-                    <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
-                  </svg>
-                  {copyAvailLoading ? "Copying..." : `Copy from ${prevMonthLabel}`}
+                  Available
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarMode("blocked")}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    calendarMode === "blocked"
+                      ? "bg-red-600 text-white shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  Blocked
                 </button>
               </div>
             </div>
           </div>
-
-          <div className="mb-2 flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Select days</span>
-            <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 p-0.5">
-              <button
-                type="button"
-                onClick={() => setCalendarMode("available")}
-                className={`rounded-md px-2 py-1 text-xs font-medium ${
-                  calendarMode === "available"
-                    ? "bg-sky-600 text-white"
-                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                Available
-              </button>
-              <button
-                type="button"
-                onClick={() => setCalendarMode("blocked")}
-                className={`rounded-md px-2 py-1 text-xs font-medium ${
-                  calendarMode === "blocked"
-                    ? "bg-red-600 text-white"
-                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                Blocked
-              </button>
-            </div>
-          </div>
           <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-            Click a day to toggle. Past days are disabled. <span className="text-emerald-600 dark:text-emerald-400">Green</span> = booked. <span className="text-sky-600 dark:text-sky-400">Blue</span> = available. <span className="text-red-600 dark:text-red-400">Red</span> = blocked.
+            Click a day to toggle. Past days are disabled. <span className="font-medium text-emerald-600 dark:text-emerald-400">Green</span> = booked · <span className="font-medium text-sky-600 dark:text-sky-400">Blue</span> = available · <span className="font-medium text-red-600 dark:text-red-400">Red</span> = blocked.
           </p>
 
           {message && (
             <div
-              className={`mb-4 rounded-lg border p-3 text-sm ${
+              className={`mb-4 rounded-xl border px-4 py-3 text-sm font-medium ${
                 message.type === "success"
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200"
-                  : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-200"
+                  ? "border-emerald-200 bg-emerald-50/80 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-200"
+                  : "border-rose-200 bg-rose-50/80 text-rose-800 dark:border-rose-800/50 dark:bg-rose-950/30 dark:text-rose-200"
               }`}
             >
               {message.text}
