@@ -1,5 +1,5 @@
 import { requirePageAccess } from "@/lib/auth";
-import { RequestClient } from "./RequestClient";
+import { RequestPageClient } from "./RequestPageClient";
 
 export default async function RequestPage() {
   await requirePageAccess("request");
@@ -9,7 +9,7 @@ export default async function RequestPage() {
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
         Enter daily requirements (demand), compare with freelancer availability (supply). Only admin or operations can run AI suggest and approve.
       </p>
-      <RequestClient />
+      <RequestPageClient />
     </div>
   );
 }

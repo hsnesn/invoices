@@ -15,11 +15,14 @@ function canRunAiSuggest(role: string) {
 }
 
 /** Fair assignment: fill each (date, role) slot from available people.
- * Uses preference list (most assigned first) when multiple people available, then minimizes variance in shifts. */
+ * 1. Per-user preference: people who appear in more users' lists get higher score.
+ * 2. Assignment count (most assigned first) per role.
+ * 3. Minimize variance in shifts. */
 function suggestAssignments(
   requirements: { date: string; role: string; count_needed: number }[],
   availability: { user_id: string; date: string; role: string | null }[],
-  preferenceByRole: Map<string, Map<string, number>>
+  preferenceByRole: Map<string, Map<string, number>>,
+  prefScoreByUser: Map<string, number>
 ): { user_id: string; date: string; role: string }[] {
   const availByDateRole = new Map<string, Set<string>>();
   for (const a of availability) {
@@ -41,6 +44,9 @@ function suggestAssignments(
     const prefMap = preferenceByRole.get(req.role);
 
     const sorted = Array.from(available).sort((a, b) => {
+      const scoreA = prefScoreByUser.get(a) ?? 0;
+      const scoreB = prefScoreByUser.get(b) ?? 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
       const prefA = prefMap?.get(a) ?? 0;
       const prefB = prefMap?.get(b) ?? 0;
       if (prefB !== prefA) return prefB - prefA;
@@ -119,7 +125,18 @@ export async function POST(request: NextRequest) {
       m.set(uid, (m.get(uid) ?? 0) + 1);
     }
 
-    const suggested = suggestAssignments(requirements, availability, preferenceByRole);
+    const { data: perUserPrefs } = await supabase
+      .from("contractor_preference_per_user")
+      .select("user_id, preferred_user_id, sort_order");
+    const prefScoreByUser = new Map<string, number>();
+    for (const r of perUserPrefs ?? []) {
+      const preferred = (r as { preferred_user_id: string }).preferred_user_id;
+      const sortOrder = (r as { sort_order: number }).sort_order;
+      const score = 1000 - sortOrder;
+      prefScoreByUser.set(preferred, (prefScoreByUser.get(preferred) ?? 0) + score);
+    }
+
+    const suggested = suggestAssignments(requirements, availability, preferenceByRole, prefScoreByUser);
     const suggestedSeen = new Set<string>();
     const suggestedDeduped = suggested.filter((s) => {
       const key = `${s.user_id}|${s.date}`;
