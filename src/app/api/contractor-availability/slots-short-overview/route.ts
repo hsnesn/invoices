@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
               shortByRole.set(r.role, (shortByRole.get(r.role) ?? 0) + short);
             }
           }
-          for (const [role, slotsShort] of shortByRole) {
+          for (const [role, slotsShort] of Array.from(shortByRole.entries())) {
             if (slotsShort > 0) {
               rows.push({
                 month: monthKey,
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
             shortByRole.set(r.role, (shortByRole.get(r.role) ?? 0) + short);
           }
         }
-        for (const [role, slotsShort] of shortByRole) {
+        for (const [role, slotsShort] of Array.from(shortByRole.entries())) {
           if (slotsShort > 0) {
             rows.push({
               month: monthKey,
