@@ -124,16 +124,44 @@ export async function PUT(request: NextRequest) {
     const count = Math.max(0, Math.min(99, Math.floor(Number(count_needed) || 0)));
 
     const supabase = createAdminClient();
-    const row = { date, role: role.trim(), count_needed: count, department_id: deptId, program_id: progId, updated_at: new Date().toISOString() };
-    const { data, error } = await supabase
+    const roleTrimmed = role.trim();
+
+    // Delete existing row first (avoids upsert conflict issues with nullable program_id)
+    let delQuery = supabase
       .from("contractor_availability_requirements")
-      .upsert(row, { onConflict: "date,role,department_id,program_id", ignoreDuplicates: false })
+      .delete()
+      .eq("date", date)
+      .eq("role", roleTrimmed)
+      .eq("department_id", deptId);
+    if (progId) {
+      delQuery = delQuery.eq("program_id", progId);
+    } else {
+      delQuery = delQuery.is("program_id", null);
+    }
+    const { error: delError } = await delQuery;
+    if (delError) {
+      console.error("[requirements PUT] delete", delError);
+      return NextResponse.json({ error: delError.message }, { status: 500 });
+    }
+
+    // Insert new row
+    const row = {
+      date,
+      role: roleTrimmed,
+      count_needed: count,
+      department_id: deptId,
+      program_id: progId,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error: insError } = await supabase
+      .from("contractor_availability_requirements")
+      .insert(row)
       .select()
       .single();
 
-    if (error) {
-      console.error("[requirements PUT]", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (insError) {
+      console.error("[requirements PUT] insert", insError);
+      return NextResponse.json({ error: insError.message }, { status: 500 });
     }
     return NextResponse.json(data);
   } catch (e) {
