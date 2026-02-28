@@ -12,6 +12,11 @@ function canManage(role: string) {
   return ["admin", "operations", "manager"].includes(role);
 }
 
+/** Only admin and operations can approve/save assignments. Manager can only request (enter demand). */
+function canApprove(role: string) {
+  return role === "admin" || role === "operations";
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { profile } = await requireAuth();
@@ -56,8 +61,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { profile } = await requireAuth();
-    if (!canManage(profile.role)) {
-      return NextResponse.json({ error: "Admin, operations or manager only." }, { status: 403 });
+    if (!canApprove(profile.role)) {
+      return NextResponse.json({ error: "Only admin or operations can approve or save assignments." }, { status: 403 });
     }
 
     const body = await request.json();

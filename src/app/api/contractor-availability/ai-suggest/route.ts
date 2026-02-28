@@ -8,8 +8,9 @@ import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-function canManage(role: string) {
-  return ["admin", "operations", "manager"].includes(role);
+/** Only admin and operations can run AI suggest. Manager can only request (enter demand). */
+function canRunAiSuggest(role: string) {
+  return role === "admin" || role === "operations";
 }
 
 /** Fair assignment: fill each (date, role) slot from available people, minimizing variance in shifts per person. */
@@ -55,8 +56,8 @@ function suggestAssignments(
 export async function POST(request: NextRequest) {
   try {
     const { profile } = await requireAuth();
-    if (!canManage(profile.role)) {
-      return NextResponse.json({ error: "Admin, operations or manager only." }, { status: 403 });
+    if (!canRunAiSuggest(profile.role)) {
+      return NextResponse.json({ error: "Only admin or operations can run AI suggest." }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));

@@ -64,6 +64,8 @@ export function ContractorAvailabilityClient() {
   const [assignEditable, setAssignEditable] = useState<AssignItem[]>([]);
 
   const canManage = profile?.role === "admin" || profile?.role === "operations" || profile?.role === "manager";
+  /** Only admin and operations can approve/save/AI suggest. Manager can only request (enter demand). */
+  const canApprove = profile?.role === "admin" || profile?.role === "operations";
 
   useEffect(() => {
     fetch("/api/profile")
@@ -556,6 +558,7 @@ export function ContractorAvailabilityClient() {
                 );
               })}
             </select>
+            {canApprove && (
             <button
               type="button"
               onClick={async () => {
@@ -589,6 +592,8 @@ export function ContractorAvailabilityClient() {
             >
               {assignSaving ? "Running..." : "AI Suggest"}
             </button>
+            )}
+            {canApprove && (
             <button
               type="button"
               onClick={async () => {
@@ -626,6 +631,8 @@ export function ContractorAvailabilityClient() {
             >
               Save Changes
             </button>
+            )}
+            {canApprove && (
             <button
               type="button"
               onClick={async () => {
@@ -662,6 +669,7 @@ export function ContractorAvailabilityClient() {
             >
               Approve & Send Emails
             </button>
+            )}
           </div>
           {message && tab === "assignments" && (
             <div
@@ -689,7 +697,7 @@ export function ContractorAvailabilityClient() {
                     <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Date</th>
                     <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Role</th>
                     <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Status</th>
-                    {assignEditable.some((a) => a.status === "pending") && (
+                    {canApprove && assignEditable.some((a) => a.status === "pending") && (
                       <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300 w-12" />
                     )}
                   </tr>
@@ -715,7 +723,7 @@ export function ContractorAvailabilityClient() {
                           {a.status}
                         </span>
                       </td>
-                      {assignEditable.some((x) => x.status === "pending") && (
+                      {canApprove && assignEditable.some((x) => x.status === "pending") && (
                         <td className="py-2 px-3">
                           {a.status === "pending" ? (
                             <button

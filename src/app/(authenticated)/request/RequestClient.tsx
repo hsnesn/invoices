@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 
+type Profile = { id: string; full_name: string | null; role: string };
+
 type RoleItem = { id: string; value: string; sort_order: number };
 type ByUserItem = { userId: string; name: string; email: string; role: string; dates: string[] };
 type ReqItem = { date: string; role: string; count_needed: number };
@@ -35,9 +37,20 @@ export function RequestClient() {
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  /** Only admin and operations can run AI suggest. Manager can only enter demand. */
+  const canRunAiSuggest = profile?.role === "admin" || profile?.role === "operations";
 
   const [y, m] = month.split("-").map(Number);
   const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((r) => r.json())
+      .then((d) => setProfile(d))
+      .catch(() => setProfile(null));
+  }, []);
 
   useEffect(() => {
     fetch("/api/contractor-availability/roles")
@@ -342,6 +355,7 @@ export function RequestClient() {
       )}
 
       <div className="flex flex-wrap gap-4 items-center">
+        {canRunAiSuggest && (
         <button
           type="button"
           onClick={handleAiSuggest}
@@ -350,11 +364,12 @@ export function RequestClient() {
         >
           {aiLoading ? "Running AI..." : "AI Suggest Assignments"}
         </button>
+        )}
         <Link
           href="/contractor-availability"
           className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
         >
-          Review & Approve in Contractor Availability →
+          {canRunAiSuggest ? "Review & Approve in Contractor Availability →" : "View in Contractor Availability →"}
         </Link>
       </div>
     </div>

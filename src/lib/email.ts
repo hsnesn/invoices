@@ -712,6 +712,7 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
     : "—";
   return sendEmail({
     to: params.to,
+    replyTo: LONDON_OPS_EMAIL,
     subject: `Your schedule is confirmed — ${params.monthLabel}`,
     html: await wrapWithLogo("Schedule Confirmed", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
