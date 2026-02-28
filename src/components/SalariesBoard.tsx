@@ -9,6 +9,7 @@ import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 import { useExportLocale } from "@/contexts/ExportLocaleContext";
 import { ExportLocaleSelector } from "./ExportLocaleSelector";
 import { LogoLoader } from "./LogoLoader";
+import { UploadOverlay } from "./UploadOverlay";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -957,6 +958,7 @@ export function SalariesBoard({
 
   return (
     <div className="space-y-6">
+      {uploading && <UploadOverlay message="Uploading..." />}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payslips</h1>
         <div className="flex flex-wrap gap-2">

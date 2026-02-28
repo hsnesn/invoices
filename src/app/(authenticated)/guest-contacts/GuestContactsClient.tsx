@@ -11,6 +11,7 @@ import { PHONE_COUNTRIES, DEFAULT_PHONE_COUNTRY, inferPhoneCountry } from "@/lib
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
 import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
 import { LogoLoader } from "@/components/LogoLoader";
+import { UploadOverlay } from "@/components/UploadOverlay";
 
 type FilterParams = {
   search?: string;
@@ -806,6 +807,7 @@ export function GuestContactsClient({
 
   return (
     <div>
+      {bulkUploading && <UploadOverlay message="Processing..." />}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Guest Contacts</h1>

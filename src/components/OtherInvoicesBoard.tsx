@@ -10,6 +10,7 @@ import { OtherDashboard } from "./OtherDashboard";
 import { useExportLocale } from "@/contexts/ExportLocaleContext";
 import { ExportLocaleSelector } from "./ExportLocaleSelector";
 import { LogoLoader } from "./LogoLoader";
+import { UploadOverlay } from "./UploadOverlay";
 
 function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
@@ -599,6 +600,7 @@ export function OtherInvoicesBoard({
 
   return (
     <div className="space-y-4 text-slate-800 dark:text-slate-100 max-w-full min-w-0 overflow-x-hidden">
+      {uploading && <UploadOverlay message="Uploading..." />}
       {actionLoadingId && (
         <div className="fixed top-0 left-0 right-0 z-50 h-1 overflow-hidden bg-slate-200 dark:bg-slate-700">
           <div className="h-full w-1/3 bg-blue-500 animate-loading-bar" />

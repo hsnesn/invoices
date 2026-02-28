@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { GenerateInvoiceForm } from "@/components/GenerateInvoiceForm";
 import { LogoLoader } from "@/components/LogoLoader";
+import { UploadOverlay } from "@/components/UploadOverlay";
 
 type DuplicateHit = {
   id: string;
@@ -236,6 +237,8 @@ function SubmitPageContent() {
   };
 
   return (
+    <>
+      {loading && <UploadOverlay message="Submitting..." />}
     <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-white p-8 text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
       <div className="mb-8 flex items-center justify-between">
         <div>
@@ -611,5 +614,6 @@ function SubmitPageContent() {
         </div>
       )}
     </div>
+    </>
   );
 }

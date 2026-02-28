@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { LogoLoader } from "@/components/LogoLoader";
+import { UploadOverlay } from "@/components/UploadOverlay";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -157,6 +158,8 @@ export default function FreelancerSubmitPage() {
   const hintCls = "text-xs text-gray-400 mt-0.5";
 
   return (
+    <>
+      {loading && <UploadOverlay message="Uploading..." />}
     <div className="mx-auto max-w-2xl py-8 px-4">
       <div className="mb-6">
         <button onClick={() => router.push("/freelancer-invoices")} className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 mb-3 inline-flex items-center gap-1">
@@ -430,5 +433,6 @@ export default function FreelancerSubmitPage() {
         </button>
       </form>
     </div>
+    </>
   );
 }
