@@ -437,38 +437,99 @@ export function RequestClient() {
       )}
 
       <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 sm:p-6 dark:border-amber-800 dark:bg-amber-950/20 min-w-0 overflow-hidden">
-        <h2 className="mb-2 font-medium text-amber-900 dark:text-amber-100 text-sm sm:text-base">Demand</h2>
-        <p className="mb-4 text-xs sm:text-sm text-amber-800/80 dark:text-amber-200/80">
-          Enter how many people per role are needed each day.
-        </p>
-        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 className="font-medium text-amber-900 dark:text-amber-100 text-sm sm:text-base">Demand</h2>
+            <p className="text-xs text-amber-800/70 dark:text-amber-200/70 mt-0.5">
+              People needed per role per day &middot; {monthLabel}
+            </p>
+          </div>
+          {roles.length > 0 && (() => {
+            const weekdayCount = days.filter((d) => d.getDay() !== 0 && d.getDay() !== 6).length;
+            return (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-amber-700 dark:text-amber-300">Fill weekdays:</span>
+                {roles.map((r) => {
+                  const total = days
+                    .filter((d) => d.getDay() !== 0 && d.getDay() !== 6)
+                    .reduce((s, d) => s + (reqByDate[toYMD(d)]?.[r.value] ?? 0), 0);
+                  const avg = weekdayCount > 0 ? Math.round(total / weekdayCount) : 0;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      title={`Fill all weekdays with selected count for ${r.value}`}
+                      onClick={async () => {
+                        const val = prompt(`Set all weekdays for "${r.value}" to:`, String(avg || 1));
+                        if (val == null) return;
+                        const n = Math.max(0, Math.min(99, parseInt(val, 10) || 0));
+                        for (const d of days) {
+                          if (d.getDay() === 0 || d.getDay() === 6) continue;
+                          await handleSetRequirement(toYMD(d), r.value, n);
+                        }
+                      }}
+                      disabled={reqSaving}
+                      className="rounded border border-amber-300 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-200 disabled:opacity-50 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-800/50"
+                    >
+                      {r.value}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 max-h-[60vh] overflow-y-auto">
           <table className="min-w-full text-xs sm:text-sm">
-              <thead>
-                <tr className="border-b border-amber-200 dark:border-amber-800">
-                  <th className="text-left py-2 px-2 sm:px-3 font-medium text-amber-900 dark:text-amber-100">Date</th>
-                  {roles.map((r) => (
-                    <th key={r.id} className="text-left py-2 px-1 sm:px-3 font-medium text-amber-900 dark:text-amber-100">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b-2 border-amber-300 dark:border-amber-700 bg-amber-100/90 dark:bg-amber-950/90 backdrop-blur">
+                <th className="text-left py-2 px-2 sm:px-3 font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">Date</th>
+                {roles.map((r) => (
+                  <th key={r.id} className="text-center py-2 px-1 sm:px-3 font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">
                     {r.value}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {days.map((d) => {
+              {days.map((d, idx) => {
                 const dateStr = toYMD(d);
+                const dayOfWeek = d.getDay();
+                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                const isMonday = dayOfWeek === 1 && idx > 0;
+                const hasAnyValue = roles.some((r) => (reqByDate[dateStr]?.[r.value] ?? 0) > 0);
                 return (
-                  <tr key={dateStr} className="border-b border-amber-100 dark:border-amber-900/50">
-                    <td className="py-2 px-2 sm:px-3 text-amber-800 dark:text-amber-200 text-xs sm:text-sm">
-                      {d.getDate()} {new Date(d).toLocaleDateString("en-GB", { weekday: "short" })}
+                  <tr
+                    key={dateStr}
+                    className={`border-b transition-colors ${
+                      isMonday ? "border-t-2 border-t-amber-300 dark:border-t-amber-700" : ""
+                    } ${
+                      isWeekend
+                        ? "bg-gray-100/60 dark:bg-gray-800/30 border-amber-100/50 dark:border-amber-900/30"
+                        : hasAnyValue
+                        ? "bg-amber-50/50 dark:bg-amber-950/10 border-amber-100 dark:border-amber-900/50"
+                        : "border-amber-100 dark:border-amber-900/50"
+                    }`}
+                  >
+                    <td className={`py-1.5 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap ${
+                      isWeekend
+                        ? "text-gray-400 dark:text-gray-500"
+                        : "text-amber-800 dark:text-amber-200 font-medium"
+                    }`}>
+                      <span className="inline-block w-5 text-right mr-1">{d.getDate()}</span>
+                      <span className={isWeekend ? "" : ""}>{new Date(d).toLocaleDateString("en-GB", { weekday: "short" })}</span>
                     </td>
                     {roles.map((r) => {
                       const isEditing = editingReq?.date === dateStr && editingReq?.role === r.value;
-                      const displayVal = isEditing
-                        ? editingReq!.val
-                        : String(reqByDate[dateStr]?.[r.value] ?? "");
-                    return (
-                      <td key={r.id} className="py-1 px-1 sm:px-2">
-                        <input
+                      const stored = reqByDate[dateStr]?.[r.value] ?? 0;
+                      const displayVal = isEditing ? editingReq!.val : stored > 0 ? String(stored) : "";
+                      const supply = supplyByDateRole.get(`${dateStr}|${r.value}`) ?? 0;
+                      const hasDemand = stored > 0;
+                      const isMet = hasDemand && supply >= stored;
+                      const isShort = hasDemand && supply < stored;
+                      return (
+                        <td key={r.id} className="py-0.5 px-1 sm:px-2 text-center">
+                          <input
                             type="number"
                             min={0}
                             max={99}
@@ -488,8 +549,18 @@ export function RequestClient() {
                               handleSetRequirement(dateStr, r.value, Number.isNaN(v) ? 0 : Math.max(0, v));
                               setEditingReq(null);
                             }}
-                            placeholder="0"
-                            className="w-10 sm:w-14 rounded border border-amber-300 px-1 sm:px-2 py-1 text-center text-xs sm:text-sm dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100"
+                            placeholder={isWeekend ? "·" : ""}
+                            className={`w-10 sm:w-12 rounded border px-1 py-1 text-center text-xs sm:text-sm transition-colors ${
+                              isMet
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-800 font-semibold dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200"
+                                : isShort
+                                ? "border-rose-300 bg-rose-50 text-rose-800 font-semibold dark:border-rose-700 dark:bg-rose-950/50 dark:text-rose-200"
+                                : hasDemand
+                                ? "border-amber-400 bg-amber-100 text-amber-900 font-semibold dark:border-amber-600 dark:bg-amber-900/50 dark:text-amber-100"
+                                : isWeekend
+                                ? "border-gray-200 bg-gray-50/50 text-gray-300 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-600"
+                                : "border-amber-200 bg-white text-gray-700 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100"
+                            }`}
                             disabled={reqSaving}
                           />
                         </td>
@@ -499,6 +570,19 @@ export function RequestClient() {
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-amber-300 dark:border-amber-700 bg-amber-100/50 dark:bg-amber-950/50">
+                <td className="py-2 px-2 sm:px-3 text-xs font-semibold text-amber-900 dark:text-amber-100">Total</td>
+                {roles.map((r) => {
+                  const total = days.reduce((s, d) => s + (reqByDate[toYMD(d)]?.[r.value] ?? 0), 0);
+                  return (
+                    <td key={r.id} className="py-2 px-1 sm:px-2 text-center text-xs font-bold text-amber-900 dark:text-amber-100">
+                      {total > 0 ? total : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
