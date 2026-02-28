@@ -463,9 +463,40 @@ export function RequestClient() {
                         const val = prompt(`Set all weekdays for "${r.value}" to:`, String(avg || 1));
                         if (val == null) return;
                         const n = Math.max(0, Math.min(99, parseInt(val, 10) || 0));
-                        for (const d of days) {
-                          if (d.getDay() === 0 || d.getDay() === 6) continue;
-                          await handleSetRequirement(toYMD(d), r.value, n);
+                        if (!selectedDepartment) return;
+                        setReqSaving(true);
+                        try {
+                          const weekdayDates = days
+                            .filter((d) => d.getDay() !== 0 && d.getDay() !== 6)
+                            .map((d) => toYMD(d));
+                          await Promise.all(
+                            weekdayDates.map((dateStr) =>
+                              fetch("/api/contractor-availability/requirements", {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  date: dateStr,
+                                  role: r.value,
+                                  count_needed: n,
+                                  department_id: selectedDepartment,
+                                  program_id: selectedProgram || undefined,
+                                }),
+                              })
+                            )
+                          );
+                          const reqParams = new URLSearchParams({ month, department_id: selectedDepartment });
+                          if (selectedProgram) reqParams.set("program_id", selectedProgram);
+                          const res = await fetch(`/api/contractor-availability/requirements?${reqParams}`);
+                          const d = await res.json();
+                          const byDate: Record<string, Record<string, number>> = {};
+                          for (const x of d.requirements ?? []) {
+                            if (!byDate[x.date]) byDate[x.date] = {};
+                            byDate[x.date][x.role] = x.count_needed;
+                          }
+                          setReqByDate(byDate);
+                          setRequirements(d.requirements ?? []);
+                        } finally {
+                          setReqSaving(false);
                         }
                       }}
                       disabled={reqSaving}
