@@ -31,6 +31,7 @@ type RequestRow = {
   requester_user_id: string;
   requester_name: string;
   approved_by_name?: string | null;
+  assignee_user_id?: string | null;
   assignee_name?: string | null;
   cost_estimate?: number | null;
   created_at: string;
@@ -364,7 +365,9 @@ export function OfficeRequestsClient() {
   };
 
   const canApprove = profile?.role === "admin" || profile?.role === "operations";
-  const canComplete = canApprove;
+  const isAssigneeOf = (r: RequestRow) => r.assignee_user_id === profile?.id;
+  const canCompleteRequest = (r: RequestRow) =>
+    canApprove || (r.status === "approved" && isAssigneeOf(r));
 
   if (loading) {
     return <div className="rounded-xl border border-gray-200 bg-white p-8 dark:border-gray-700 dark:bg-gray-900/80 text-center text-gray-500">Loading...</div>;
@@ -583,7 +586,7 @@ export function OfficeRequestsClient() {
                             Approve
                           </button>
                         )}
-                        {canApprove && r.status === "approved" && (
+                        {canCompleteRequest(r) && r.status === "approved" && (
                           <button onClick={() => { setCompleteModal(r); setCompletionNotes(""); }} className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500">
                             Complete
                           </button>
@@ -608,9 +611,13 @@ export function OfficeRequestsClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{approveModal.title}</h3>
+            <div className="mb-4 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800/50">
+              <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Requester</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{approveModal.requester_name}</p>
+            </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Assignee</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Assignee (person who will fulfill)</label>
                 <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
                   <option value="">—</option>
                   {users.filter((u) => u.full_name).map((u) => (
@@ -655,7 +662,7 @@ export function OfficeRequestsClient() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Completion notes</label>
               <textarea value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)} placeholder="Optional" rows={3} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
             </div>
-            {canComplete && (
+            {canApprove && (
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={createInvoiceOnComplete} onChange={(e) => setCreateInvoiceOnComplete(e.target.checked)} className="rounded" />
                 Create invoice from this request (Other invoice, ready for payment)

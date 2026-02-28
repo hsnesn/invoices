@@ -1,10 +1,11 @@
 /**
- * Mark office request as completed and send email to requester.
+ * Mark office request as completed. Send email to requester and admin notification.
+ * Assignee can complete (not just admin/operations).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
-import { sendOfficeRequestCompletedEmail } from "@/lib/email";
+import { sendOfficeRequestCompletedEmail, sendOfficeRequestCompletedToAdminEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export async function POST(
       .single();
 
     if (fetchErr || !req) return NextResponse.json({ error: "Request not found" }, { status: 404 });
+
+    const { data: reqProfile } = await supabase.from("profiles").select("full_name").eq("id", (req as { requester_user_id: string }).requester_user_id).single();
     if ((req as { status: string }).status !== "approved") {
       return NextResponse.json({ error: "Request must be approved first" }, { status: 400 });
     }
@@ -101,6 +104,7 @@ export async function POST(
     const requesterId = (req as { requester_user_id: string }).requester_user_id;
     const { data: user } = await supabase.auth.admin.getUserById(requesterId);
     const email = user?.user?.email;
+    const link = `${APP_URL}/office-requests`;
 
     if (email && email.includes("@")) {
       await sendOfficeRequestCompletedEmail({
@@ -108,8 +112,31 @@ export async function POST(
         title: (req as { title: string }).title,
         description: (req as { description?: string | null }).description,
         completionNotes,
-        link: `${APP_URL}/office-requests`,
-      });
+        link,
+      }).catch(() => {});
+    }
+
+    const completedByProfile = await supabase.from("profiles").select("full_name").eq("id", session.user.id).single();
+    const completedByName = completedByProfile.data?.full_name ?? profile.full_name ?? "User";
+    const requesterName = reqProfile?.full_name ?? "Requester";
+    const { data: adminProfiles } = await supabase
+      .from("profiles")
+      .select("id")
+      .in("role", ["admin", "operations"])
+      .eq("is_active", true);
+    const adminIds = (adminProfiles ?? []).map((p) => p.id).filter((uid) => uid !== session.user.id);
+    for (const adminId of adminIds.slice(0, 5)) {
+      const { data: adminUser } = await supabase.auth.admin.getUserById(adminId);
+      const adminEmail = adminUser?.user?.email;
+      if (adminEmail && adminEmail.includes("@")) {
+        await sendOfficeRequestCompletedToAdminEmail({
+          to: adminEmail,
+          title: (req as { title: string }).title,
+          requesterName,
+          completedByName,
+          link,
+        }).catch(() => {});
+      }
     }
 
     const { data: updated } = await supabase.from("office_requests").select("*").eq("id", id).single();

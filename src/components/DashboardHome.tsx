@@ -19,7 +19,7 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useLogos } from "@/contexts/LogoContext";
+import { TrtLogo } from "@/components/TrtLogo";
 import useSWR from "swr";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import type { Profile, PageKey } from "@/lib/types";
@@ -450,7 +450,6 @@ const METRIC_OPTIONS: { key: MetricKey; label: string }[] = [
 ];
 
 export function DashboardHome({ profile }: { profile: Profile }) {
-  const logos = useLogos();
   const [editLayoutMode, setEditLayoutMode] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const { metricOrder, pageOrderByGroup, hiddenSections, hiddenMetrics, hiddenPages, chartExpanded, setLayout, resetLayout, toggleSection, toggleMetric, togglePage, setChartExpanded } = useDashboardLayout(profile?.id);
@@ -517,16 +516,8 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     <div className="mx-auto max-w-5xl min-w-0 w-full pb-8">
       {/* Hero Header */}
       <div className="mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4 min-w-0">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white shadow ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
-          <img
-          src={logos.logo_trt || "/trt-logo.png"}
-          alt="TRT"
-          className="h-5 sm:h-6 object-contain"
-          onError={(e) => {
-            const el = e.currentTarget;
-            if (el.src !== "/trt-logo.png") el.src = "/trt-logo.png";
-          }}
-        />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow ring-1 ring-gray-200/80 dark:ring-gray-700/80 overflow-hidden">
+          <TrtLogo size="sm" className="h-full w-full rounded-lg" />
         </div>
         <div className="min-w-0 flex-1 overflow-hidden">
           <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-white truncate">

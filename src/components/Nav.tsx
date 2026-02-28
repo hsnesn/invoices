@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { useTheme } from "@/components/ThemeProvider";
-import { useLogos } from "@/contexts/LogoContext";
+import { TrtLogo } from "@/components/TrtLogo";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
 import { MessageNotificationSound } from "@/components/MessageNotificationSound";
 import { MessagesNavBadge } from "@/components/MessagesNavBadge";
@@ -33,7 +33,6 @@ function canAccessFreelancerInvoices(profile: Profile): boolean {
 export function Nav({ profile }: { profile: Profile }) {
   const router = useRouter();
   const themeContext = useTheme();
-  const logos = useLogos();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [submitMenuOpen, setSubmitMenuOpen] = useState(false);
 
@@ -52,11 +51,7 @@ export function Nav({ profile }: { profile: Profile }) {
       <MessageNotificationSound />
       <nav className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200/80 bg-white/95 px-3 sm:px-6 py-2 sm:py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-gray-800 dark:bg-gray-900 dark:bg-gray-900/95 supports-[backdrop-filter]:dark:bg-gray-900/80 min-w-0">
       <Link href="/dashboard" className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
-        <img
-          src={logos.logo_trt || "/trt-logo.png"}
-          alt="TRT"
-          className="h-6 sm:h-8 object-contain shrink-0"
-        />
+        <TrtLogo size="xs" />
         <span className="inline sm:hidden text-sm font-semibold text-gray-800 dark:text-white truncate">TRT UK Ops</span>
         <span className="hidden sm:inline text-sm sm:text-base font-semibold text-gray-800 dark:text-white truncate">
           TRT UK Operations Platform

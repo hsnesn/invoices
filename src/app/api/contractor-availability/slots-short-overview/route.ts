@@ -1,12 +1,58 @@
 /**
  * Slots short overview: all months, departments, programs, positions in one list.
+ * Optimized: batch DB queries instead of N+1 per month/dept/program.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
-import { getMergedRequirements } from "@/lib/contractor-requirements";
 
 export const dynamic = "force-dynamic";
+
+type ExplicitRow = { date: string; role: string; count_needed: number; department_id: string; program_id: string | null };
+type RecurringRow = { day_of_week: number; role: string; count_needed: number; department_id: string; program_id: string | null };
+type AssignRow = { date: string; role: string | null; department_id: string; program_id: string | null };
+
+function mergeRequirementsForMonth(
+  explicit: ExplicitRow[],
+  recurring: RecurringRow[],
+  start: string,
+  end: string,
+  deptId: string,
+  progId: string | null
+): { date: string; role: string; count_needed: number }[] {
+  const [y, m] = start.split("-").map(Number);
+  const byKey = new Map<string, number>();
+
+  const deptMatch = (r: { department_id: string }) => r.department_id === deptId;
+  const progMatch = (r: { program_id: string | null }) =>
+    progId ? r.program_id === progId : r.program_id == null;
+
+  for (const r of explicit) {
+    if (!deptMatch(r) || !progMatch(r)) continue;
+    byKey.set(`${r.date}|${r.role}`, r.count_needed);
+  }
+
+  for (const r of recurring) {
+    if (!deptMatch(r) || !progMatch(r)) continue;
+    // Will fill in below where not in byKey
+  }
+
+  for (let d = new Date(y, m - 1, 1); d <= new Date(y, m, 0); d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().slice(0, 10);
+    const dow = d.getDay();
+    for (const rec of recurring) {
+      if (!deptMatch(rec) || !progMatch(rec)) continue;
+      if (rec.day_of_week !== dow) continue;
+      const key = `${dateStr}|${rec.role}`;
+      if (!byKey.has(key)) byKey.set(key, rec.count_needed);
+    }
+  }
+
+  return Array.from(byKey.entries()).map(([key, count_needed]) => {
+    const [date, role] = key.split("|");
+    return { date, role, count_needed };
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,11 +68,35 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endMonth = new Date(now.getFullYear(), now.getMonth() + monthsAhead, 0);
+    const startDate = `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, "0")}-01`;
+    const endDate = `${endMonth.getFullYear()}-${String(endMonth.getMonth() + 1).padStart(2, "0")}-${String(endMonth.getDate()).padStart(2, "0")}`;
 
-    const { data: departments } = await supabase.from("departments").select("id, name").order("name");
-    const { data: programs } = await supabase.from("programs").select("id, name, department_id").order("name");
-    const deptMap = new Map((departments ?? []).map((d: { id: string; name: string }) => [d.id, d.name]));
-    const progMap = new Map((programs ?? []).map((p: { id: string; name: string; department_id: string }) => [p.id, { name: p.name, department_id: p.department_id }]));
+    // Batch fetch: departments, programs, requirements, recurring, assignments
+    const [deptRes, progRes, reqRes, recRes, assignRes] = await Promise.all([
+      supabase.from("departments").select("id, name").order("name"),
+      supabase.from("programs").select("id, name, department_id").order("name"),
+      supabase
+        .from("contractor_availability_requirements")
+        .select("date, role, count_needed, department_id, program_id")
+        .gte("date", startDate)
+        .lte("date", endDate),
+      supabase.from("contractor_availability_recurring").select("day_of_week, role, count_needed, department_id, program_id"),
+      supabase
+        .from("output_schedule_assignments")
+        .select("date, role, department_id, program_id")
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .in("status", ["pending", "confirmed"]),
+    ]);
+
+    const departments = (deptRes.data ?? []) as { id: string; name: string }[];
+    const programs = (progRes.data ?? []) as { id: string; name: string; department_id: string }[];
+    const explicitRows = (reqRes.data ?? []) as ExplicitRow[];
+    const recurringRows = (recRes.data ?? []) as RecurringRow[];
+    const assignRows = (assignRes.data ?? []) as AssignRow[];
+
+    const deptMap = new Map(departments.map((d) => [d.id, d.name]));
+    const progMap = new Map(programs.map((p) => [p.id, p.name]));
 
     type Row = { month: string; monthLabel: string; department_id: string; department: string; program_id: string | null; program: string; role: string; slots_short: number };
     const rows: Row[] = [];
@@ -39,27 +109,21 @@ export async function GET(request: NextRequest) {
       const start = new Date(y, mo - 1, 1).toISOString().slice(0, 10);
       const end = new Date(y, mo, 0).toISOString().slice(0, 10);
 
-      for (const dept of departments ?? []) {
-        const deptId = (dept as { id: string }).id;
-        const progsForDept = (programs ?? []).filter((p: { department_id: string }) => (p as { department_id: string }).department_id === deptId);
+      // Per-program
+      for (const dept of departments) {
+        const deptId = dept.id;
+        const progsForDept = programs.filter((p) => p.department_id === deptId);
         for (const prog of progsForDept) {
-          if ((prog as { department_id: string }).department_id !== deptId) continue;
-          const progId = (prog as { id: string }).id;
-          const requirements = await getMergedRequirements(supabase, start, end, deptId, progId);
+          const progId = prog.id;
+          const requirements = mergeRequirementsForMonth(explicitRows, recurringRows, start, end, deptId, progId);
           if (requirements.length === 0) continue;
 
-          let assignQuery = supabase
-            .from("output_schedule_assignments")
-            .select("date, role")
-            .gte("date", start)
-            .lte("date", end)
-            .in("status", ["pending", "confirmed"])
-            .eq("department_id", deptId)
-            .eq("program_id", progId);
-          const { data: assignRows } = await assignQuery;
           const filledByKey = new Map<string, number>();
-          for (const a of assignRows ?? []) {
-            const key = `${(a as { date: string }).date}|${(a as { role: string }).role || ""}`;
+          for (const a of assignRows) {
+            if (a.department_id !== deptId || a.program_id !== progId) continue;
+            const d = (a as { date: string }).date;
+            if (d < start || d > end) continue;
+            const key = `${d}|${(a as { role: string }).role || ""}`;
             filledByKey.set(key, (filledByKey.get(key) ?? 0) + 1);
           }
 
@@ -79,28 +143,24 @@ export async function GET(request: NextRequest) {
                 department_id: deptId,
                 department: deptMap.get(deptId) ?? "—",
                 program_id: progId,
-                program: (progMap.get(progId) as { name: string } | undefined)?.name ?? "—",
+                program: progMap.get(progId) ?? "—",
                 role,
                 slots_short: slotsShort,
               });
             }
           }
         }
-        const requirementsAllProg = await getMergedRequirements(supabase, start, end, deptId, null);
+
+        // All programs (program_id null)
+        const requirementsAllProg = mergeRequirementsForMonth(explicitRows, recurringRows, start, end, deptId, null);
         if (requirementsAllProg.length === 0) continue;
 
-        let assignQuery = supabase
-          .from("output_schedule_assignments")
-          .select("date, role")
-          .gte("date", start)
-          .lte("date", end)
-          .in("status", ["pending", "confirmed"])
-          .eq("department_id", deptId)
-          .is("program_id", null);
-        const { data: assignRows } = await assignQuery;
         const filledByKey = new Map<string, number>();
-        for (const a of assignRows ?? []) {
-          const key = `${(a as { date: string }).date}|${(a as { role: string }).role || ""}`;
+        for (const a of assignRows) {
+          if (a.department_id !== deptId || a.program_id != null) continue;
+          const d = (a as { date: string }).date;
+          if (d < start || d > end) continue;
+          const key = `${d}|${(a as { role: string }).role || ""}`;
           filledByKey.set(key, (filledByKey.get(key) ?? 0) + 1);
         }
 

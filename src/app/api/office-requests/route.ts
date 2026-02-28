@@ -43,27 +43,75 @@ export async function GET(request: NextRequest) {
         linked_invoice_id
       `;
 
-    let query = supabase
-      .from("office_requests")
-      .select(extendedSelect)
-      .order("created_at", { ascending: false });
+    let rows: Record<string, unknown>[] | null = null;
+    let error: { message: string } | null = null;
 
+    const selectCols = extendedSelect;
     if (profile.role !== "admin" && profile.role !== "operations") {
-      query = query.eq("requester_user_id", session.user.id);
-    } else if (mine) {
-      query = query.eq("requester_user_id", session.user.id);
+      let asRequester: Record<string, unknown>[] | null = null;
+      let reqErr: { message: string } | null = null;
+      ({ data: asRequester, error: reqErr } = await supabase
+        .from("office_requests")
+        .select(selectCols)
+        .eq("requester_user_id", session.user.id)
+        .order("created_at", { ascending: false }));
+      if (reqErr && (String(reqErr.message).includes("project_id") || String(reqErr.message).includes("vendor_id") || String(reqErr.message).includes("schema cache"))) {
+        ({ data: asRequester, error: reqErr } = await supabase
+          .from("office_requests")
+          .select(baseSelect)
+          .eq("requester_user_id", session.user.id)
+          .order("created_at", { ascending: false }));
+      }
+      if (reqErr) throw reqErr;
+      const { data: asAssignee } = await supabase
+        .from("office_request_todos")
+        .select("office_request_id")
+        .eq("assignee_user_id", session.user.id);
+      const assigneeIds = (asAssignee ?? []).map((t) => (t as { office_request_id: string }).office_request_id).filter(Boolean);
+      let assigneeRows: Record<string, unknown>[] | null = null;
+      if (assigneeIds.length > 0) {
+        const res = await supabase
+          .from("office_requests")
+          .select(selectCols)
+          .in("id", assigneeIds)
+          .order("created_at", { ascending: false });
+        if (res.error && (String(res.error.message).includes("project_id") || String(res.error.message).includes("vendor_id") || String(res.error.message).includes("schema cache"))) {
+          const fallback = await supabase.from("office_requests").select(baseSelect).in("id", assigneeIds).order("created_at", { ascending: false });
+          assigneeRows = fallback.data;
+        } else {
+          assigneeRows = res.data;
+        }
+      }
+      const seen = new Set<string>();
+      rows = [];
+      for (const r of [...(asRequester ?? []), ...(assigneeRows ?? [])]) {
+        const id = (r as { id: string }).id;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        rows.push(r);
+      }
+      rows.sort((a, b) => new Date((b as { created_at: string }).created_at).getTime() - new Date((a as { created_at: string }).created_at).getTime());
+    } else {
+      let query = supabase
+        .from("office_requests")
+        .select(extendedSelect)
+        .order("created_at", { ascending: false });
+      if (mine) query = query.eq("requester_user_id", session.user.id);
+      if (status) query = query.eq("status", status);
+      const res = await query;
+      rows = res.data;
+      error = res.error;
+      if (error && (String(error.message).includes("project_id") || String(error.message).includes("vendor_id") || String(error.message).includes("schema cache"))) {
+        let fallbackQuery = supabase.from("office_requests").select(baseSelect).order("created_at", { ascending: false });
+        if (mine) fallbackQuery = fallbackQuery.eq("requester_user_id", session.user.id);
+        if (status) fallbackQuery = fallbackQuery.eq("status", status);
+        const fallback = await fallbackQuery;
+        rows = fallback.data as typeof rows;
+        error = fallback.error;
+      }
     }
-    if (status) query = query.eq("status", status);
-
-    let { data: rows, error } = await query;
-    if (error && (String(error.message).includes("project_id") || String(error.message).includes("vendor_id") || String(error.message).includes("schema cache"))) {
-      let fallbackQuery = supabase.from("office_requests").select(baseSelect).order("created_at", { ascending: false });
-      if (profile.role !== "admin" && profile.role !== "operations") fallbackQuery = fallbackQuery.eq("requester_user_id", session.user.id);
-      else if (mine) fallbackQuery = fallbackQuery.eq("requester_user_id", session.user.id);
-      if (status) fallbackQuery = fallbackQuery.eq("status", status);
-      const fallback = await fallbackQuery;
-      rows = fallback.data as typeof rows;
-      error = fallback.error;
+    if (status && rows) {
+      rows = rows.filter((r) => (r as { status: string }).status === status);
     }
     if (error) throw error;
 
@@ -82,15 +130,14 @@ export async function GET(request: NextRequest) {
 
     const enriched = (rows ?? []).map((r) => {
       const o = r as Record<string, unknown>;
+      const todo = Array.isArray(o.office_request_todos) ? o.office_request_todos[0] : o.office_request_todos;
+      const aid = (todo as { assignee_user_id?: string })?.assignee_user_id;
       return {
         ...o,
         requester_name: profileMap[(o.requester_user_id as string) ?? ""] ?? o.requester_user_id,
         approved_by_name: o.approved_by ? profileMap[o.approved_by as string] ?? o.approved_by : null,
-        assignee_name: (() => {
-          const todo = Array.isArray(o.office_request_todos) ? o.office_request_todos[0] : o.office_request_todos;
-          const aid = (todo as { assignee_user_id?: string })?.assignee_user_id;
-          return aid ? profileMap[aid] ?? aid : null;
-        })(),
+        assignee_user_id: aid ?? null,
+        assignee_name: aid ? profileMap[aid] ?? aid : null,
       };
     });
 

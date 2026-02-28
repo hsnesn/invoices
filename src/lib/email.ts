@@ -956,8 +956,91 @@ export async function sendPasswordResetEmail(params: { email: string; resetLink:
 }
 
 /* ------------------------------------------------------------------ */
-/* Office request completed                                            */
+/* Office request: approved, rejected, assigned, completed             */
 /* ------------------------------------------------------------------ */
+
+export async function sendOfficeRequestApprovedEmail(params: {
+  to: string;
+  title: string;
+  assigneeName?: string | null;
+  link: string;
+}) {
+  const assigneeNote = params.assigneeName
+    ? `<p style="margin:0 0 12px;font-size:14px;color:#475569">Assigned to: <strong>${params.assigneeName}</strong></p>`
+    : "";
+  return sendEmail({
+    to: params.to,
+    subject: `Request approved: ${params.title} — ${APP_NAME}`,
+    html: await wrapWithLogo("Request Approved", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your office request has been approved.</p>
+      <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#1e293b">${params.title}</p>
+      ${assigneeNote}
+      ${btn(params.link, "View Request", "#2563eb")}
+    `),
+  });
+}
+
+export async function sendOfficeRequestRejectedEmail(params: {
+  to: string;
+  title: string;
+  rejectionReason?: string | null;
+  link: string;
+}) {
+  const reasonBlock = params.rejectionReason
+    ? `<div style="margin:12px 0;padding:12px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0"><p style="margin:0;font-size:13px;color:#7f1d1d"><strong>Reason:</strong> ${params.rejectionReason}</p></div>`
+    : "";
+  return sendEmail({
+    to: params.to,
+    subject: `Request rejected: ${params.title} — ${APP_NAME}`,
+    html: await wrapWithLogo("Request Rejected", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your office request has been rejected.</p>
+      <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#1e293b">${params.title}</p>
+      ${reasonBlock}
+      ${btn(params.link, "View Request", "#dc2626")}
+    `),
+  });
+}
+
+export async function sendOfficeRequestAssignedEmail(params: {
+  to: string;
+  title: string;
+  dueDate?: string | null;
+  link: string;
+}) {
+  const dueNote = params.dueDate
+    ? `<p style="margin:0 0 12px;font-size:14px;color:#475569">Due date: <strong>${params.dueDate}</strong></p>`
+    : "";
+  return sendEmail({
+    to: params.to,
+    subject: `You have been assigned: ${params.title} — ${APP_NAME}`,
+    html: await wrapWithLogo("Task Assigned to You", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">You have been assigned to this office request.</p>
+      <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#1e293b">${params.title}</p>
+      ${dueNote}
+      ${btn(params.link, "View Request", "#059669")}
+    `),
+  });
+}
+
+export async function sendOfficeRequestCompletedToAdminEmail(params: {
+  to: string;
+  title: string;
+  requesterName: string;
+  completedByName: string;
+  link: string;
+}) {
+  return sendEmail({
+    to: params.to,
+    subject: `Request completed: ${params.title} — ${APP_NAME}`,
+    html: await wrapWithLogo("Request Completed (Notification)", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">An office request has been completed.</p>
+      <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#1e293b">${params.title}</p>
+      <p style="margin:0 0 8px;font-size:14px;color:#475569">Requester: <strong>${params.requesterName}</strong></p>
+      <p style="margin:0 0 12px;font-size:14px;color:#475569">Completed by: <strong>${params.completedByName}</strong></p>
+      ${btn(params.link, "View Request", "#10b981")}
+    `),
+  });
+}
 
 export async function sendOfficeRequestCompletedEmail(params: {
   to: string;

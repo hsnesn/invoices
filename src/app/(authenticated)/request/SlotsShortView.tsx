@@ -27,8 +27,8 @@ export function SlotsShortView() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const refresh = useCallback(() => {
-    setLoading(true);
+  const refresh = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     fetch(`/api/contractor-availability/slots-short-overview?months=${months}`)
       .then((r) => r.json())
       .then((d) => {
@@ -71,7 +71,11 @@ export function SlotsShortView() {
         next.delete(key);
         return next;
       });
-      refresh();
+      // Optimistic update: remove row immediately, refresh in background
+      setRows((prev) => prev.filter((x) => rowKey(x) !== key));
+      setTotal((prev) => prev - r.slots_short);
+      setDeletingId(null);
+      refresh(true); // Background refresh to sync with server
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -84,6 +88,8 @@ export function SlotsShortView() {
     if (toDelete.length === 0) return;
     if (!confirm(`Remove demand for ${toDelete.length} selected slot(s)?`)) return;
     setBulkDeleting(true);
+    const keysToRemove = new Set(toDelete.map((r) => rowKey(r)));
+    const removedTotal = toDelete.reduce((s, r) => s + r.slots_short, 0);
     try {
       const res = await fetch("/api/contractor-availability/requirements/bulk", {
         method: "POST",
@@ -103,7 +109,9 @@ export function SlotsShortView() {
         throw new Error(err.error ?? "Bulk delete failed");
       }
       setSelectedKeys(new Set());
-      refresh();
+      setRows((prev) => prev.filter((x) => !keysToRemove.has(rowKey(x))));
+      setTotal((prev) => prev - removedTotal);
+      refresh(true);
     } catch (e) {
       alert((e as Error).message);
     } finally {

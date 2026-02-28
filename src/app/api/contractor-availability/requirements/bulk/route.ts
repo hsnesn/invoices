@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
 
     if (action === "clear_roles_bulk" && Array.isArray(items) && items.length > 0) {
       let cleared = 0;
+      const allZeroRows: { date: string; role: string; count_needed: number; department_id: string; program_id: string | null }[] = [];
       for (const it of items) {
         const toMonth = it?.to_month;
         const deptIdIt = it?.department_id;
@@ -56,7 +57,23 @@ export async function POST(request: NextRequest) {
         else delQuery = delQuery.is("program_id", null);
         const { error } = await delQuery;
         if (error) throw error;
+        const progIdVal = progIdIt && /^[0-9a-f-]{36}$/i.test(progIdIt) ? progIdIt : null;
+        for (let d = new Date(y, m - 1, 1); d <= new Date(y, m, 0); d.setDate(d.getDate() + 1)) {
+          allZeroRows.push({
+            date: d.toISOString().slice(0, 10),
+            role: roleIt.trim(),
+            count_needed: 0,
+            department_id: deptIdIt,
+            program_id: progIdVal,
+          });
+        }
         cleared++;
+      }
+      if (allZeroRows.length > 0) {
+        const { error: insErr } = await supabase.from("contractor_availability_requirements").upsert(allZeroRows, {
+          onConflict: "date,role,department_id,program_id",
+        });
+        if (insErr) throw insErr;
       }
       return NextResponse.json({ ok: true, count: cleared });
     }
@@ -80,6 +97,23 @@ export async function POST(request: NextRequest) {
       else delQuery = delQuery.is("program_id", null);
       const { error } = await delQuery;
       if (error) throw error;
+      // Insert explicit count_needed=0 to override recurring requirements for this month
+      const zeroRows: { date: string; role: string; count_needed: number; department_id: string; program_id: string | null }[] = [];
+      for (let d = new Date(y, m - 1, 1); d <= new Date(y, m, 0); d.setDate(d.getDate() + 1)) {
+        zeroRows.push({
+          date: d.toISOString().slice(0, 10),
+          role: role.trim(),
+          count_needed: 0,
+          department_id: deptId,
+          program_id: progId,
+        });
+      }
+      if (zeroRows.length > 0) {
+        const { error: insErr } = await supabase.from("contractor_availability_requirements").upsert(zeroRows, {
+          onConflict: "date,role,department_id,program_id",
+        });
+        if (insErr) throw insErr;
+      }
       return NextResponse.json({ ok: true });
     }
 

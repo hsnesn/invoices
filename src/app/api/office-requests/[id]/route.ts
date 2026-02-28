@@ -1,11 +1,25 @@
 /**
  * Office request: approve or reject.
+ * Sends emails: approved → requester (+ assignee if assigned); rejected → requester.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import {
+  sendOfficeRequestApprovedEmail,
+  sendOfficeRequestRejectedEmail,
+  sendOfficeRequestAssignedEmail,
+} from "@/lib/email";
 
 export const dynamic = "force-dynamic";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+async function getEmailForUserId(supabase: ReturnType<typeof createAdminClient>, userId: string): Promise<string | null> {
+  const { data } = await supabase.auth.admin.getUserById(userId);
+  const email = data?.user?.email;
+  return email && email.includes("@") ? email : null;
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -36,6 +50,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Request is no longer pending" }, { status: 400 });
     }
 
+    const reqRow = req as { title: string; requester_user_id: string };
+    const link = `${APP_URL}/office-requests`;
+
     if (action === "approve") {
       const { error: updateErr } = await supabase
         .from("office_requests")
@@ -63,6 +80,32 @@ export async function PATCH(
         { onConflict: "office_request_id" }
       );
       if (todoErr) throw todoErr;
+
+      const requesterEmail = await getEmailForUserId(supabase, reqRow.requester_user_id);
+      if (requesterEmail) {
+        const { data: assigneeProfile } = assigneeUserId
+          ? await supabase.from("profiles").select("full_name").eq("id", assigneeUserId).single()
+          : { data: null };
+        const assigneeName = assigneeProfile?.full_name ?? null;
+        await sendOfficeRequestApprovedEmail({
+          to: requesterEmail,
+          title: reqRow.title,
+          assigneeName,
+          link,
+        }).catch(() => {});
+      }
+
+      if (assigneeUserId && assigneeUserId !== reqRow.requester_user_id) {
+        const assigneeEmail = await getEmailForUserId(supabase, assigneeUserId);
+        if (assigneeEmail) {
+          await sendOfficeRequestAssignedEmail({
+            to: assigneeEmail,
+            title: reqRow.title,
+            dueDate: dueDate || null,
+            link,
+          }).catch(() => {});
+        }
+      }
     } else if (action === "reject") {
       const { error: updateErr } = await supabase
         .from("office_requests")
@@ -78,6 +121,16 @@ export async function PATCH(
         .eq("id", id);
 
       if (updateErr) throw updateErr;
+
+      const requesterEmail = await getEmailForUserId(supabase, reqRow.requester_user_id);
+      if (requesterEmail) {
+        await sendOfficeRequestRejectedEmail({
+          to: requesterEmail,
+          title: reqRow.title,
+          rejectionReason: rejectionReason || null,
+          link,
+        }).catch(() => {});
+      }
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
