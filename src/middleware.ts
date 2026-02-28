@@ -39,11 +39,13 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { session } } = await supabase.auth.getSession();
+  // getClaims() validates JWT and refreshes token if needed - required to prevent random logouts
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const hasSession = !!claimsData?.claims?.sub;
 
   // IP binding: if session exists and secret is configured, bind session to IP
   // Skip in development (localhost IP is unreliable)
-  if (session) {
+  if (hasSession) {
     const secret = process.env.SESSION_IP_SECRET;
     const isProduction = process.env.NODE_ENV === "production";
     const clientIp = getClientIp(request);

@@ -37,7 +37,7 @@ function LoginPageContent() {
         return;
       }
       // Brief delay so Supabase can persist session to cookies before redirect
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 400));
       window.location.href = "/dashboard";
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed. Please try again.";
