@@ -699,6 +699,46 @@ export async function sendContractorAvailabilitySubmittedEmail(params: {
 }
 
 /* ------------------------------------------------------------------ */
+/* Weekly requirements digest (Friday → next week's list)              */
+/* ------------------------------------------------------------------ */
+
+export async function sendWeeklyRequirementsDigestEmail(params: {
+  to: string;
+  weekLabel: string;
+  requirements: { date: string; role: string; count_needed: number }[];
+}) {
+  const byDate = new Map<string, { role: string; count: number }[]>();
+  for (const r of params.requirements) {
+    if (!byDate.has(r.date)) byDate.set(r.date, []);
+    byDate.get(r.date)!.push({ role: r.role, count: r.count_needed });
+  }
+  const sortedDates = Array.from(byDate.keys()).sort();
+  const rows = sortedDates
+    .map(
+      (d) =>
+        `<tr><td style="padding:8px 12px;color:#1e293b">${new Date(d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</td><td style="padding:8px 12px;color:#1e293b">${byDate.get(d)!.map((x) => `${x.role}: ${x.count}`).join(", ")}</td></tr>`
+    )
+    .join("");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const requestUrl = `${appUrl}/request`;
+  return sendEmail({
+    to: params.to,
+    replyTo: LONDON_OPS_EMAIL,
+    subject: `Next week's requirements — ${params.weekLabel}`,
+    html: await wrapWithLogo("Next Week's Requirements", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Here is the scheduled demand for next week:</p>
+      <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Date</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Roles (count needed)</th></tr>
+          ${rows}
+        </table>
+      </div>
+      <p style="margin:16px 0 0;font-size:12px;color:#94a3b8"><a href="${requestUrl}" style="color:#2563eb;text-decoration:none">View and manage in My Availability → Request</a></p>
+    `),
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Contractor assignment confirmed → person gets email                */
 /* ------------------------------------------------------------------ */
 
