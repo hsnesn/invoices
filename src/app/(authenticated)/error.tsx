@@ -13,6 +13,9 @@ export default function AuthenticatedError({
     console.error("Page error:", error);
   }, [error]);
 
+  const isDev = process.env.NODE_ENV === "development";
+  const message = error?.message || "An unexpected error occurred. Please try again.";
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 shadow-xl dark:border-red-900/50 dark:bg-slate-900">
@@ -25,7 +28,7 @@ export default function AuthenticatedError({
         </div>
         <h1 className="mb-2 text-center text-xl font-bold text-slate-800 dark:text-white">Something went wrong</h1>
         <p className="mb-6 text-center text-sm text-slate-600 dark:text-slate-400">
-          An unexpected error occurred. Please try again.
+          {isDev ? message : "An unexpected error occurred. Please try again."}
         </p>
         <div className="flex flex-col gap-3">
           <button

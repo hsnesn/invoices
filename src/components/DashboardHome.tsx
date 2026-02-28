@@ -109,12 +109,12 @@ const PAGES: PageCard[] = [
     ),
   },
   {
-    title: "Output Schedule",
-    description: "Submit availability, AI scheduling, booking emails and attendance tracking.",
-    href: "/output-schedule",
+    title: "Contractor Availability",
+    description: "Submit your availability by role and days. Admin sees all records.",
+    href: "/contractor-availability",
     color: "text-sky-500",
     gradient: "from-sky-500/20 to-sky-600/5",
-    pageKey: "output_schedule",
+    pageKey: "contractor_availability",
     icon: (
       <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
@@ -227,10 +227,10 @@ function getInitials(name: string | null): string {
 
 export function DashboardHome({ profile }: { profile: Profile }) {
   const logos = useLogos();
-  const isAdmin = profile.role === "admin";
-  const isViewer = profile.role === "viewer";
-  const isOperations = profile.role === "operations";
-  const userPages = profile.allowed_pages;
+  const isAdmin = profile?.role === "admin";
+  const isViewer = profile?.role === "viewer";
+  const isOperations = profile?.role === "operations";
+  const userPages = Array.isArray(profile?.allowed_pages) ? profile.allowed_pages : null;
   const isSubmitter = profile.role === "submitter";
   const canSeeStats = !isSubmitter;
   const { data: stats, mutate, isValidating: statsValidating } = useSWR<Stats>(
@@ -249,16 +249,17 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
 
+  const role = profile?.role ?? "";
   const visiblePages = PAGES.filter((p) => {
     if (p.viewerHidden && isViewer) return false;
     if (p.pageKey === "setup" && (isAdmin || isOperations)) return true;
     if (p.adminOnly && !isAdmin) return false;
     if (isViewer) return ["guest_invoices", "invited_guests", "freelancer_invoices", "reports", "messages"].includes(p.pageKey) || (p.pageKey === "other_invoices" && !!userPages?.includes("other_invoices")) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "output_schedule", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
-    if (profile.role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "messages"].includes(p.pageKey);
-    if (["submitter", "manager"].includes(profile.role) && p.pageKey === "invited_guests") return true;
+    if (isOperations) return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "contractor_availability", "setup", "messages"].includes(p.pageKey) || (p.pageKey === "guest_contacts" && !!userPages?.includes("guest_contacts"));
+    if (role === "finance") return ["guest_invoices", "invited_guests", "freelancer_invoices", "other_invoices", "reports", "salaries", "messages"].includes(p.pageKey);
+    if (["submitter", "manager"].includes(role) && p.pageKey === "invited_guests") return true;
     if (p.pageKey === "guest_contacts") return isAdmin || (!!userPages && userPages.includes("guest_contacts"));
-    if (p.pageKey === "output_schedule") return isAdmin || isOperations || (!!userPages && userPages.includes("output_schedule")) || (!userPages || userPages.length === 0);
+    if (p.pageKey === "contractor_availability") return isAdmin || isOperations || (!!userPages && userPages.includes("contractor_availability")) || (!userPages || userPages.length === 0);
     if (userPages && userPages.length > 0) return userPages.includes(p.pageKey);
     return true;
   });

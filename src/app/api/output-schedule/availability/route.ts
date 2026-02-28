@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("output_schedule_availability")
-      .select("user_id, date")
+      .select("user_id, date, role")
       .gte("date", start.toISOString().slice(0, 10))
       .lte("date", end.toISOString().slice(0, 10));
 
@@ -38,15 +38,18 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     const dates = (data ?? []).map((r: { date: string }) => r.date);
+    const roles = (data ?? []).map((r: { date: string; role?: string }) => r.role).filter(Boolean);
+    const role = roles[0] ?? null; // same role for all in a submission
     const byUser = all
-      ? (data ?? []).reduce((acc: Record<string, string[]>, r: { user_id: string; date: string }) => {
-          if (!acc[r.user_id]) acc[r.user_id] = [];
-          acc[r.user_id].push(r.date);
+      ? (data ?? []).reduce((acc: Record<string, { dates: string[]; role?: string }>, r: { user_id: string; date: string; role?: string }) => {
+          if (!acc[r.user_id]) acc[r.user_id] = { dates: [], role: r.role ?? undefined };
+          acc[r.user_id].dates.push(r.date);
+          if (r.role) acc[r.user_id].role = r.role;
           return acc;
         }, {})
       : null;
 
-    return NextResponse.json(all ? { byUser, dates } : { dates });
+    return NextResponse.json(all ? { byUser, dates } : { dates, role });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
   try {
     const { profile } = await requireAuth();
     const body = await request.json();
-    const { dates } = body as { dates: string[] };
+    const { dates, role } = body as { dates: string[]; role?: string };
 
     if (!Array.isArray(dates)) {
       return NextResponse.json({ error: "dates must be an array of YYYY-MM-DD strings." }, { status: 400 });
@@ -68,12 +71,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No valid dates provided." }, { status: 400 });
     }
 
+    const roleVal = typeof role === "string" && role.trim() ? role.trim() : null;
+
     const supabase = createAdminClient();
 
-    await supabase.from("output_schedule_availability").delete().eq("user_id", profile.id).in("date", valid);
+    const minDate = valid.reduce((a, b) => (a < b ? a : b));
+    const maxDate = valid.reduce((a, b) => (a > b ? a : b));
+    await supabase
+      .from("output_schedule_availability")
+      .delete()
+      .eq("user_id", profile.id)
+      .gte("date", minDate)
+      .lte("date", maxDate);
 
     if (valid.length > 0) {
-      const rows = valid.map((date) => ({ user_id: profile.id, date }));
+      const rows = valid.map((date) => ({ user_id: profile.id, date, role: roleVal }));
       const { error: insErr } = await supabase.from("output_schedule_availability").insert(rows);
       if (insErr) throw insErr;
     }

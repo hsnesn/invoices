@@ -17,7 +17,7 @@ export const ALL_PAGES = [
   { key: "freelancer_invoices", label: "Contractor Invoices" },
   { key: "other_invoices", label: "Other Invoices" },
   { key: "salaries", label: "Salaries" },
-  { key: "output_schedule", label: "Output Schedule" },
+  { key: "contractor_availability", label: "Contractor Availability" },
   { key: "setup", label: "Setup" },
   { key: "reports", label: "Reports" },
   { key: "audit_log", label: "Audit Log" },

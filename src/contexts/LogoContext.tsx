@@ -14,10 +14,11 @@ const defaults: LogoUrls = {
   logo_email: "/logo.png",
 };
 
-function addCacheBust(url: string, v: number): string {
-  if (!url) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}v=${v}`;
+function addCacheBust(url: string | undefined, v: number): string {
+  const u = url || "";
+  if (!u) return "";
+  const sep = u.includes("?") ? "&" : "?";
+  return `${u}${sep}v=${v}`;
 }
 
 const LogoContext = createContext<LogoUrls>(defaults);
