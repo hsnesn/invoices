@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 const LOGO_OPTIONS = [
   { key: "logo_trt", label: "TRT Logo", desc: "Nav, Dashboard, Upload overlay, LogoLoader", default: "/trt-logo.png" },
@@ -21,7 +22,6 @@ export function LogosSetupSection() {
     try {
       const s = sessionStorage.getItem("logo-upload-result");
       if (s) {
-        sessionStorage.removeItem("logo-upload-result");
         setMessage(JSON.parse(s) as { type: string; text: string });
       }
     } catch {}
@@ -38,7 +38,7 @@ export function LogosSetupSection() {
         }
         setValues(v);
       })
-      .catch(() => setMessage({ type: "error", text: "Failed to load." }))
+      .catch(() => setMessage((prev) => (prev?.type === "error" ? prev : { type: "error", text: "Failed to load." })))
       .finally(() => setLoading(false));
   };
 
@@ -53,7 +53,7 @@ export function LogosSetupSection() {
       return;
     }
     setSaving(key);
-    setMessage(null);
+    setMessage((prev) => (prev?.type === "error" ? prev : null));
     try {
       const res = await fetch("/api/admin/logos", {
         method: "PATCH",
@@ -65,12 +65,19 @@ export function LogosSetupSection() {
         setValues((prev) => ({ ...prev, [key]: val }));
         setPreviewStamp(Date.now());
         setMessage({ type: "success", text: "Saved and applied." });
+        try { sessionStorage.removeItem("logo-upload-result"); } catch {}
         window.dispatchEvent(new CustomEvent("logos-updated"));
       } else {
-        setMessage({ type: "error", text: data.error || "Failed to save." });
+        const errText = data.error || `Failed to save (HTTP ${res.status})`;
+        setMessage({ type: "error", text: errText });
+        toast.error(errText, { duration: 8000 });
+        try { sessionStorage.setItem("logo-upload-result", JSON.stringify({ type: "error", text: errText })); } catch {}
       }
-    } catch {
-      setMessage({ type: "error", text: "Connection error." });
+    } catch (err) {
+      const errText = `Connection error: ${(err as Error).message}`;
+      setMessage({ type: "error", text: errText });
+      toast.error(errText, { duration: 8000 });
+      try { sessionStorage.setItem("logo-upload-result", JSON.stringify({ type: "error", text: errText })); } catch {}
     } finally {
       setSaving(null);
     }
@@ -82,7 +89,7 @@ export function LogosSetupSection() {
     e.target.value = "";
 
     setUploading(key);
-    setMessage(null);
+    setMessage((prev) => (prev?.type === "error" ? prev : null));
     try {
       const formData = new FormData();
       formData.set("key", key);
@@ -123,18 +130,18 @@ export function LogosSetupSection() {
 
         const msg = { type: "success", text: `Upload OK. New URL: ${data.value}${verifyMsg}` };
         setMessage(msg);
-        try {
-          sessionStorage.setItem("logo-upload-result", JSON.stringify(msg));
-        } catch {}
+        try { sessionStorage.removeItem("logo-upload-result"); } catch {}
         window.dispatchEvent(new CustomEvent("logos-updated"));
       } else {
         const errMsg = { type: "error", text: data.error || `Upload failed (HTTP ${res.status}). Please refresh and try again.` };
         setMessage(errMsg);
+        toast.error(errMsg.text, { duration: 8000 });
         try { sessionStorage.setItem("logo-upload-result", JSON.stringify(errMsg)); } catch {}
       }
     } catch (err) {
       const errMsg = { type: "error", text: `Upload error: ${(err as Error).message}. Please refresh the page.` };
       setMessage(errMsg);
+      toast.error(errMsg.text, { duration: 8000 });
       try { sessionStorage.setItem("logo-upload-result", JSON.stringify(errMsg)); } catch {}
     } finally {
       setUploading(null);
