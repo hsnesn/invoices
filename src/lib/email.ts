@@ -701,6 +701,41 @@ export async function sendContractorAvailabilitySubmittedEmail(params: {
 /* Contractor assignment confirmed → person gets email                */
 /* ------------------------------------------------------------------ */
 
+export async function sendContractorAssignmentsPendingEmail(params: {
+  to: string;
+  monthLabel: string;
+  count: number;
+  reviewUrl: string;
+}) {
+  return sendEmail({
+    to: params.to,
+    replyTo: LONDON_OPS_EMAIL,
+    subject: `Contractor assignments pending review — ${params.monthLabel}`,
+    html: await wrapWithLogo("Assignments Pending Review", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">AI has suggested <strong>${params.count}</strong> contractor assignments for ${params.monthLabel}.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Please review, edit if needed, and approve to send confirmation emails to contractors.</p>
+      ${btn(params.reviewUrl, "Review Assignments", "#10b981")}
+    `),
+  });
+}
+
+export async function sendContractorReminderEmail(params: {
+  to: string;
+  personName: string;
+  dateLabel: string;
+}) {
+  return sendEmail({
+    to: params.to,
+    replyTo: LONDON_OPS_EMAIL,
+    subject: `Reminder: You are booked tomorrow — ${params.dateLabel}`,
+    html: await wrapWithLogo("Schedule Reminder", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">This is a reminder that you are booked for <strong>${params.dateLabel}</strong>.</p>
+      <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">If you have any questions, please contact London Operations.</p>
+    `),
+  });
+}
+
 export async function sendContractorAssignmentConfirmedEmail(params: {
   to: string;
   personName: string;
@@ -721,6 +756,32 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
         <p style="margin:0;font-size:14px;font-weight:600;color:#065f46">${datesList}</p>
       </div>
       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">If you have any questions, please contact London Operations.</p>
+    `),
+  });
+}
+
+/** Copy of booking confirmation summary to London Operations. */
+export async function sendContractorAssignmentConfirmedToLondonOps(params: {
+  monthLabel: string;
+  byPerson: { name: string; email: string; dates: string[] }[];
+}) {
+  const rows = params.byPerson
+    .map(
+      (p) =>
+        `<tr><td style="padding:8px 12px;color:#1e293b">${p.name}</td><td style="padding:8px 12px;color:#64748b">${p.email}</td><td style="padding:8px 12px;color:#1e293b">${p.dates.map((d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })).join(", ")}</td></tr>`
+    )
+    .join("");
+  return sendEmail({
+    to: LONDON_OPS_EMAIL,
+    subject: `Contractor schedule confirmed — ${params.monthLabel}`,
+    html: await wrapWithLogo("Schedule Confirmed (Copy)", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The following contractor assignments have been confirmed for <strong>${params.monthLabel}</strong>:</p>
+      <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Name</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Email</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Booked days</th></tr>
+          ${rows}
+        </table>
+      </div>
     `),
   });
 }

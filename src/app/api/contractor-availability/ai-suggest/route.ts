@@ -112,6 +112,16 @@ export async function POST(request: NextRequest) {
       }));
       const { error: insErr } = await supabase.from("output_schedule_assignments").insert(rows);
       if (insErr) throw insErr;
+
+      const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const { sendContractorAssignmentsPendingEmail } = await import("@/lib/email");
+      await sendContractorAssignmentsPendingEmail({
+        to: "london.operations@trtworld.com",
+        monthLabel,
+        count: suggested.length,
+        reviewUrl: `${appUrl}/contractor-availability?tab=assignments&month=${month}`,
+      });
     }
 
     return NextResponse.json({ ok: true, count: suggested.length, assignments: suggested });

@@ -1,6 +1,7 @@
 /**
- * Contractor availability assignments: list, save, approve.
+ * Contractor availability assignments: list, save, approve, cancel.
  * Admin, operations, manager can manage; users see own.
+ * Approval: admin always; operations/manager only if in contractor_approval_user_ids.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -8,13 +9,22 @@ import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+const APPROVAL_KEY = "contractor_approval_user_ids";
+
 function canManage(role: string) {
   return ["admin", "operations", "manager"].includes(role);
 }
 
-/** Only admin and operations can approve/save assignments. Manager can only request (enter demand). */
-function canApprove(role: string) {
-  return role === "admin" || role === "operations";
+async function getCanApprove(
+  supabase: ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>,
+  profile: { id: string; role: string }
+): Promise<boolean> {
+  if (profile.role === "admin") return true;
+  if (!["operations", "manager"].includes(profile.role)) return false;
+  const { data } = await supabase.from("app_settings").select("value").eq("key", APPROVAL_KEY).single();
+  const val = (data as { value?: unknown } | null)?.value;
+  const ids = Array.isArray(val) ? val.filter((x): x is string => typeof x === "string") : [];
+  return ids.includes(profile.id);
 }
 
 export async function GET(request: NextRequest) {
@@ -51,7 +61,9 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     const monthLabel = new Date(year, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
-    return NextResponse.json({ assignments: data ?? [], monthLabel });
+    const canApprove = canManage(profile.role) ? await getCanApprove(supabase, profile) : false;
+    const canRunAiSuggest = profile.role === "admin" || profile.role === "operations";
+    return NextResponse.json({ assignments: data ?? [], monthLabel, canApprove, canRunAiSuggest });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
@@ -61,15 +73,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { profile } = await requireAuth();
-    if (!canApprove(profile.role)) {
-      return NextResponse.json({ error: "Only admin or operations can approve or save assignments." }, { status: 403 });
+    const supabase = createAdminClient();
+    const allowed = await getCanApprove(supabase, profile);
+    if (!allowed) {
+      return NextResponse.json({ error: "You do not have permission to approve or save assignments." }, { status: 403 });
     }
 
     const body = await request.json();
-    const { action, month, assignments } = body as {
-      action?: "approve" | "save";
+    const { action, month, assignments, user_id: cancelUserId, date: cancelDate } = body as {
+      action?: "approve" | "save" | "cancel";
       month?: string;
       assignments?: { user_id: string; date: string; role?: string }[];
+      user_id?: string;
+      date?: string;
     };
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
@@ -79,7 +95,18 @@ export async function POST(request: NextRequest) {
     const [y, m] = month.split("-").map(Number);
     const start = new Date(y, m - 1, 1).toISOString().slice(0, 10);
     const end = new Date(y, m, 0).toISOString().slice(0, 10);
-    const supabase = createAdminClient();
+
+    if (action === "cancel" && cancelUserId && cancelDate && /^\d{4}-\d{2}-\d{2}$/.test(cancelDate)) {
+      const { error: delErr } = await supabase
+        .from("output_schedule_assignments")
+        .delete()
+        .eq("user_id", cancelUserId)
+        .eq("date", cancelDate)
+        .gte("date", start)
+        .lte("date", end);
+      if (delErr) throw delErr;
+      return NextResponse.json({ ok: true, cancelled: true });
+    }
 
     if (action === "approve") {
       const { data: pending } = await supabase
@@ -118,18 +145,26 @@ export async function POST(request: NextRequest) {
       }
 
       const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
-      const { sendContractorAssignmentConfirmedEmail } = await import("@/lib/email");
+      const { sendContractorAssignmentConfirmedEmail, sendContractorAssignmentConfirmedToLondonOps } = await import("@/lib/email");
 
+      const byPersonForLondon: { name: string; email: string; dates: string[] }[] = [];
       for (const [uid, { dates }] of Array.from(byUser.entries())) {
         const email = emailMap.get(uid);
+        const name = nameMap.get(uid) ?? "Unknown";
         if (email && dates.length > 0) {
+          const sorted = dates.sort();
           await sendContractorAssignmentConfirmedEmail({
             to: email,
-            personName: nameMap.get(uid) ?? "",
+            personName: name,
             monthLabel,
-            dates: dates.sort(),
+            dates: sorted,
           });
+          byPersonForLondon.push({ name, email, dates: sorted });
         }
+      }
+
+      if (byPersonForLondon.length > 0) {
+        await sendContractorAssignmentConfirmedToLondonOps({ monthLabel, byPerson: byPersonForLondon });
       }
 
       return NextResponse.json({ ok: true, approved: ids.length });

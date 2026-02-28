@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Profile = { id: string; full_name: string | null; role: string };
 type RoleItem = { id: string; value: string; sort_order: number };
@@ -25,6 +25,7 @@ function toYMD(d: Date): string {
 
 export function ContractorAvailabilityClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [tab, setTab] = useState<"form" | "all" | "requirements" | "assignments">("form");
@@ -62,10 +63,11 @@ export function ContractorAvailabilityClient() {
   const [bookedDates, setBookedDates] = useState<Set<string>>(new Set());
   const [assignNameMap, setAssignNameMap] = useState<Record<string, string>>({});
   const [assignEditable, setAssignEditable] = useState<AssignItem[]>([]);
+  const [coverage, setCoverage] = useState<{ slotsFilled: number; slotsShort: number } | null>(null);
 
   const canManage = profile?.role === "admin" || profile?.role === "operations" || profile?.role === "manager";
-  /** Only admin and operations can approve/save/AI suggest. Manager can only request (enter demand). */
-  const canApprove = profile?.role === "admin" || profile?.role === "operations";
+  const [canApprove, setCanApprove] = useState(false);
+  const [canRunAiSuggest, setCanRunAiSuggest] = useState(false);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -74,6 +76,16 @@ export function ContractorAvailabilityClient() {
       .catch(() => setProfile(null))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "assignments" && canManage) setTab("assignments");
+    const m = searchParams.get("month");
+    if (m && /^\d{4}-\d{2}$/.test(m)) {
+      setAssignMonth(m);
+      setReqMonth(m);
+    }
+  }, [searchParams, canManage, profile]);
 
   useEffect(() => {
     fetch("/api/contractor-availability/roles")
@@ -132,6 +144,9 @@ export function ContractorAvailabilityClient() {
         setAssignments(arr);
         setAssignEditable(arr);
         setAssignMonthLabel(assignData.monthLabel ?? null);
+        setCanApprove(!!assignData.canApprove);
+        setCanRunAiSuggest(!!assignData.canRunAiSuggest);
+        setCoverage(listData.coverage ?? null);
         const map: Record<string, string> = {};
         for (const u of listData.byUser ?? []) {
           map[u.userId] = u.name;
@@ -418,6 +433,13 @@ export function ContractorAvailabilityClient() {
             >
               {saving ? "Saving..." : "Save Availability"}
             </button>
+            <a
+              href={`/api/contractor-availability/export/ical?month=${month}`}
+              download={`contractor-schedule-${month}.ics`}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              Export to calendar (.ics)
+            </a>
             <span className="text-sm text-gray-500 dark:text-gray-400">
               {selectedDates.size} day{selectedDates.size !== 1 ? "s" : ""} selected
             </span>
@@ -523,6 +545,18 @@ export function ContractorAvailabilityClient() {
           <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
             AI suggests assignments from requirements and availability. Review, modify if needed, then approve to send confirmation emails.
           </p>
+          {coverage && (
+            <div className="mb-4 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-lg bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200">
+                {coverage.slotsFilled} slot{coverage.slotsFilled !== 1 ? "s" : ""} filled
+              </span>
+              {coverage.slotsShort > 0 && (
+                <span className="rounded-lg bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
+                  {coverage.slotsShort} short
+                </span>
+              )}
+            </div>
+          )}
           <div className="mb-4 flex flex-wrap gap-2 min-w-0">
             <select
               value={assignMonth}
@@ -558,7 +592,7 @@ export function ContractorAvailabilityClient() {
                 );
               })}
             </select>
-            {canApprove && (
+            {canRunAiSuggest && (
             <button
               type="button"
               onClick={async () => {
@@ -697,9 +731,9 @@ export function ContractorAvailabilityClient() {
                     <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Date</th>
                     <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Role</th>
                     <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300">Status</th>
-                    {canApprove && assignEditable.some((a) => a.status === "pending") && (
-                      <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300 w-12" />
-                    )}
+                    {(canApprove && assignEditable.some((a) => a.status === "pending")) || assignEditable.some((a) => a.status === "confirmed") ? (
+                      <th className="text-left py-2 px-3 font-medium text-gray-700 dark:text-gray-300 w-20" />
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -723,21 +757,58 @@ export function ContractorAvailabilityClient() {
                           {a.status}
                         </span>
                       </td>
-                      {canApprove && assignEditable.some((x) => x.status === "pending") && (
-                        <td className="py-2 px-3">
-                          {a.status === "pending" ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setAssignEditable((prev) => prev.filter((x) => x.id !== a.id))
+                      <td className="py-2 px-3">
+                        {a.status === "pending" && canApprove ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAssignEditable((prev) => prev.filter((x) => x.id !== a.id))
+                            }
+                            className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/70"
+                          >
+                            Remove
+                          </button>
+                        ) : a.status === "confirmed" && canApprove ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setAssignSaving(true);
+                              try {
+                                const res = await fetch("/api/contractor-availability/assignments", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "cancel",
+                                    month: assignMonth,
+                                    user_id: a.user_id,
+                                    date: a.date,
+                                  }),
+                                });
+                                if (res.ok) {
+                                  const r = await fetch(`/api/contractor-availability/assignments?month=${assignMonth}`);
+                                  const d = await r.json();
+                                  const arr = d.assignments ?? [];
+                                  setAssignments(arr);
+                                  setAssignEditable(arr);
+                                  setMessage({ type: "success", text: "Assignment cancelled." });
+                                  setTimeout(() => setMessage(null), 3000);
+                                } else {
+                                  const data = await res.json();
+                                  setMessage({ type: "error", text: data.error || "Cancel failed." });
+                                }
+                              } catch {
+                                setMessage({ type: "error", text: "Connection error." });
+                              } finally {
+                                setAssignSaving(false);
                               }
-                              className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/70"
-                            >
-                              Remove
-                            </button>
-                          ) : null}
-                        </td>
-                      )}
+                            }}
+                            disabled={assignSaving}
+                            className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/70 disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -790,6 +861,42 @@ export function ContractorAvailabilityClient() {
                   );
                 })}
               </select>
+              <button
+                type="button"
+                onClick={async () => {
+                  setReqSaving(true);
+                  try {
+                    const res = await fetch("/api/contractor-availability/requirements/copy-previous", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ month: reqMonth }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      setMessage({ type: "success", text: `Copied ${data.count ?? 0} requirements from previous month.` });
+                      setTimeout(() => setMessage(null), 3000);
+                      const r = await fetch(`/api/contractor-availability/requirements?month=${reqMonth}`);
+                      const d = await r.json();
+                      const byDate: Record<string, Record<string, number>> = {};
+                      for (const x of d.requirements ?? []) {
+                        if (!byDate[x.date]) byDate[x.date] = {};
+                        byDate[x.date][x.role] = x.count_needed;
+                      }
+                      setReqByDate(byDate);
+                    } else {
+                      setMessage({ type: "error", text: data.error || "Copy failed." });
+                    }
+                  } catch {
+                    setMessage({ type: "error", text: "Connection error." });
+                  } finally {
+                    setReqSaving(false);
+                  }
+                }}
+                disabled={reqSaving}
+                className="rounded-lg border border-sky-500/50 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/30 disabled:opacity-50"
+              >
+                Copy from previous month
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">

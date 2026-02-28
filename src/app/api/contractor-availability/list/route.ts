@@ -85,6 +85,11 @@ export async function GET(request: NextRequest) {
       : null;
 
     let requirements: { date: string; role: string; count_needed: number }[] = [];
+    let coverage: { slotsFilled: number; slotsShort: number; byDateRole: Record<string, { needed: number; filled: number }> } = {
+      slotsFilled: 0,
+      slotsShort: 0,
+      byDateRole: {},
+    };
     if (month && /^\d{4}-\d{2}$/.test(month)) {
       const [y, m] = month.split("-").map(Number);
       const start = new Date(y, m - 1, 1).toISOString().slice(0, 10);
@@ -95,12 +100,37 @@ export async function GET(request: NextRequest) {
         .gte("date", start)
         .lte("date", end);
       requirements = (reqRows ?? []) as { date: string; role: string; count_needed: number }[];
+
+      const { data: assignRows } = await supabase
+        .from("output_schedule_assignments")
+        .select("date, role")
+        .gte("date", start)
+        .lte("date", end)
+        .in("status", ["pending", "confirmed"]);
+      const filledByKey = new Map<string, number>();
+      for (const a of assignRows ?? []) {
+        const key = `${(a as { date: string }).date}|${(a as { role: string }).role || ""}`;
+        filledByKey.set(key, (filledByKey.get(key) ?? 0) + 1);
+      }
+      let slotsFilled = 0;
+      let slotsShort = 0;
+      const byDateRole: Record<string, { needed: number; filled: number }> = {};
+      for (const r of requirements) {
+        const key = `${r.date}|${r.role}`;
+        const needed = r.count_needed;
+        const filled = filledByKey.get(key) ?? 0;
+        byDateRole[key] = { needed, filled };
+        slotsFilled += filled;
+        if (filled < needed) slotsShort += needed - filled;
+      }
+      coverage = { slotsFilled, slotsShort, byDateRole };
     }
 
     return NextResponse.json({
       month: month ?? null,
       monthLabel,
       requirements,
+      coverage,
       records: rows ?? [],
       byUser: Object.entries(byUser).map(([id, v]) => ({ userId: id, ...v })),
     });
