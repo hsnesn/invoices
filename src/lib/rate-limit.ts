@@ -37,8 +37,12 @@ export function rateLimit(key: string, limit: number, windowSeconds: number): { 
   return inMemoryRateLimit(key, limit, windowSeconds);
 }
 
-/** Check rate limit from request, 60 req/min per IP+path. Returns { ok, retryAfter? }. */
-export async function checkRateLimit(request: Request): Promise<{ ok: boolean; retryAfter?: number }> {
+/** Check rate limit from request. Defaults to 60 req / 60s per IP+path. */
+export async function checkRateLimit(
+  request: Request,
+  limit = 60,
+  windowSeconds = 60
+): Promise<{ ok: boolean; retryAfter?: number }> {
   const key = getRateLimitKey(request);
 
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
@@ -50,7 +54,7 @@ export async function checkRateLimit(request: Request): Promise<{ ok: boolean; r
       const { Redis } = await import("@upstash/redis");
       const ratelimit = new Ratelimit({
         redis: new Redis({ url: redisUrl, token: redisToken }),
-        limiter: Ratelimit.slidingWindow(60, "60 s"),
+        limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
       });
       const { success, reset } = await ratelimit.limit(key);
       if (!success) {
@@ -63,9 +67,9 @@ export async function checkRateLimit(request: Request): Promise<{ ok: boolean; r
     }
   }
 
-  const result = inMemoryRateLimit(key, 60, 60);
+  const result = inMemoryRateLimit(key, limit, windowSeconds);
   if (!result.ok) {
-    return { ok: false, retryAfter: 60 };
+    return { ok: false, retryAfter: windowSeconds };
   }
   return { ok: true };
 }

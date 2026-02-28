@@ -85,9 +85,13 @@ export async function POST(request: NextRequest) {
     const sort_code = (formData.get("sort_code") as string | null)?.trim() || null;
 
     const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
     const fileExtFromName = file?.name?.split(".").pop()?.toLowerCase() ?? "";
     if (!file || !ALLOWED_EXT.includes(fileExtFromName)) {
       return NextResponse.json({ error: "Invalid or missing file. Supported: PDF, DOCX, DOC, XLSX, XLS" }, { status: 400 });
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.` }, { status: 413 });
     }
 
     const supabase = createAdminClient();
@@ -221,6 +225,7 @@ export async function POST(request: NextRequest) {
 
     for (let i = 1; i < files.length; i++) {
       const f = files[i];
+      if (f.size > MAX_FILE_SIZE) continue;
       const ext = f.name.split(".").pop()?.toLowerCase() ?? "pdf";
       if (!["pdf", "docx", "doc", "xlsx", "xls"].includes(ext)) continue;
       const stem = f.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "file";

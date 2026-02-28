@@ -12,6 +12,7 @@ import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 const BUCKET = "invoices";
 const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
 const MAX_FILES = 20;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function safeStem(name: string): string {
   return name
@@ -64,6 +65,10 @@ export async function POST(request: NextRequest) {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
       if (!ALLOWED_EXT.includes(ext)) {
         results.push({ id: "", fileName: file.name, error: `Unsupported: ${ext}` });
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        results.push({ id: "", fileName: file.name, error: `File too large. Max ${MAX_FILE_SIZE / (1024 * 1024)} MB.` });
         continue;
       }
 

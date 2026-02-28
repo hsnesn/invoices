@@ -17,6 +17,7 @@ import { sendBookingFormEmailsForInvoice } from "@/lib/booking-form/process-pend
 import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds, filterUserIdsByEmailPreference, userWantsUpdateEmails } from "@/lib/email-settings";
 import type { InvoiceStatus } from "@/lib/types";
 import { notifyWebhooks } from "@/lib/webhook";
+import { updateWorkflowWithVersion } from "@/lib/workflow-update";
 
 export async function POST(
   request: NextRequest,
@@ -116,6 +117,8 @@ export async function POST(
     }
 
     const fromStatus = wf.status;
+    const wfVersion: number = wf.version ?? 1;
+
     const { data: extracted } = await supabase
       .from("invoice_extracted_fields")
       .select("manager_confirmed, invoice_number, beneficiary_name, account_number, sort_code, gross_amount")
@@ -175,13 +178,11 @@ export async function POST(
         }
         const newStatus = isFreelancer ? "pending_admin" : "ready_for_payment";
 
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: wfOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: newStatus,
             manager_user_id: session.user.id,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!wfOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (!isFreelancer) {
           const enabled = await isEmailStageEnabled("ready_for_payment");
@@ -266,14 +267,12 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: rejOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "rejected",
             rejection_reason,
             manager_user_id: session.user.id,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!rejOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         const enabled = await isEmailStageEnabled("manager_rejected");
         if (enabled) {
@@ -300,13 +299,11 @@ export async function POST(
     } else if ((isOperationsRoom || isOperations) && (inv as { invoice_type?: string }).invoice_type === "freelancer") {
       const opsValidFrom = ["pending_admin", "approved_by_manager"];
       if (to_status === "ready_for_payment" && opsValidFrom.includes(fromStatus)) {
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: opsOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "ready_for_payment",
             admin_comment: admin_comment ?? wf.admin_comment,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!opsOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         const enabled = await isEmailStageEnabled("ready_for_payment");
         if (enabled) {
@@ -335,14 +332,12 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: opsRejOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "rejected",
             rejection_reason,
             admin_comment: admin_comment ?? wf.admin_comment,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!opsRejOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (await isEmailStageEnabled("manager_rejected")) {
           const sendSubmitter = await isRecipientEnabled("manager_rejected", "submitter");
@@ -373,13 +368,11 @@ export async function POST(
           );
         }
         const invIsFreelancer = (inv as { invoice_type?: string }).invoice_type === "freelancer";
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: admApOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: invIsFreelancer ? "pending_admin" : "ready_for_payment",
             manager_user_id: session.user.id,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!admApOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (invIsFreelancer) {
           const approverUser = (await supabase.auth.admin.getUserById(session.user.id)).data?.user;
@@ -435,13 +428,11 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: admRfpOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "ready_for_payment",
             admin_comment: admin_comment ?? wf.admin_comment,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!admRfpOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (await isEmailStageEnabled("ready_for_payment")) {
           const [sendSubmitter, sendFinance] = await Promise.all([
@@ -495,14 +486,12 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: admRejOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "rejected",
             rejection_reason,
             admin_comment: admin_comment ?? wf.admin_comment,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!admRejOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (await isEmailStageEnabled("manager_rejected")) {
           const sendSubmitter = await isRecipientEnabled("manager_rejected", "submitter");
@@ -531,14 +520,12 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: admPaidOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "paid",
             payment_reference: payment_reference ?? null,
             paid_date: paid_date ?? new Date().toISOString().split("T")[0],
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!admPaidOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (await isEmailStageEnabled("paid")) {
           const invIsGuest = (inv as { invoice_type?: string }).invoice_type !== "freelancer";
@@ -583,10 +570,8 @@ export async function POST(
           }
         }
       } else if (to_status === "archived") {
-        await supabase
-          .from("invoice_workflows")
-          .update({ status: "archived" })
-          .eq("invoice_id", invoiceId);
+        const { ok: archOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, { status: "archived" });
+        if (!archOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
       } else if (to_status === "pending_admin") {
         const validFrom = ["ready_for_payment"];
         const adminCanForce = profile.role === "admin";
@@ -602,10 +587,8 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({ status: "pending_admin" })
-          .eq("invoice_id", invoiceId);
+        const { ok: paOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, { status: "pending_admin" });
+        if (!paOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
       } else if (to_status === "pending_manager") {
         const validFromForResubmit = ["rejected"];
         const validFromForMoveBack = ["ready_for_payment", "approved_by_manager", "pending_admin", "paid", "archived", "submitted"];
@@ -618,14 +601,12 @@ export async function POST(
           );
         }
         const today = new Date().toISOString().slice(0, 10);
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: pmOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "pending_manager",
             pending_manager_since: today,
             ...(fromStatus === "rejected" ? { rejection_reason: null } : {}),
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!pmOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (fromStatus === "rejected") {
           if (await isEmailStageEnabled("resubmitted")) {
@@ -654,14 +635,12 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: finPaidOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "paid",
             payment_reference: payment_reference ?? null,
             paid_date: paid_date ?? new Date().toISOString().split("T")[0],
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!finPaidOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         const isGuestInvoice = (inv as { invoice_type?: string }).invoice_type !== "freelancer";
         if (await isEmailStageEnabled("paid")) {
@@ -724,24 +703,20 @@ export async function POST(
             { status: 400 }
           );
         }
-        await supabase
-          .from("invoice_workflows")
-          .update({ status: "archived" })
-          .eq("invoice_id", invoiceId);
+        const { ok: finArchOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, { status: "archived" });
+        if (!finArchOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
       } else {
         return NextResponse.json({ error: "Invalid finance action" }, { status: 400 });
       }
     } else if ((profile.role === "submitter" || isOwner) && profile.role !== "viewer") {
       if (to_status === "pending_manager" && fromStatus === "rejected") {
         const today = new Date().toISOString().slice(0, 10);
-        await supabase
-          .from("invoice_workflows")
-          .update({
+        const { ok: subResOk } = await updateWorkflowWithVersion(supabase, invoiceId, wfVersion, {
             status: "pending_manager",
             pending_manager_since: today,
             rejection_reason: null,
-          })
-          .eq("invoice_id", invoiceId);
+          });
+        if (!subResOk) return NextResponse.json({ error: "Invoice was modified by another user. Please refresh." }, { status: 409 });
 
         if (await isEmailStageEnabled("resubmitted")) {
           const sendDeptEp = await isRecipientEnabled("resubmitted", "dept_ep");

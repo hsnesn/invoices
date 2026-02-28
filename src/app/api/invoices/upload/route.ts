@@ -60,10 +60,17 @@ export async function POST(request: NextRequest) {
     const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg"];
     const fileExtFromName = file?.name?.split(".").pop()?.toLowerCase() ?? "";
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
     if (!file || (!ALLOWED_MIME[file.type] && !ALLOWED_EXT.includes(fileExtFromName))) {
       return NextResponse.json(
         { error: "Invalid or missing file. Supported: PDF, DOCX, DOC, XLSX, XLS, JPEG" },
         { status: 400 }
+      );
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.` },
+        { status: 413 }
       );
     }
 
@@ -100,57 +107,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: invError } = await supabaseAdmin.from("invoices").insert({
-      id: invoiceId,
-      submitter_user_id: session.user.id,
-      department_id: safeDepartmentId,
-      program_id: safeProgramId,
-      service_description: service_description || null,
-      service_date_from: service_date_from || null,
-      service_date_to: service_date_to || null,
-      currency,
-      storage_path: storagePath,
-      invoice_type: "guest",
+    const seedInvNumber = file.name.replace(/\.[^.]+$/, "");
+    const { error: txError } = await supabaseAdmin.rpc("create_invoice_with_workflow", {
+      p_id: invoiceId,
+      p_submitter: session.user.id,
+      p_dept: safeDepartmentId,
+      p_prog: safeProgramId,
+      p_desc: service_description || null,
+      p_date_from: service_date_from || "",
+      p_date_to: service_date_to || "",
+      p_currency: currency,
+      p_path: storagePath,
+      p_type: "guest",
+      p_manager: managerUserId,
+      p_filename: seedInvNumber,
+      p_currency_extracted: currency,
     });
 
-    if (invError) {
+    if (txError) {
       await supabaseAdmin.storage.from(BUCKET).remove([storagePath]);
       return NextResponse.json(
-        { error: "Invoice insert failed: " + invError.message },
+        { error: "Invoice creation failed: " + txError.message },
         { status: 500 }
       );
     }
-
-    const today = new Date().toISOString().slice(0, 10);
-    const { error: wfError } = await supabaseAdmin.from("invoice_workflows").insert({
-      invoice_id: invoiceId,
-      status: "pending_manager",
-      manager_user_id: managerUserId,
-      pending_manager_since: today,
-    });
-
-    if (wfError) {
-      await supabaseAdmin.from("invoices").delete().eq("id", invoiceId);
-      await supabaseAdmin.storage.from(BUCKET).remove([storagePath]);
-      return NextResponse.json(
-        { error: "Workflow insert failed: " + wfError.message },
-        { status: 500 }
-      );
-    }
-
-    // Seed extracted fields so INV Number is always visible from filename.
-    await supabaseAdmin.from("invoice_extracted_fields").upsert(
-      {
-        invoice_id: invoiceId,
-        invoice_number: file.name.replace(/\.[^.]+$/, ""),
-        extracted_currency: currency,
-        needs_review: true,
-        manager_confirmed: false,
-        raw_json: { source_file_name: file.name },
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "invoice_id" }
-    );
 
     // Server-side extraction trigger: runs right after upload.
     try {
@@ -191,7 +171,7 @@ export async function POST(request: NextRequest) {
       const submitterEmail = submitterEmails[0];
       if (submitterEmail || managerEmails.length > 0) {
         const guestName = parseGuestNameFromServiceDesc(service_description);
-        const invoiceNumber = file.name.replace(/\.[^.]+$/, "");
+        const invoiceNumber = seedInvNumber;
         const deptName = safeDepartmentId
           ? ((await supabaseAdmin.from("departments").select("name").eq("id", safeDepartmentId).single()).data?.name ?? "—")
           : "—";

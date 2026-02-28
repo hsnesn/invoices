@@ -5,7 +5,7 @@ const COOKIE_NAME = "mfa_verified";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days (same session duration)
 
 function getSecret(): string | null {
-  return process.env.SESSION_IP_SECRET ?? process.env.CRON_SECRET ?? null;
+  return process.env.MFA_COOKIE_SECRET ?? null;
 }
 
 async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
@@ -42,7 +42,7 @@ export function getMfaCookieName(): string {
 export async function createMfaVerifiedCookie(userId: string): Promise<string | null> {
   const secret = getSecret();
   if (!secret) return null;
-  const payload = userId;
+  const payload = `${userId}:${Math.floor(Date.now() / 1000)}`;
   const sig = await hmacSha256Hex(secret, payload);
   return `${payload}.${sig}`;
 }
@@ -53,12 +53,20 @@ export async function verifyMfaCookie(
 ): Promise<boolean> {
   const secret = getSecret();
   if (!secret) return false;
-  const parts = cookieValue.split(".");
-  if (parts.length !== 2) return false;
-  const [payload, sig] = parts;
+  const dotIdx = cookieValue.lastIndexOf(".");
+  if (dotIdx === -1) return false;
+  const payload = cookieValue.slice(0, dotIdx);
+  const sig = cookieValue.slice(dotIdx + 1);
   const expected = await hmacSha256Hex(secret, payload);
   if (!timingSafeEqual(sig, expected)) return false;
-  return payload === userId;
+  const colonIdx = payload.indexOf(":");
+  if (colonIdx === -1) return false;
+  const cookieUserId = payload.slice(0, colonIdx);
+  const issuedAt = parseInt(payload.slice(colonIdx + 1), 10);
+  if (cookieUserId !== userId) return false;
+  const age = Math.floor(Date.now() / 1000) - issuedAt;
+  if (age < 0 || age > MAX_AGE) return false;
+  return true;
 }
 
 export function getMfaCookieOptions() {

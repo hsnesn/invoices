@@ -53,6 +53,7 @@ function matchEmployee(
 
 const BUCKET = "invoices";
 const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function safeFileStem(name: string): string {
   return name
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
     for (const file of files) {
       const fileExt = file.name?.split(".").pop()?.toLowerCase() ?? "";
       if (!ALLOWED_EXT.includes(fileExt)) continue;
+      if (file.size > MAX_FILE_SIZE) continue;
 
       const buffer = Buffer.from(await file.arrayBuffer());
       const isExcel = fileExt === "xlsx" || fileExt === "xls";
