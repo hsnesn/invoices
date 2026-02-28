@@ -2,10 +2,33 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useLogos } from "@/contexts/LogoContext";
 import useSWR from "swr";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import type { Profile, PageKey } from "@/lib/types";
+import {
+  useDashboardLayout,
+  type MetricKey,
+  type PageGroup as LayoutPageGroup,
+  DEFAULT_METRIC_ORDER,
+} from "@/hooks/useDashboardLayout";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const statsFetcher = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json());
@@ -54,6 +77,14 @@ interface PageCard {
   adminOnly?: boolean;
   viewerHidden?: boolean;
 }
+
+type MetricConfig = {
+  key: MetricKey;
+  label: string;
+  value: number;
+  links: React.ReactNode;
+  className: string;
+};
 
 const PAGES: PageCard[] = [
   {
@@ -290,6 +321,97 @@ const PAGES: PageCard[] = [
   },
 ];
 
+function SortableMetricCard({
+  id,
+  children,
+  isEditMode,
+}: {
+  id: MetricKey;
+  children: React.ReactNode;
+  isEditMode: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: !isEditMode,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? "opacity-60 z-10" : ""}>
+      {isEditMode ? (
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing touch-none rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-800/40 px-3 py-2 flex items-center gap-2"
+        >
+          <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+          </svg>
+          {children}
+        </div>
+      ) : (
+        <div>{children}</div>
+      )}
+    </div>
+  );
+}
+
+function SortablePageCard({
+  id,
+  href,
+  isEditMode,
+  children,
+}: {
+  id: string;
+  href: string;
+  isEditMode: boolean;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: !isEditMode,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const cardContent = (
+    <>
+      {children}
+      {!isEditMode && (
+        <svg className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+      )}
+    </>
+  );
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? "opacity-60 z-10" : ""}>
+      {isEditMode ? (
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing touch-none rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900/60 px-3 py-2.5 flex items-center gap-2"
+        >
+          <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+          </svg>
+          {children}
+        </div>
+      ) : (
+        <Link
+          href={href}
+          className="group flex items-center gap-2.5 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:border-gray-600"
+        >
+          {cardContent}
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -309,6 +431,12 @@ function getInitials(name: string | null): string {
 
 export function DashboardHome({ profile }: { profile: Profile }) {
   const logos = useLogos();
+  const [editLayoutMode, setEditLayoutMode] = useState(false);
+  const { metricOrder, pageOrderByGroup, setLayout } = useDashboardLayout(profile?.id);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const isAdmin = profile?.role === "admin";
   const isViewer = profile?.role === "viewer";
   const isOperations = profile?.role === "operations";
@@ -391,6 +519,13 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             </span>
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setEditLayoutMode((v) => !v)}
+          className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+        >
+          {editLayoutMode ? "Done" : "Customize layout"}
+        </button>
       </div>
 
       {/* Proactive Alerts */}
@@ -559,43 +694,95 @@ export function DashboardHome({ profile }: { profile: Profile }) {
               ))}
             </div>
           ) : (
-          <div className="grid gap-2 grid-cols-3 lg:grid-cols-6 min-w-0">
-          <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Guest Pending</p>
-            <p className="text-lg font-bold text-amber-800 dark:text-amber-200">{stats.guest.pending}</p>
-            <Link href="/invoices?group=pending" className="text-[11px] font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">View →</Link>
-          </div>
-          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Guest Paid</p>
-            <p className="text-lg font-bold text-emerald-800 dark:text-emerald-200">{stats.guest.paid}</p>
-            <Link href="/invoices?group=paid" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">View →</Link>
-          </div>
-          <div className="rounded-lg border border-teal-200/80 bg-teal-50/80 px-3 py-2 shadow-sm dark:border-teal-800/60 dark:bg-teal-950/30">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-teal-600 dark:text-teal-400">Contr. Pending</p>
-            <p className="text-lg font-bold text-teal-800 dark:text-teal-200">{stats.freelancer.pending}</p>
-            <Link href="/freelancer-invoices?group=pending" className="text-[11px] font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">View →</Link>
-          </div>
-          <div className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Contr. Paid</p>
-            <p className="text-lg font-bold text-sky-800 dark:text-sky-200">{stats.freelancer.paid}</p>
-            <Link href="/freelancer-invoices?group=paid" className="text-[11px] font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400">View →</Link>
-          </div>
-          <div className="rounded-lg border border-rose-200/80 bg-rose-50/80 px-3 py-2 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/30">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-rose-600 dark:text-rose-400">Rejected</p>
-            <p className="text-lg font-bold text-rose-800 dark:text-rose-200">{stats.guest.rejected + stats.freelancer.rejected}</p>
-            <div className="flex gap-1.5">
-              <Link href="/invoices?group=rejected" className="text-[11px] font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">Guest →</Link>
-              <Link href="/freelancer-invoices?group=rejected" className="text-[11px] font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">Contr. →</Link>
-            </div>
-          </div>
-          {stats.other != null && (
-            <div className="rounded-lg border border-orange-200/80 bg-orange-50/80 px-3 py-2 shadow-sm dark:border-orange-800/60 dark:bg-orange-950/30">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">Other Pending</p>
-              <p className="text-lg font-bold text-orange-800 dark:text-orange-200">{stats.other.pending}</p>
-              <Link href="/other-invoices" className="text-[11px] font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400">View →</Link>
-            </div>
-          )}
-        </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(e: DragEndEvent) => {
+                const { active, over } = e;
+                if (!over || active.id === over.id) return;
+                const current = [...metricOrder];
+                const oldIdx = current.indexOf(active.id as MetricKey);
+                const newIdx = current.indexOf(over.id as MetricKey);
+                if (oldIdx === -1 || newIdx === -1) return;
+                const reordered = arrayMove(current, oldIdx, newIdx);
+                setLayout((prev) => ({
+                  ...prev,
+                  metricOrder: reordered,
+                }));
+              }}
+            >
+              <SortableContext items={metricOrder} strategy={rectSortingStrategy}>
+                <div className="grid gap-2 grid-cols-3 lg:grid-cols-6 min-w-0">
+                  {metricOrder
+                    .filter((k) => {
+                      if (k === "other_pending") return stats.other != null;
+                      return true;
+                    })
+                    .map((key) => {
+                      const configs: Record<MetricKey, MetricConfig> = {
+                        guest_pending: {
+                          key: "guest_pending",
+                          label: "Guest Pending",
+                          value: stats.guest.pending,
+                          links: <Link href="/invoices?group=pending" className="text-[11px] font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">View →</Link>,
+                          className: "rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30",
+                        },
+                        guest_paid: {
+                          key: "guest_paid",
+                          label: "Guest Paid",
+                          value: stats.guest.paid,
+                          links: <Link href="/invoices?group=paid" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">View →</Link>,
+                          className: "rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30",
+                        },
+                        contr_pending: {
+                          key: "contr_pending",
+                          label: "Contr. Pending",
+                          value: stats.freelancer.pending,
+                          links: <Link href="/freelancer-invoices?group=pending" className="text-[11px] font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">View →</Link>,
+                          className: "rounded-lg border border-teal-200/80 bg-teal-50/80 px-3 py-2 shadow-sm dark:border-teal-800/60 dark:bg-teal-950/30",
+                        },
+                        contr_paid: {
+                          key: "contr_paid",
+                          label: "Contr. Paid",
+                          value: stats.freelancer.paid,
+                          links: <Link href="/freelancer-invoices?group=paid" className="text-[11px] font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400">View →</Link>,
+                          className: "rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30",
+                        },
+                        rejected: {
+                          key: "rejected",
+                          label: "Rejected",
+                          value: stats.guest.rejected + stats.freelancer.rejected,
+                          links: (
+                            <div className="flex gap-1.5">
+                              <Link href="/invoices?group=rejected" className="text-[11px] font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">Guest →</Link>
+                              <Link href="/freelancer-invoices?group=rejected" className="text-[11px] font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">Contr. →</Link>
+                            </div>
+                          ),
+                          className: "rounded-lg border border-rose-200/80 bg-rose-50/80 px-3 py-2 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/30",
+                        },
+                        other_pending: {
+                          key: "other_pending",
+                          label: "Other Pending",
+                          value: stats.other?.pending ?? 0,
+                          links: <Link href="/other-invoices" className="text-[11px] font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400">View →</Link>,
+                          className: "rounded-lg border border-orange-200/80 bg-orange-50/80 px-3 py-2 shadow-sm dark:border-orange-800/60 dark:bg-orange-950/30",
+                        },
+                      };
+                      const cfg = configs[key];
+                      if (!cfg) return null;
+                      return (
+                        <SortableMetricCard key={key} id={key} isEditMode={editLayoutMode}>
+                          <div className={cfg.className}>
+                            <p className="text-[10px] font-medium uppercase tracking-wider opacity-90">{cfg.label}</p>
+                            <p className="text-lg font-bold">{cfg.value}</p>
+                            {cfg.links}
+                          </div>
+                        </SortableMetricCard>
+                      );
+                    })}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       )}
@@ -718,43 +905,80 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       ) : null}
 
-      {/* Page Cards - grouped */}
-      {(["invoices", "operations", "admin"] as PageGroup[]).map((groupKey) => {
-        const groupPages = visiblePages.filter((p) => p.group === groupKey);
-        if (groupPages.length === 0) return null;
-        const groupLabels: Record<PageGroup, string> = {
-          invoices: "Invoices & Reports",
-          operations: "Operations",
-          admin: "Admin & Setup",
-        };
-        return (
-          <div key={groupKey} className="mb-6">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              {groupLabels[groupKey]}
-            </h3>
-            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-              {groupPages.map((page) => (
-                <Link
-                  key={page.href}
-                  href={page.href}
-                  className="group flex items-center gap-2.5 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:border-gray-600"
-                >
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-50 ${page.color} dark:bg-gray-800/80 [&>svg]:h-5 [&>svg]:w-5`}>
-                    {page.icon}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">{page.title}</h3>
-                    <p className="text-[10px] leading-tight text-gray-500 dark:text-gray-400 line-clamp-1">{page.description}</p>
-                  </div>
-                  <svg className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                  </svg>
-                </Link>
-              ))}
+      {/* Page Cards - grouped, sortable */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={(e: DragEndEvent) => {
+          const { active, over } = e;
+          if (!over || active.id === over.id) return;
+          const id = String(active.id);
+          const page = visiblePages.find((p) => p.pageKey === id);
+          if (!page) return;
+          const group = page.group as LayoutPageGroup;
+          const savedOrder = pageOrderByGroup[group] ?? [];
+          const groupPages = visiblePages.filter((p) => p.group === group);
+          const order = savedOrder.length > 0 ? savedOrder : groupPages.map((p) => p.pageKey);
+          const oldIdx = order.indexOf(id);
+          const newIdx = order.indexOf(String(over.id));
+          if (oldIdx === -1 || newIdx === -1) return;
+          const reordered = arrayMove(order, oldIdx, newIdx);
+          setLayout((prev) => ({
+            ...prev,
+            pageOrderByGroup: { ...prev.pageOrderByGroup, [group]: reordered },
+          }));
+        }}
+      >
+        {(["invoices", "operations", "admin"] as PageGroup[]).map((groupKey) => {
+          const groupPages = visiblePages.filter((p) => p.group === groupKey);
+          if (groupPages.length === 0) return null;
+          const savedOrder = pageOrderByGroup[groupKey as LayoutPageGroup] ?? [];
+          const orderedPages =
+            savedOrder.length > 0
+              ? [...groupPages].sort((a, b) => {
+                  const ai = savedOrder.indexOf(a.pageKey);
+                  const bi = savedOrder.indexOf(b.pageKey);
+                  if (ai === -1 && bi === -1) return 0;
+                  if (ai === -1) return 1;
+                  if (bi === -1) return -1;
+                  return ai - bi;
+                })
+              : groupPages;
+          const groupLabels: Record<PageGroup, string> = {
+            invoices: "Invoices & Reports",
+            operations: "Operations",
+            admin: "Admin & Setup",
+          };
+          const itemIds = orderedPages.map((p) => p.pageKey);
+          return (
+            <div key={groupKey} className="mb-6">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                {groupLabels[groupKey]}
+              </h3>
+              <SortableContext items={itemIds} strategy={rectSortingStrategy}>
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {orderedPages.map((page) => (
+                    <SortablePageCard
+                      key={page.pageKey}
+                      id={page.pageKey}
+                      href={page.href}
+                      isEditMode={editLayoutMode}
+                    >
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-50 ${page.color} dark:bg-gray-800/80 [&>svg]:h-5 [&>svg]:w-5`}>
+                        {page.icon}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">{page.title}</h3>
+                        <p className="text-[10px] leading-tight text-gray-500 dark:text-gray-400 line-clamp-1">{page.description}</p>
+                      </div>
+                    </SortablePageCard>
+                  ))}
+                </div>
+              </SortableContext>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </DndContext>
 
       {/* Quick Overview */}
       <div className="mt-4 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">

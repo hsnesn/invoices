@@ -1462,12 +1462,14 @@ export function GuestContactsClient({
                   {visibleColumns.has("invoice") && (
                     <td className="px-3 py-2 align-top text-sm">
                       {c.invoice_id ? (
-                        <Link
-                          href={`/invoices/${c.invoice_id}`}
+                        <a
+                          href={`/api/invoices/${c.invoice_id}/pdf?redirect=1`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="text-sky-600 hover:underline dark:text-sky-400"
                         >
-                          View
-                        </Link>
+                          View invoice
+                        </a>
                       ) : (
                         <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
                       )}
@@ -1649,7 +1651,7 @@ export function GuestContactsClient({
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
                 {c.invoice_id && (
-                  <Link href={`/invoices/${c.invoice_id}`} className="text-xs text-sky-600 dark:text-sky-400">View invoice</Link>
+                  <a href={`/api/invoices/${c.invoice_id}/pdf?redirect=1`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 dark:text-sky-400">View invoice</a>
                 )}
                 <button type="button" onClick={() => openGuestAssessment(c.guest_name)} className="text-xs text-sky-600 dark:text-sky-400">
                   AI Assessment
@@ -1719,12 +1721,14 @@ export function GuestContactsClient({
                           <span className="text-gray-600 dark:text-gray-300">{a.topic}</span>
                           <span className="text-gray-500 dark:text-gray-400">({a.programme})</span>
                           <span className="text-gray-500 dark:text-gray-400">{a.amount}</span>
-                          <Link
-                            href={`/invoices/${a.invoice_id}`}
+                          <a
+                            href={`/api/invoices/${a.invoice_id}/pdf?redirect=1`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="ml-auto text-sky-600 hover:underline dark:text-sky-400"
                           >
                             View invoice
-                          </Link>
+                          </a>
                         </li>
                       ))}
                     </ul>

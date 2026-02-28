@@ -57,6 +57,11 @@ export async function GET(
       );
     }
 
+    // When redirect=1, redirect directly to the PDF (e.g. from guest contact list)
+    if (request.nextUrl.searchParams.get("redirect") === "1") {
+      return NextResponse.redirect(data.signedUrl);
+    }
+
     return NextResponse.json({ url: data.signedUrl });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
