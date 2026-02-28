@@ -103,15 +103,21 @@ export function LogosSetupSection() {
         setValues((prev) => ({ ...prev, [key]: data.value ?? prev[key] }));
         setPreviewStamp(Date.now());
 
-        // Verify the database actually saved the new URL
+        // Verify the database saved the new URL (retry after delay for replication lag)
         let verifyMsg = "";
-        try {
-          const checkRes = await fetch(`/api/settings/logos?_=${Date.now()}`, { cache: "no-store" });
-          const checkData = await checkRes.json();
-          const savedUrl = checkData?.[key] || "(empty)";
-          verifyMsg = ` | DB check: ${savedUrl}`;
-        } catch {
-          verifyMsg = " | DB check failed";
+        const newFilename = data.value?.split("/").pop()?.split("?")[0] ?? "";
+        const fetchLogos = () => fetch(`/api/settings/logos?_=${Date.now()}`, { cache: "no-store" }).then((r) => r.json());
+        for (let attempt = 0; attempt <= 2; attempt++) {
+          try {
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt));
+            const checkData = await fetchLogos();
+            const savedUrl = checkData?.[key] || "(empty)";
+            verifyMsg = ` | DB check: ${savedUrl}`;
+            if (savedUrl.includes(newFilename)) break;
+          } catch {
+            verifyMsg = " | DB check failed";
+            break;
+          }
         }
 
         const msg = { type: "success", text: `Upload OK. New URL: ${data.value}${verifyMsg}` };
