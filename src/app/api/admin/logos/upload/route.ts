@@ -92,13 +92,21 @@ export async function POST(request: NextRequest) {
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(uploadData!.path);
     const logoValue = urlData.publicUrl;
 
-    const { error: rpcError } = await supabase.rpc("update_logo_setting", {
+    const { data: stored, error: rpcError } = await supabase.rpc("update_logo_setting_and_return", {
       p_key: key,
       p_value: logoValue,
     });
 
     if (rpcError) {
       return NextResponse.json({ error: `DB update failed: ${rpcError.message}` }, { status: 500 });
+    }
+
+    const newFilename = logoValue.split("/").pop()?.split("?")[0] ?? "";
+    const storedStr = stored != null ? String(stored) : "";
+    if (!storedStr.includes(newFilename)) {
+      return NextResponse.json({
+        error: `RPC returned but value mismatch. Stored: ${storedStr.slice(0, 120)} | Expected: ${newFilename}`,
+      }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, value: logoValue });
