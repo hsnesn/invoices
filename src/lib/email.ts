@@ -186,6 +186,31 @@ export async function sendMfaOtpEmail(to: string, code: string): Promise<{ succe
 }
 
 /* ------------------------------------------------------------------ */
+/* Login lockout notifications                                            */
+/* ------------------------------------------------------------------ */
+
+export async function sendLoginLockoutEmailToUser(email: string): Promise<{ success: boolean }> {
+  const html = await wrapWithLogo(
+    "Account Locked",
+    `<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">Your account has been temporarily locked after 3 failed login attempts.</p>
+<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">You can try again in 30 minutes. If you did not attempt to log in, please contact your administrator immediately.</p>`
+  );
+  const res = await sendEmail({ to: email, subject: `${APP_NAME} – Account Locked`, html });
+  return { success: res.success };
+}
+
+export async function sendLoginLockoutEmailToAdmin(userEmail: string): Promise<{ success: boolean }> {
+  const adminEmail = process.env.ADMIN_LOCKOUT_EMAIL ?? "london.finance@trtworld.com";
+  const html = await wrapWithLogo(
+    "Login Lockout Alert",
+    `<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">The account <strong>${userEmail}</strong> has been locked after 3 failed login attempts.</p>
+<p style="margin:0;font-size:13px;color:#94a3b8">Lockout duration: 30 minutes. The user has been notified by email.</p>`
+  );
+  const res = await sendEmail({ to: adminEmail, subject: `${APP_NAME} – Login Lockout: ${userEmail}`, html });
+  return { success: res.success };
+}
+
+/* ------------------------------------------------------------------ */
 
 export async function sendEmail(params: {
   to: string | string[];

@@ -27,17 +27,18 @@ function LoginPageContent() {
     setLoading(true);
     setMessage(null);
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: email.trim(), password }),
       });
-      if (error) {
-        setMessage({ type: "error", text: error.message });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage({ type: "error", text: data?.error ?? "Login failed" });
         return;
       }
-      // Full reload ensures cookies propagate; delay lets Supabase persist session
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 150));
       window.location.assign("/dashboard");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed. Please try again.";
