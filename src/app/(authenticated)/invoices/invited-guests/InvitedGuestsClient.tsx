@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
@@ -162,6 +163,7 @@ export function InvitedGuestsClient({
     return () => clearTimeout(t);
   }, [acceptanceForm.invoice_number]);
 
+  const router = useRouter();
   const selectedProducer = producers.find((p) => p.id === currentUserId) ?? { id: currentUserId, full_name: currentUserFullName };
 
   const filteredGuests = guests.filter((g) => {
@@ -492,6 +494,9 @@ export function InvitedGuestsClient({
         setAcceptanceModal(null);
         const list = await fetch("/api/producer-guests", { credentials: "same-origin" }).then((r) => r.json());
         setGuests(Array.isArray(list) ? list : []);
+        if (data.invoice_id) {
+          router.push(`/invoices?expand=${data.invoice_id}`);
+        }
       } else {
         const msg = data.message ?? data.error ?? "Failed";
         toast.error(msg);
