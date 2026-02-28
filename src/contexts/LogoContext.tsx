@@ -14,18 +14,18 @@ const defaults: LogoUrls = {
   logo_email: "/logo.png",
 };
 
-function addCacheBust(url: string | undefined, v: number): string {
+function addCacheBust(url: string | undefined, stamp: number): string {
   const u = url || "";
   if (!u) return "";
   const sep = u.includes("?") ? "&" : "?";
-  return `${u}${sep}v=${v}`;
+  return `${u}${sep}v=${stamp}`;
 }
 
 const LogoContext = createContext<LogoUrls>(defaults);
 
 export function LogoProvider({ children }: { children: React.ReactNode }) {
   const [urls, setUrls] = useState<LogoUrls>(defaults);
-  const [version, setVersion] = useState(0);
+  const [stamp, setStamp] = useState(() => Date.now());
 
   useEffect(() => {
     const load = () => {
@@ -38,7 +38,7 @@ export function LogoProvider({ children }: { children: React.ReactNode }) {
               logo_trt_world: d.logo_trt_world || defaults.logo_trt_world,
               logo_email: d.logo_email || defaults.logo_email,
             });
-            setVersion((v) => v + 1);
+            setStamp(Date.now());
           }
         })
         .catch(() => {});
@@ -49,9 +49,9 @@ export function LogoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const urlsWithCacheBust: LogoUrls = {
-    logo_trt: addCacheBust(urls.logo_trt, version),
-    logo_trt_world: addCacheBust(urls.logo_trt_world, version),
-    logo_email: addCacheBust(urls.logo_email, version),
+    logo_trt: addCacheBust(urls.logo_trt, stamp),
+    logo_trt_world: addCacheBust(urls.logo_trt_world, stamp),
+    logo_email: addCacheBust(urls.logo_email, stamp),
   };
 
   return <LogoContext.Provider value={urlsWithCacheBust}>{children}</LogoContext.Provider>;

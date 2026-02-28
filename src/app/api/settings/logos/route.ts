@@ -18,9 +18,7 @@ function toLogoUrl(value: unknown): string {
 
 function addCacheBust(url: string, updatedAt: string | null): string {
   if (!url) return url;
-  // Only add cache-bust when we have updated_at so logo changes bypass browser/CDN cache
-  if (!updatedAt) return url;
-  const ts = new Date(updatedAt).getTime();
+  const ts = updatedAt ? new Date(updatedAt).getTime() : Date.now();
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}t=${ts}`;
 }
