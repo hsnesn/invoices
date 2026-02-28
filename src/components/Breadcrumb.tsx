@@ -7,14 +7,24 @@ const LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   invoices: "Guest Invoices",
   "freelancer-invoices": "Contractor Invoices",
+  "other-invoices": "Other Invoices",
   salaries: "Salaries",
+  "contractor-availability": "My Availability",
+  request: "Request",
+  submit: "Submit Invoice",
   profile: "Profile",
+  help: "Help",
+  messages: "Messages",
   admin: "Admin",
   setup: "Setup",
+  users: "User Management",
   reports: "Reports",
   "audit-log": "Audit Log",
-  users: "User Management",
+  "guest-contacts": "Guest Contacts",
+  "invited-guests": "Invited Guests",
 };
+
+const UUID_RE = /^[0-9a-f]{8}-/;
 
 export function Breadcrumb() {
   const pathname = usePathname();
@@ -30,6 +40,7 @@ export function Breadcrumb() {
         Home
       </Link>
       {segments.map((seg, i) => {
+        if (UUID_RE.test(seg)) return null;
         const href = "/" + segments.slice(0, i + 1).join("/");
         const label = LABELS[seg] ?? seg.replace(/-/g, " ");
         const isLast = i === segments.length - 1;

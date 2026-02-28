@@ -4,7 +4,6 @@ import React, { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspens
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { toast } from "sonner";
-import { setInvoiceToast } from "@/components/InvoiceToastListener";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { fireApprovalConfetti } from "@/lib/action-animations";
 import { triggerPaidAnimation } from "@/components/PaidIconOverlay";
@@ -1676,6 +1675,8 @@ export function InvoicesBoard({
   const onManagerApprove = async (invoiceId: string) => {
     setActionLoadingId(invoiceId);
     try {
+      const row = rows.find((r) => r.id === invoiceId);
+      const previousStatus = row?.status ?? "pending_manager";
       const res = await fetch(`/api/invoices/${invoiceId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1686,8 +1687,28 @@ export function InvoicesBoard({
       });
       if (res.ok) {
         fireApprovalConfetti();
-        setInvoiceToast("success", "Invoice approved");
-        setTimeout(() => window.location.reload(), 400);
+        const reloadTimer = setTimeout(() => window.location.reload(), 5000);
+        toast.success("Invoice approved", {
+          duration: 5000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              clearTimeout(reloadTimer);
+              fetch(`/api/invoices/${invoiceId}/status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ to_status: previousStatus }),
+              }).then((r) => {
+                if (r.ok) {
+                  toast.success("Status reverted");
+                  window.location.reload();
+                } else {
+                  toast.error("Failed to revert status");
+                }
+              }).catch(() => toast.error("Failed to revert status"));
+            },
+          },
+        });
         return;
       }
     } finally {
@@ -1706,9 +1727,12 @@ export function InvoicesBoard({
     if (!rejectModalId || !rejectReason.trim()) return;
     setRejectButtonShaking(true);
     setTimeout(() => setRejectButtonShaking(false), 400);
-    setActionLoadingId(rejectModalId);
+    const invoiceId = rejectModalId;
+    const row = rows.find((r) => r.id === invoiceId);
+    const previousStatus = row?.status ?? "pending_manager";
+    setActionLoadingId(invoiceId);
     try {
-      const res = await fetch(`/api/invoices/${rejectModalId}/status`, {
+      const res = await fetch(`/api/invoices/${invoiceId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1717,8 +1741,28 @@ export function InvoicesBoard({
         }),
       });
       if (res.ok) {
-        setInvoiceToast("success", "Invoice rejected");
-        setTimeout(() => window.location.reload(), 300);
+        const reloadTimer = setTimeout(() => window.location.reload(), 5000);
+        toast.success("Invoice rejected", {
+          duration: 5000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              clearTimeout(reloadTimer);
+              fetch(`/api/invoices/${invoiceId}/status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ to_status: previousStatus }),
+              }).then((r) => {
+                if (r.ok) {
+                  toast.success("Status reverted");
+                  window.location.reload();
+                } else {
+                  toast.error("Failed to revert status");
+                }
+              }).catch(() => toast.error("Failed to revert status"));
+            },
+          },
+        });
         return;
       }
     } finally {
@@ -1726,11 +1770,13 @@ export function InvoicesBoard({
       setRejectModalId(null);
       setRejectReason("");
     }
-  }, [rejectModalId, rejectReason]);
+  }, [rejectModalId, rejectReason, rows]);
 
   const onMarkPaid = async (invoiceId: string) => {
     setActionLoadingId(invoiceId);
     try {
+      const row = rows.find((r) => r.id === invoiceId);
+      const previousStatus = row?.status ?? "approved_by_manager";
       const res = await fetch(`/api/invoices/${invoiceId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1741,8 +1787,28 @@ export function InvoicesBoard({
       });
       if (res.ok) {
         triggerPaidAnimation();
-        setInvoiceToast("success", "Invoice marked as paid");
-        setTimeout(() => window.location.reload(), 600);
+        const reloadTimer = setTimeout(() => window.location.reload(), 5000);
+        toast.success("Invoice marked as paid", {
+          duration: 5000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              clearTimeout(reloadTimer);
+              fetch(`/api/invoices/${invoiceId}/status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ to_status: previousStatus }),
+              }).then((r) => {
+                if (r.ok) {
+                  toast.success("Status reverted");
+                  window.location.reload();
+                } else {
+                  toast.error("Failed to revert status");
+                }
+              }).catch(() => toast.error("Failed to revert status"));
+            },
+          },
+        });
         return;
       }
       const data = await res.json().catch(() => null);
@@ -1751,6 +1817,41 @@ export function InvoicesBoard({
       setActionLoadingId(null);
     }
   };
+
+  useEffect(() => {
+    if (!expandedRowId) return;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) return;
+      if (rejectModalId || editModalRow || previewUrl || previewHtml || showCompareModal || showAssignManagerModal || showMoveModal || showImportModal || showCustomReport) return;
+
+      const row = rows.find((r) => r.id === expandedRowId);
+      if (!row) return;
+      const isSubmitter = row.submitterId === currentUserId;
+      const canApprove = currentRole === "admin" || (!isSubmitter && currentRole === "manager");
+
+      if ((e.key === "a" || e.key === "A") && row.status === "pending_manager" && canApprove) {
+        e.preventDefault();
+        void onManagerApprove(expandedRowId);
+      }
+      if (e.key === "r" || e.key === "R") {
+        const canReject =
+          (row.status === "pending_manager" && canApprove) ||
+          (row.status === "ready_for_payment" && currentRole === "admin") ||
+          ((row.status === "approved_by_manager" || row.status === "pending_admin") && currentRole === "admin");
+        if (canReject) {
+          e.preventDefault();
+          onRejectInvoice(expandedRowId);
+        }
+      }
+      if ((e.key === "p" || e.key === "P") && row.status === "ready_for_payment" && (currentRole === "admin" || currentRole === "finance")) {
+        e.preventDefault();
+        void onMarkPaid(expandedRowId);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [expandedRowId, rejectModalId, editModalRow, previewUrl, previewHtml, showCompareModal, showAssignManagerModal, showMoveModal, showImportModal, showCustomReport, rows, currentRole, currentUserId, onManagerApprove, onRejectInvoice, onMarkPaid]);
 
   const closePreview = useCallback(() => {
     setPreviewUrl((prev) => {
@@ -2723,6 +2824,14 @@ export function InvoicesBoard({
           )}
           {(currentRole === "admin" || currentRole === "manager" || currentRole === "operations") && (
             <>
+          <button onClick={() => void bulkApprove()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+            {actionLoadingId === "bulk" ? "Approving..." : "Approve Selected"}
+          </button>
+          <button onClick={() => void bulkReject()} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-400 disabled:opacity-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            {actionLoadingId === "bulk" ? "Rejecting..." : "Reject Selected"}
+          </button>
           <button onClick={() => exportToCsv(rows.filter((r) => selectedIds.has(r.id)))} disabled={actionLoadingId === "bulk"} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950/50">
             CSV
           </button>
@@ -2946,6 +3055,29 @@ export function InvoicesBoard({
           })}
         </div>
       )}
+
+      {/* Quick status filter pills */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {([
+          { value: "", label: "All" },
+          { value: "pending", label: "My Pending" },
+          { value: "ready_for_payment", label: "Ready for Payment" },
+          { value: "paid_invoices", label: "Paid" },
+          { value: "rejected", label: "Rejected" },
+        ] as const).map((pill) => (
+          <button
+            key={pill.value}
+            onClick={() => setGroupFilter(pill.value as "" | DisplayRow["group"] | "pending")}
+            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              groupFilter === pill.value
+                ? "bg-blue-600 text-white shadow-sm"
+                : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
+            }`}
+          >
+            {pill.label}
+          </button>
+        ))}
+      </div>
 
       <div className={`rounded-2xl border-2 border-slate-300 bg-slate-100 shadow-lg dark:border-slate-600 dark:bg-slate-800 overflow-hidden ${selectedIds.size > 0 ? "relative z-40" : ""}`}>
         <div className="flex flex-wrap items-center gap-2 p-4 overflow-x-auto md:overflow-visible min-w-0">

@@ -389,6 +389,8 @@ export function ContractorAvailabilityClient() {
 
   const [y, m] = month.split("-").map(Number);
   const days = getDaysInMonth(y, m);
+  const prevMonthDate = new Date(y, m - 2, 1);
+  const prevMonthLabel = prevMonthDate.toLocaleString("en-GB", { month: "long" });
   const firstDayOfWeek = new Date(y, m - 1, 1).getDay();
   const padStart = Array.from({ length: firstDayOfWeek }, (_, i) => (
     <div key={`pad-${i}`} className="aspect-square min-w-[1.75rem] sm:min-w-[2.25rem]" />
@@ -554,6 +556,51 @@ export function ContractorAvailabilityClient() {
                     );
                   })}
                 </select>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!selectedDepartment) {
+                      setMessage({ type: "error", text: "Please select a department first." });
+                      return;
+                    }
+                    setCopyAvailLoading(true);
+                    setMessage(null);
+                    try {
+                      const [curY, curM] = month.split("-").map(Number);
+                      const prev = new Date(curY, curM - 2, 1);
+                      const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+                      const params = new URLSearchParams({ month: prevMonth, department_id: selectedDepartment });
+                      if (selectedProgram) params.set("program_id", selectedProgram);
+                      const res = await fetch(`/api/output-schedule/availability?${params}`);
+                      const data = await res.json();
+                      const prevDates: string[] = data.dates ?? [];
+                      const daysInCurrent = new Date(curY, curM, 0).getDate();
+                      const mapped = new Set<string>();
+                      for (const d of prevDates) {
+                        const day = parseInt(d.slice(8, 10), 10);
+                        if (day <= daysInCurrent) {
+                          mapped.add(`${month}-${String(day).padStart(2, "0")}`);
+                        }
+                      }
+                      setSelectedDates(mapped);
+                      if (data.role) setSelectedRole(data.role);
+                      setMessage({ type: "success", text: `Copied ${mapped.size} day${mapped.size !== 1 ? "s" : ""} from ${prevMonthLabel}.` });
+                      setTimeout(() => setMessage(null), 3000);
+                    } catch {
+                      setMessage({ type: "error", text: "Failed to copy from last month." });
+                    } finally {
+                      setCopyAvailLoading(false);
+                    }
+                  }}
+                  disabled={copyAvailLoading || !selectedDepartment}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
+                    <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
+                    <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
+                  </svg>
+                  {copyAvailLoading ? "Copying..." : `Copy from ${prevMonthLabel}`}
+                </button>
               </div>
             </div>
           </div>

@@ -11,6 +11,9 @@ const SHORTCUTS = [
   { keys: ["g", "c"], action: "Go to Contractor Invoices" },
   { keys: ["g", "m"], action: "Go to Messages" },
   { keys: ["g", "h"], action: "Go to Help" },
+  { keys: ["A"], action: "Approve invoice (when expanded)" },
+  { keys: ["R"], action: "Reject invoice (when expanded)" },
+  { keys: ["P"], action: "Mark as paid (when expanded)" },
 ];
 
 export function KeyboardShortcuts() {

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
 import { GenerateInvoiceForm } from "@/components/GenerateInvoiceForm";
 import { LogoLoader } from "@/components/LogoLoader";
 import { UploadOverlay } from "@/components/UploadOverlay";
+import AutocompleteInput from "@/components/AutocompleteInput";
+import { toast } from "sonner";
 
 type DuplicateHit = {
   id: string;
@@ -17,6 +19,16 @@ type DuplicateHit = {
   invoice_number: string | null;
   match_reasons: string[];
 };
+
+type FormTemplate = {
+  name: string;
+  departmentId: string;
+  programId: string;
+  producer: string;
+  paymentType: string;
+  currency: string;
+};
+const TEMPLATES_KEY = "invoice-templates";
 
 const fetcher = (url: string) =>
   fetch(url).then(async (r) => {
@@ -72,6 +84,14 @@ function SubmitPageContent() {
   const [duplicates, setDuplicates] = useState<DuplicateHit[]>([]);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [duplicateChecked, setDuplicateChecked] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [draftBanner, setDraftBanner] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [templates, setTemplates] = useState<FormTemplate[]>([]);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
+  const ALLOWED_EXTS = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".jpg", ".jpeg"];
 
   useEffect(() => {
     if (deptError) setError(deptError.message ?? "Failed to load departments");
@@ -93,6 +113,121 @@ function SubmitPageContent() {
   useEffect(() => {
     if (departmentId) setProgramId("");
   }, [departmentId]);
+
+  // --- Draft auto-save (debounced 10s) ---
+  const DRAFT_KEY = "invoice-draft";
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const draft = { guestName, guestPhone, guestEmail, title, producer, topic, departmentId, programId, invoiceDate, txDate1, txDate2, txDate3, paymentType, currency };
+      const hasContent = Object.values(draft).some((v) => typeof v === "string" && v.trim() !== "");
+      if (hasContent) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      }
+    }, 10_000);
+    return () => clearTimeout(timer);
+  }, [guestName, guestPhone, guestEmail, title, producer, topic, departmentId, programId, invoiceDate, txDate1, txDate2, txDate3, paymentType, currency]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) setDraftBanner(true);
+    } catch { /* noop */ }
+  }, []);
+
+  const restoreDraft = () => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d.guestName) setGuestName(d.guestName);
+      if (d.guestPhone) setGuestPhone(d.guestPhone);
+      if (d.guestEmail) setGuestEmail(d.guestEmail);
+      if (d.title) setTitle(d.title);
+      if (d.producer) { setProducer(d.producer); setProducerLoaded(true); }
+      if (d.topic) setTopic(d.topic);
+      if (d.departmentId) setDepartmentId(d.departmentId);
+      if (d.programId) setTimeout(() => setProgramId(d.programId), 200);
+      if (d.invoiceDate) setInvoiceDate(d.invoiceDate);
+      if (d.txDate1) setTxDate1(d.txDate1);
+      if (d.txDate2) setTxDate2(d.txDate2);
+      if (d.txDate3) setTxDate3(d.txDate3);
+      if (d.paymentType) setPaymentType(d.paymentType);
+      if (d.currency) setCurrency(d.currency);
+    } catch { /* noop */ }
+    setDraftBanner(false);
+  };
+
+  const discardDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftBanner(false);
+  };
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TEMPLATES_KEY);
+      if (saved) setTemplates(JSON.parse(saved));
+    } catch { /* noop */ }
+  }, []);
+
+  function saveTemplate() {
+    if (!templateName.trim()) return;
+    const t: FormTemplate = { name: templateName.trim(), departmentId, programId, producer, paymentType, currency };
+    const updated = [...templates.filter(x => x.name !== t.name), t];
+    setTemplates(updated);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updated));
+    setShowSaveTemplate(false);
+    setTemplateName("");
+    toast.success("Template saved");
+  }
+
+  function loadTemplate(t: FormTemplate) {
+    setDepartmentId(t.departmentId);
+    setProgramId(t.programId);
+    setProducer(t.producer);
+    setPaymentType(t.paymentType as typeof paymentType);
+    setCurrency(t.currency);
+    toast.success(`Template "${t.name}" loaded`);
+  }
+
+  function deleteTemplate(name: string) {
+    const updated = templates.filter(x => x.name !== name);
+    setTemplates(updated);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updated));
+  }
+
+  // --- Drag-and-drop helpers ---
+  const validateAndMergeFiles = (incoming: File[]) => {
+    const valid = incoming.filter((f) => {
+      const ext = f.name.toLowerCase().slice(f.name.lastIndexOf("."));
+      return ALLOWED_EXTS.includes(ext);
+    });
+    if (valid.length < incoming.length) {
+      setError(`${incoming.length - valid.length} file(s) skipped (unsupported type). Allowed: PDF, DOCX, DOC, XLSX, XLS, JPEG`);
+    }
+    setFiles((prev) => {
+      const existing = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
+      const deduped = valid.filter((f) => !existing.has(`${f.name}-${f.size}-${f.lastModified}`));
+      return [...prev, ...deduped];
+    });
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const dropped = Array.from(e.dataTransfer.files);
+    if (dropped.length) validateAndMergeFiles(dropped);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOver(false);
+  };
 
   const markTouched = (field: string) => () => setTouched((p) => ({ ...p, [field]: true }));
 
@@ -153,10 +288,9 @@ function SubmitPageContent() {
       setError("Please select at least one file (PDF, DOCX, DOC, XLSX, XLS, JPEG)");
       return;
     }
-    const allowedExts = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".jpg", ".jpeg"];
     for (const f of files) {
       const fileExt = f.name.toLowerCase().slice(f.name.lastIndexOf("."));
-      if (!allowedExts.includes(fileExt)) {
+      if (!ALLOWED_EXTS.includes(fileExt)) {
         setError(`Unsupported file type: ${f.name}. Allowed: PDF, DOCX, DOC, XLSX, XLS, JPEG`);
         return;
       }
@@ -221,6 +355,7 @@ function SubmitPageContent() {
       setLoading(false);
 
       if (successCount > 0) {
+        localStorage.removeItem(DRAFT_KEY);
         setSuccess(
           successCount === files.length
             ? `${successCount} invoice(s) submitted. Redirecting...`
@@ -282,6 +417,16 @@ function SubmitPageContent() {
         </div>
       )}
 
+      {draftBanner && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm text-sky-800 dark:border-sky-700 dark:bg-sky-950/30 dark:text-sky-200">
+          <span>You have an unsaved draft. Resume where you left off?</span>
+          <div className="flex gap-2">
+            <button type="button" onClick={restoreDraft} className="rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500">Resume</button>
+            <button type="button" onClick={discardDraft} className="rounded-md border border-sky-300 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-600 dark:text-sky-300 dark:hover:bg-sky-900">Discard</button>
+          </div>
+        </div>
+      )}
+
       {duplicates.length > 0 && (
         <div className="mb-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-950/40" role="alert">
           <div className="flex items-start gap-3">
@@ -302,19 +447,80 @@ function SubmitPageContent() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-700/50">
+          {templates.length > 0 && (
+            <div className="relative group">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                Load Template
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div className="invisible absolute left-0 top-full z-20 mt-1 min-w-[200px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg group-hover:visible dark:border-slate-600 dark:bg-slate-800">
+                {templates.map((t) => (
+                  <div key={t.name} className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => loadTemplate(t)}
+                      className="flex-1 text-left text-xs text-slate-700 dark:text-slate-200"
+                    >
+                      {t.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteTemplate(t.name)}
+                      className="ml-2 flex-shrink-0 rounded p-0.5 text-slate-400 hover:text-red-500"
+                      aria-label={`Delete template ${t.name}`}
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!showSaveTemplate ? (
+            <button
+              type="button"
+              onClick={() => setShowSaveTemplate(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4z"/><path strokeLinecap="round" strokeLinejoin="round" d="M7 3v5h8V3M7 14h10"/></svg>
+              Save as Template
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveTemplate(); } }}
+                placeholder="Template name..."
+                className="w-40 rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={saveTemplate}
+                className="rounded-md bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowSaveTemplate(false); setTemplateName(""); }}
+                className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+
         <div>
-          <label htmlFor="guestName" className="block text-sm font-semibold text-slate-800">
-            Guest Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="guestName"
-            value={guestName}
-            onChange={(e) => setGuestName(e.target.value.slice(0, 255))}
-            onBlur={() => { markTouched("guestName")(); void checkDuplicates(); }}
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 aria-[invalid=true]:border-red-500"
-            aria-invalid={touched.guestName && !guestName.trim() ? true : undefined}
-            aria-describedby={touched.guestName && !guestName.trim() ? "guestName-error" : undefined}
-          />
+          <AutocompleteInput value={guestName} onChange={setGuestName} field="guest" label="Guest Name" required placeholder="e.g. John Doe" />
           {touched.guestName && !guestName.trim() && <p id="guestName-error" className="mt-1 text-sm text-red-600" role="alert">Guest name is required</p>}
           <p className="mt-1 text-right text-sm text-slate-500">{guestName.length}/255</p>
           {duplicates.length > 0 && (
@@ -367,27 +573,9 @@ function SubmitPageContent() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-slate-800">
-            Producer <span className="text-red-500">*</span>
-          </label>
-          <input
-            value={producer}
-            onChange={(e) => setProducer(e.target.value)}
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
-          />
-        </div>
+        <AutocompleteInput value={producer} onChange={setProducer} field="producer" label="Producer" required placeholder="e.g. Jane Smith" />
 
-        <div>
-          <label className="block text-sm font-semibold text-slate-800">
-            Topic <span className="text-red-500">*</span>
-          </label>
-          <input
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
-          />
-        </div>
+        <AutocompleteInput value={topic} onChange={setTopic} field="topic" label="Topic" placeholder="e.g. Politics" />
 
         <div>
           <label htmlFor="departmentId" className="block text-sm font-semibold text-slate-800">
@@ -520,17 +708,59 @@ function SubmitPageContent() {
           <label htmlFor="invoiceFiles" className="block text-sm font-semibold text-slate-800">
             Invoice File(s) <span className="text-red-500">*</span>
           </label>
-          <input
-            id="invoiceFiles"
-            type="file"
-            accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg"
-            multiple
-            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-            aria-describedby="files-hint"
-            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 file:mr-4 file:rounded file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-white"
-          />
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`mt-2 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
+              dragOver
+                ? "border-sky-500 bg-sky-50 dark:border-sky-400 dark:bg-sky-950/30"
+                : "border-slate-300 bg-white hover:border-slate-400 dark:border-slate-600 dark:bg-slate-700"
+            }`}
+          >
+            {dragOver ? (
+              <p className="text-sm font-medium text-sky-600 dark:text-sky-400">Drop files here</p>
+            ) : (
+              <>
+                <svg className="mb-2 h-8 w-8 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Drag & drop files here, or <span className="font-medium text-sky-600 dark:text-sky-400">browse</span></p>
+              </>
+            )}
+            <input
+              ref={fileInputRef}
+              id="invoiceFiles"
+              type="file"
+              accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg"
+              multiple
+              onChange={(e) => {
+                const picked = Array.from(e.target.files ?? []);
+                if (picked.length) validateAndMergeFiles(picked);
+                e.target.value = "";
+              }}
+              aria-describedby="files-hint"
+              className="hidden"
+            />
+          </div>
           <p id="files-hint" className="mt-1 text-xs text-slate-500">PDF, DOCX, DOC, XLSX, XLS, JPEG. Select multiple files to create one invoice per file.</p>
-          {files.length > 0 && <p className="mt-1 text-sm text-sky-600 font-medium">{files.length} file(s) selected</p>}
+          {files.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {files.map((f, i) => (
+                <div key={`${f.name}-${f.size}-${i}`} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-1.5 text-sm dark:bg-slate-700">
+                  <span className="truncate text-slate-700 dark:text-slate-200">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, idx) => idx !== i)); }}
+                    className="ml-2 flex-shrink-0 text-slate-400 hover:text-red-500"
+                    aria-label={`Remove ${f.name}`}
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              ))}
+              <p className="text-sm font-medium text-sky-600">{files.length} file(s) selected</p>
+            </div>
+          )}
         </div>
 
         <button

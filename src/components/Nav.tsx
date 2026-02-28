@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
@@ -11,10 +12,13 @@ import { MessageNotificationSound } from "@/components/MessageNotificationSound"
 import { MessagesNavBadge } from "@/components/MessagesNavBadge";
 import { AssignmentsNavBadge } from "@/components/AssignmentsNavBadge";
 
+const CAN_SUBMIT_ROLES = ["submitter", "admin", "operations", "manager"];
+
 export function Nav({ profile }: { profile: Profile }) {
   const router = useRouter();
   const themeContext = useTheme();
   const logos = useLogos();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -22,6 +26,8 @@ export function Nav({ profile }: { profile: Profile }) {
     router.push("/login");
     router.refresh();
   };
+
+  const canSubmit = CAN_SUBMIT_ROLES.includes(profile.role ?? "");
 
   return (
     <>
@@ -34,6 +40,17 @@ export function Nav({ profile }: { profile: Profile }) {
         </span>
       </Link>
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {canSubmit && (
+          <Link
+            href="/submit"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shrink-0"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            <span className="hidden sm:inline">Submit</span>
+          </Link>
+        )}
         {themeContext && (
           <button
             onClick={themeContext.toggleTheme}
@@ -53,14 +70,11 @@ export function Nav({ profile }: { profile: Profile }) {
         <MessagesNavBadge />
         <Link
           href="/help"
-          className="flex items-center gap-1.5 rounded-lg p-2 sm:p-0 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white sm:hover:bg-transparent"
+          className="hidden sm:inline-flex items-center gap-1.5 rounded-lg text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
           title="Help"
           aria-label="Help"
         >
-          <svg className="h-5 w-5 shrink-0 sm:hidden" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="hidden sm:inline text-sm">Help</span>
+          Help
         </Link>
         <Link
           href="/profile"
@@ -78,12 +92,39 @@ export function Nav({ profile }: { profile: Profile }) {
         </Link>
         <button
           onClick={handleSignOut}
-          className="rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white shrink-0"
+          className="hidden sm:inline-flex rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white shrink-0"
         >
-          <span className="sm:hidden">Out</span>
-          <span className="hidden sm:inline">Sign out</span>
+          Sign out
+        </button>
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="sm:hidden rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          aria-label="Menu"
+        >
+          {mobileOpen ? (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          ) : (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+          )}
         </button>
       </div>
+      {/* Mobile dropdown menu */}
+      {mobileOpen && (
+        <div className="sm:hidden w-full border-t border-gray-200/80 dark:border-gray-700 pt-2 mt-1 flex flex-col gap-1">
+          <Link href="/profile" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">{(profile.full_name || "?")[0].toUpperCase()}</span>
+            )}
+            {profile.full_name || profile.role} ({profile.role})
+          </Link>
+          <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">Dashboard</Link>
+          <Link href="/help" onClick={() => setMobileOpen(false)} className="rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">Help</Link>
+          <button onClick={() => { setMobileOpen(false); handleSignOut(); }} className="rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">Sign out</button>
+        </div>
+      )}
     </nav>
     </>
   );

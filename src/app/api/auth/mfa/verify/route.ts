@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
 
     const cookieValue = await createMfaVerifiedCookie(session.user.id);
     if (!cookieValue) {
+      console.error("[auth/mfa/verify] MFA_COOKIE_SECRET is not set. Add it to .env.local");
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
     }
 

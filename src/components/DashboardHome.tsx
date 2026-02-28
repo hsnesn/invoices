@@ -313,6 +313,40 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       </div>
 
+      {/* Your Pending Actions — admin / manager / operations */}
+      {canSeeStats && (() => {
+        const actions: { count: number; label: string; href: string }[] = [];
+        if (stats?.guest.pending && stats.guest.pending > 0)
+          actions.push({ count: stats.guest.pending, label: "guest invoices pending", href: "/invoices?group=pending" });
+        if (stats?.freelancer.pending && stats.freelancer.pending > 0)
+          actions.push({ count: stats.freelancer.pending, label: "contractor invoices pending", href: "/freelancer-invoices" });
+        if (contractorStats?.pendingCount && contractorStats.pendingCount > 0)
+          actions.push({ count: contractorStats.pendingCount, label: "assignments to review", href: "/contractor-availability" });
+        if (actions.length === 0) return null;
+        return (
+          <div className="mb-8 min-w-0">
+            <h2 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Your Pending Actions</h2>
+            <div className="flex gap-3 overflow-x-auto pb-1 min-w-0">
+              {actions.map((a) => (
+                <Link
+                  key={a.href}
+                  href={a.href}
+                  className="flex min-w-[180px] shrink-0 items-start gap-3 rounded-lg border-l-4 border-amber-400 bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200/80 transition-colors hover:bg-amber-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-amber-950/30"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-2xl font-bold text-amber-700 dark:text-amber-300">{a.count}</span>
+                    <span className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{a.label}</span>
+                  </div>
+                  <span className="ml-auto mt-1 whitespace-nowrap text-xs font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">
+                    View →
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Submitter: My Pending Invoices */}
       {isSubmitter && submitterStats && (
         <div className="mb-8 min-w-0">
