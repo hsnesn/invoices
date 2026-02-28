@@ -14,11 +14,20 @@ import { AssignmentsNavBadge } from "@/components/AssignmentsNavBadge";
 
 const CAN_SUBMIT_ROLES = ["submitter", "admin", "operations", "manager"];
 
+function canAccessFreelancerInvoices(profile: Profile): boolean {
+  if (profile.role === "admin") return true;
+  if (profile.role === "viewer") return true;
+  const pages = profile.allowed_pages;
+  if (!pages || pages.length === 0) return true;
+  return pages.includes("freelancer_invoices");
+}
+
 export function Nav({ profile }: { profile: Profile }) {
   const router = useRouter();
   const themeContext = useTheme();
   const logos = useLogos();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [submitMenuOpen, setSubmitMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -27,7 +36,8 @@ export function Nav({ profile }: { profile: Profile }) {
     router.refresh();
   };
 
-  const canSubmit = CAN_SUBMIT_ROLES.includes(profile.role ?? "");
+  const canSubmitGuest = CAN_SUBMIT_ROLES.includes(profile.role ?? "");
+  const canSubmitFreelancer = canAccessFreelancerInvoices(profile);
 
   return (
     <>
@@ -40,16 +50,72 @@ export function Nav({ profile }: { profile: Profile }) {
         </span>
       </Link>
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-        {canSubmit && (
-          <Link
-            href="/submit"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shrink-0"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            <span className="hidden sm:inline">Submit</span>
-          </Link>
+        {(canSubmitGuest || canSubmitFreelancer) && (
+          <div className="relative shrink-0">
+            {canSubmitGuest && !canSubmitFreelancer ? (
+              <Link
+                href="/submit"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span className="hidden sm:inline">Submit</span>
+              </Link>
+            ) : !canSubmitGuest && canSubmitFreelancer ? (
+              <Link
+                href="/freelancer-invoices/submit"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span className="hidden sm:inline">Submit</span>
+              </Link>
+            ) : (
+              <>
+                <button
+                  onClick={() => setSubmitMenuOpen(!submitMenuOpen)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  <span className="hidden sm:inline">Submit</span>
+                  <svg className="h-3 w-3 ml-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {submitMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setSubmitMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                      <Link
+                        href="/submit"
+                        onClick={() => setSubmitMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                        Guest Invoice
+                      </Link>
+                      <Link
+                        href="/freelancer-invoices/submit"
+                        onClick={() => setSubmitMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        <svg className="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                        </svg>
+                        Contractor Invoice
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         )}
         {themeContext && (
           <button

@@ -51,17 +51,29 @@ export async function GET() {
       updatedMap[key] = updatedAt;
     }
 
-    // Add cache-bust so logo changes reflect immediately (browser/CDN won't serve stale)
     const result: Record<string, string> = {};
     for (const k of ["logo_trt", "logo_trt_world", "logo_email"] as const) {
       result[k] = addCacheBust(map[k], updatedMap[k] ?? null);
     }
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
+      },
+    });
   } catch (e) {
     console.error("[logos]", e);
     return NextResponse.json(
       { logo_trt: "/trt-logo.png", logo_trt_world: "/trt-world-logo.png", logo_email: "/logo.png" },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "CDN-Cache-Control": "no-store",
+          "Vercel-CDN-Cache-Control": "no-store",
+        },
+      }
     );
   }
 }

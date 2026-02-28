@@ -43,9 +43,9 @@ export async function POST(request: NextRequest) {
 
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
     const safeExt = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) ? ext : "png";
-    const storagePath = customName
-      ? sanitizeFilename(customName)
-      : `${key.replace("logo_", "")}-${Date.now()}.${safeExt}`;
+    const ts = Date.now();
+    const baseName = customName ? sanitizeFilename(customName).replace(/\.[^.]+$/, "") : key.replace("logo_", "");
+    const storagePath = `${baseName}-${ts}.${safeExt}`;
 
     const supabase = createAdminClient();
 
@@ -79,9 +79,10 @@ export async function POST(request: NextRequest) {
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(uploadData!.path);
     const logoValue = urlData.publicUrl;
 
+    const nowIso = new Date().toISOString();
     const { error: settingsError } = await supabase
       .from("app_settings")
-      .upsert({ key, value: logoValue, updated_at: new Date().toISOString() }, { onConflict: "key" });
+      .upsert({ key, value: logoValue, updated_at: nowIso }, { onConflict: "key" });
 
     if (settingsError) throw settingsError;
 
