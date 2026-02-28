@@ -728,6 +728,23 @@ export async function sendSalaryPaymentConfirmationEmail(params: {
 
 const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
 
+export async function sendAvailabilityClearedEmail(params: {
+  to: string;
+  monthLabel: string;
+}): Promise<{ success: boolean }> {
+  const link = `${APP_URL}/contractor-availability`;
+  const res = await sendEmail({
+    to: params.to,
+    subject: `Availability cancelled — ${params.monthLabel}`,
+    html: await wrapWithLogo("Availability Cancelled", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your submitted availability for <strong>${params.monthLabel}</strong> has been cleared by an administrator.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">If you need to submit your availability again, please do so in My Availability.</p>
+      <p style="margin:16px 0 0;font-size:12px;color:#94a3b8"><a href="${link}" style="color:#2563eb;text-decoration:none">Go to My Availability →</a></p>
+    `),
+  });
+  return { success: res.success };
+}
+
 export async function sendContractorAvailabilitySubmittedEmail(params: {
   to: string;
   replyTo: string;

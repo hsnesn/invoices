@@ -87,7 +87,18 @@ export function ContractorAvailabilityClient() {
   const [preferenceLoading, setPreferenceLoading] = useState(false);
 
   const canManage = profile?.role === "admin" || profile?.role === "operations" || profile?.role === "manager";
+  const canClearMonth = profile?.role === "admin" || profile?.role === "operations";
   const [canApprove, setCanApprove] = useState(false);
+  const [clearMonthOpen, setClearMonthOpen] = useState(false);
+  const [clearMonthLoading, setClearMonthLoading] = useState(false);
+  const [clearMonthForm, setClearMonthForm] = useState(() => {
+    const n = new Date();
+    return {
+      month: `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`,
+      type: "both" as "availability" | "requirements" | "both",
+      department_id: "",
+    };
+  });
   const [canRunAiSuggest, setCanRunAiSuggest] = useState(false);
 
   useEffect(() => {
@@ -456,6 +467,140 @@ export function ContractorAvailabilityClient() {
           </>
         )}
       </div>
+
+      {canClearMonth && (
+        <div className="rounded-xl border border-rose-200/80 bg-rose-50/30 dark:border-rose-800/50 dark:bg-rose-950/20 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setClearMonthOpen(!clearMonthOpen)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left"
+          >
+            <span className="text-sm font-medium text-rose-900 dark:text-rose-100">Clear month (admin)</span>
+            <svg className={`h-4 w-4 text-rose-600 transition-transform ${clearMonthOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          {clearMonthOpen && (
+            <div className="border-t border-rose-200/80 dark:border-rose-800/50 px-4 py-4 space-y-3">
+              <p className="text-xs text-rose-800/80 dark:text-rose-200/80">
+                Clear demands and/or availability for a month. Affected contractors will receive an email when their availability is cleared.
+              </p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-medium text-rose-900 dark:text-rose-100 mb-1">Month</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={clearMonthForm.month}
+                      onChange={(e) => setClearMonthForm((p) => ({ ...p, month: e.target.value }))}
+                      className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm dark:border-rose-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const m = String(i + 1).padStart(2, "0");
+                        const y = clearMonthForm.month.split("-")[0];
+                        return (
+                          <option key={m} value={`${y}-${m}`}>
+                            {new Date(2000, i).toLocaleString("en-GB", { month: "long" })}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <select
+                      value={clearMonthForm.month.split("-")[0]}
+                      onChange={(e) => setClearMonthForm((p) => ({ ...p, month: `${e.target.value}-${p.month.split("-")[1]}` }))}
+                      className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm dark:border-rose-700 dark:bg-gray-800 dark:text-white w-20"
+                    >
+                      {Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - 1 + i).map((y) => (
+                        <option key={y} value={String(y)}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-rose-900 dark:text-rose-100 mb-1">Clear</label>
+                  <select
+                    value={clearMonthForm.type}
+                    onChange={(e) => setClearMonthForm((p) => ({ ...p, type: e.target.value as "availability" | "requirements" | "both" }))}
+                    className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm dark:border-rose-700 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="availability">Availability only</option>
+                    <option value="requirements">Demands only</option>
+                    <option value="both">Both</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-rose-900 dark:text-rose-100 mb-1">Department (optional)</label>
+                  <select
+                    value={clearMonthForm.department_id}
+                    onChange={(e) => setClearMonthForm((p) => ({ ...p, department_id: e.target.value }))}
+                    className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm dark:border-rose-700 dark:bg-gray-800 dark:text-white min-w-[140px]"
+                  >
+                    <option value="">All departments</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!confirm(`Clear ${clearMonthForm.type} for ${new Date(clearMonthForm.month + "-01").toLocaleString("en-GB", { month: "long", year: "numeric" })}?${clearMonthForm.type !== "requirements" ? " Affected contractors will be notified by email." : ""}`)) return;
+                    setClearMonthLoading(true);
+                    setMessage(null);
+                    try {
+                      const res = await fetch("/api/contractor-availability/admin/clear-month", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          month: clearMonthForm.month,
+                          type: clearMonthForm.type,
+                          department_id: clearMonthForm.department_id || undefined,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setMessage({
+                          type: "success",
+                          text: `Cleared: ${data.availabilityDeleted ?? 0} availability, ${data.requirementsDeleted ?? 0} demands. ${data.emailsSent ?? 0} notification(s) sent.`,
+                        });
+                        setTimeout(() => setMessage(null), 5000);
+                        setClearMonthOpen(false);
+                        if (listDepartment && listMonth === clearMonthForm.month) {
+                          const params = new URLSearchParams({ month: listMonth, department_id: listDepartment });
+                          if (listProgram) params.set("program_id", listProgram);
+                          const r = await fetch(`/api/contractor-availability/list?${params}`);
+                          const d = await r.json();
+                          setByUser(d.byUser ?? []);
+                        }
+                        if (tab === "requirements" && reqMonth === clearMonthForm.month && listDepartment) {
+                          const params = new URLSearchParams({ month: reqMonth, department_id: listDepartment });
+                          if (listProgram) params.set("program_id", listProgram);
+                          const r = await fetch(`/api/contractor-availability/requirements?${params}`);
+                          const reqData = await r.json();
+                          const byDate: Record<string, Record<string, number>> = {};
+                          for (const x of reqData.requirements ?? []) {
+                            if (!byDate[x.date]) byDate[x.date] = {};
+                            byDate[x.date][x.role] = x.count_needed;
+                          }
+                          setReqByDate(byDate);
+                          setRequirements(reqData.requirements ?? []);
+                        }
+                      } else {
+                        setMessage({ type: "error", text: data.error || "Failed to clear." });
+                      }
+                    } catch {
+                      setMessage({ type: "error", text: "Connection error." });
+                    } finally {
+                      setClearMonthLoading(false);
+                    }
+                  }}
+                  disabled={clearMonthLoading}
+                  className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+                >
+                  {clearMonthLoading ? "Clearing…" : "Clear month"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {tab === "form" && (
         <div className="rounded-2xl border border-gray-200/80 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0">
