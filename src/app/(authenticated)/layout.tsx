@@ -4,6 +4,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { FooterShortcutTrigger } from "@/components/FooterShortcutTrigger";
 import { InvoiceToastListener } from "@/components/InvoiceToastListener";
+import { PaidIconOverlay } from "@/components/PaidIconOverlay";
 import { ExportLocaleWrapper } from "@/components/ExportLocaleWrapper";
 
 export default async function AuthenticatedLayout({
@@ -19,6 +20,7 @@ export default async function AuthenticatedLayout({
       <Nav profile={profile} />
       <main className="flex-1 p-4 sm:p-6 min-w-0 w-full max-w-full overflow-x-hidden overflow-y-auto">
         <InvoiceToastListener />
+        <PaidIconOverlay />
         <Breadcrumb />
         {children}
       </main>

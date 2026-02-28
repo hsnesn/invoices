@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { triggerPaidAnimation } from "./PaidIconOverlay";
 import { EmptyState } from "./EmptyState";
 import { BulkMoveModal, type MoveGroup } from "./BulkMoveModal";
 import { useExportLocale } from "@/contexts/ExportLocaleContext";
@@ -730,6 +731,7 @@ export function SalariesBoard({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to mark as paid");
+      triggerPaidAnimation();
       toast.success("Marked as paid. Confirmation email sent.");
       mutate();
     } catch (e) {

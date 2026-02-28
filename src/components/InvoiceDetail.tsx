@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
+import { fireApprovalConfetti } from "@/lib/action-animations";
+import { triggerPaidAnimation } from "@/components/PaidIconOverlay";
 
 interface InvoiceDetailProps {
   invoice: Record<string, unknown>;
@@ -27,6 +29,7 @@ export function InvoiceDetail({
   const [loading, setLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [adminComment, setAdminComment] = useState("");
+  const [rejectShaking, setRejectShaking] = useState(false);
   const [paidDate, setPaidDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -191,6 +194,10 @@ export function InvoiceDetail({
   };
 
   const transitionStatus = async (to: string, extra?: Record<string, unknown>) => {
+    if (to === "rejected") {
+      setRejectShaking(true);
+      setTimeout(() => setRejectShaking(false), 400);
+    }
     setLoading(true);
     setMessage(null);
     const body: Record<string, unknown> = { to_status: to, ...extra };
@@ -203,7 +210,9 @@ export function InvoiceDetail({
     setLoading(false);
     if (res.ok) {
       setMessage({ type: "success", text: "Updated." });
-      window.location.reload();
+      if (to === "approved_by_manager" || to === "ready_for_payment") fireApprovalConfetti();
+      if (to === "paid") triggerPaidAnimation();
+      setTimeout(() => window.location.reload(), to === "paid" ? 600 : to === "rejected" ? 300 : 400);
     } else {
       setMessage({ type: "error", text: data.error });
     }
@@ -518,9 +527,9 @@ export function InvoiceDetail({
                   transitionStatus("rejected", { rejection_reason: rejectionReason })
                 }
                 disabled={!rejectionReason.trim() || loading}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500 disabled:opacity-50"
+                className={`rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500 disabled:opacity-50 ${rejectShaking ? "animate-shake-reject" : ""}`}
               >
-                Reject
+                ✗ Reject
               </button>
             </div>
           </div>
@@ -570,9 +579,9 @@ export function InvoiceDetail({
                       })
                     }
                     disabled={!rejectionReason.trim() || loading}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500 disabled:opacity-50"
+                    className={`rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500 disabled:opacity-50 ${rejectShaking ? "animate-shake-reject" : ""}`}
                   >
-                    Reject
+                    ✗ Reject
                   </button>
                 </>
               )}

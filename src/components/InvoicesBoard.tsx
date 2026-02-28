@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { setInvoiceToast } from "@/components/InvoiceToastListener";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
+import { fireApprovalConfetti } from "@/lib/action-animations";
+import { triggerPaidAnimation } from "@/components/PaidIconOverlay";
 import { EmptyState } from "./EmptyState";
 import { InvoiceMobileCards } from "./InvoiceMobileCards";
 
@@ -564,6 +566,7 @@ function InvoiceTable({
   producerColorsMap = {},
   onSaveTag,
   onRemoveTag,
+  rejectInlineShakeId = null,
 }: {
   rows: DisplayRow[];
   currentRole: string;
@@ -572,7 +575,7 @@ function InvoiceTable({
   onToggleSelect: (id: string) => void;
   onToggleAll: (ids: string[], checked: boolean) => void;
   onManagerApprove: (id: string) => Promise<void>;
-  onRejectInvoice: (id: string) => Promise<void>;
+  onRejectInvoice: (id: string) => void;
   onResubmit: (id: string) => Promise<void>;
   onMarkPaid: (id: string) => Promise<void>;
   onDeleteInvoice: (id: string) => Promise<void>;
@@ -608,6 +611,7 @@ function InvoiceTable({
   producerColorsMap?: Record<string, string>;
   onSaveTag?: (invoiceId: string, newTag: string, currentTags: string[]) => Promise<void>;
   onRemoveTag?: (invoiceId: string, tag: string, currentTags: string[]) => Promise<void>;
+  rejectInlineShakeId?: string | null;
 }) {
   const totalPages = Math.ceil(rows.length / pageSize);
   const paginatedRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -705,7 +709,7 @@ function InvoiceTable({
                       onClick={() => void onRejectInvoice(r.id)}
                       disabled={actionLoadingId === r.id}
                       title="Reject"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-white hover:bg-red-500 disabled:opacity-50 transition-colors shadow-sm"
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-white hover:bg-red-500 disabled:opacity-50 transition-colors shadow-sm ${rejectInlineShakeId === r.id ? "animate-shake-reject" : ""}`}
                     >
                       ✗
                     </button>
@@ -739,7 +743,7 @@ function InvoiceTable({
                         onClick={() => void onRejectInvoice(r.id)}
                         disabled={actionLoadingId === r.id}
                         title="Reject (reason required)"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm"
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm ${rejectInlineShakeId === r.id ? "animate-shake-reject" : ""}`}
                       >
                         ✗
                       </button>
@@ -750,7 +754,7 @@ function InvoiceTable({
                     onClick={() => void onRejectInvoice(r.id)}
                     disabled={actionLoadingId === r.id}
                     title="Reject (reason required)"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm"
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm ${rejectInlineShakeId === r.id ? "animate-shake-reject" : ""}`}
                   >
                     {actionLoadingId === r.id ? "…" : "✗"}
                   </button>
@@ -1238,6 +1242,8 @@ export function InvoicesBoard({
   const [editModalRow, setEditModalRow] = useState<DisplayRow | null>(null);
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectButtonShaking, setRejectButtonShaking] = useState(false);
+  const [rejectInlineShakeId, setRejectInlineShakeId] = useState<string | null>(null);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
@@ -1654,21 +1660,27 @@ export function InvoicesBoard({
         }),
       });
       if (res.ok) {
+        fireApprovalConfetti();
         setInvoiceToast("success", "Invoice approved");
-        window.location.reload();
+        setTimeout(() => window.location.reload(), 400);
+        return;
       }
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const onRejectInvoice = useCallback(async (invoiceId: string) => {
+  const onRejectInvoice = useCallback((invoiceId: string) => {
+    setRejectInlineShakeId(invoiceId);
+    setTimeout(() => setRejectInlineShakeId(null), 400);
     setRejectModalId(invoiceId);
     setRejectReason("");
   }, []);
 
   const confirmReject = useCallback(async () => {
     if (!rejectModalId || !rejectReason.trim()) return;
+    setRejectButtonShaking(true);
+    setTimeout(() => setRejectButtonShaking(false), 400);
     setActionLoadingId(rejectModalId);
     try {
       const res = await fetch(`/api/invoices/${rejectModalId}/status`, {
@@ -1681,7 +1693,8 @@ export function InvoicesBoard({
       });
       if (res.ok) {
         setInvoiceToast("success", "Invoice rejected");
-        window.location.reload();
+        setTimeout(() => window.location.reload(), 300);
+        return;
       }
     } finally {
       setActionLoadingId(null);
@@ -1702,12 +1715,13 @@ export function InvoicesBoard({
         }),
       });
       if (res.ok) {
+        triggerPaidAnimation();
         setInvoiceToast("success", "Invoice marked as paid");
-        window.location.reload();
-      } else {
-        const data = await res.json().catch(() => null);
-        toast.error(getApiErrorMessage(data));
+        setTimeout(() => window.location.reload(), 600);
+        return;
       }
+      const data = await res.json().catch(() => null);
+      toast.error(getApiErrorMessage(data));
     } finally {
       setActionLoadingId(null);
     }
@@ -3192,11 +3206,12 @@ export function InvoicesBoard({
                 onToggleAll={onToggleAll}
                 canBulkSelect={currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer"}
                 onManagerApprove={onManagerApprove}
-                onRejectInvoice={onRejectInvoice}
-                onResubmit={onResubmit}
-                onMarkPaid={onMarkPaid}
-                onDeleteInvoice={onDeleteInvoice}
-                onStartEdit={onStartEdit}
+              onRejectInvoice={onRejectInvoice}
+              onResubmit={onResubmit}
+              onMarkPaid={onMarkPaid}
+              onDeleteInvoice={onDeleteInvoice}
+              onStartEdit={onStartEdit}
+              rejectInlineShakeId={rejectInlineShakeId}
                 openPdf={openPdf}
                 actionLoadingId={actionLoadingId}
                 expandedRowId={expandedRowId}
@@ -3261,6 +3276,7 @@ export function InvoicesBoard({
               producerColorsMap={producerColorsMap}
               onSaveTag={saveTag}
               onRemoveTag={removeTag}
+              rejectInlineShakeId={rejectInlineShakeId}
             />
             </div>
           </section>
@@ -3576,9 +3592,9 @@ export function InvoicesBoard({
               <button
                 onClick={() => void confirmReject()}
                 disabled={!rejectReason.trim() || actionLoadingId === rejectModalId}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                className={`rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 ${rejectButtonShaking ? "animate-shake-reject" : ""}`}
               >
-                {actionLoadingId === rejectModalId ? "Rejecting..." : "Reject"}
+                {actionLoadingId === rejectModalId ? "Rejecting..." : "✗ Reject"}
               </button>
             </div>
           </div>

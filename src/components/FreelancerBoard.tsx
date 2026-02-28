@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { getApiErrorMessage, toUserFriendlyError } from "@/lib/error-messages";
+import { fireApprovalConfetti } from "@/lib/action-animations";
+import { triggerPaidAnimation } from "@/components/PaidIconOverlay";
 import { EmptyState } from "./EmptyState";
 import { FreelancerMobileCards } from "./FreelancerMobileCards";
 
@@ -332,6 +334,7 @@ export function FreelancerBoard({
   const [detailLoading, setDetailLoading] = useState(false);
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectBtnShaking, setRejectBtnShaking] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState("");
@@ -442,17 +445,24 @@ export function FreelancerBoard({
   }, [editModalRow, refreshAndKeepVisible]);
 
   /* ---------- Status actions ---------- */
-  const statusAction = useCallback(async (id: string, body: Record<string, unknown>) => {
+  const statusAction = useCallback(async (id: string, body: Record<string, unknown>, onSuccess?: () => void) => {
     setActionLoadingId(id);
-    try { await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); refreshAndKeepVisible(); }
-    finally { setActionLoadingId(null); }
+    try {
+      const res = await fetch(`/api/invoices/${id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (res.ok) {
+        onSuccess?.();
+        refreshAndKeepVisible();
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
   }, [refreshAndKeepVisible]);
 
-  const onManagerApprove = useCallback((id: string) => statusAction(id, { to_status: "approved_by_manager", manager_confirmed: true }), [statusAction]);
-  const onAdminApprove = useCallback((id: string) => statusAction(id, { to_status: "ready_for_payment" }), [statusAction]);
+  const onManagerApprove = useCallback((id: string) => statusAction(id, { to_status: "approved_by_manager", manager_confirmed: true }, () => { fireApprovalConfetti(); }), [statusAction]);
+  const onAdminApprove = useCallback((id: string) => statusAction(id, { to_status: "ready_for_payment" }, () => { fireApprovalConfetti(); }), [statusAction]);
   const onResubmit = useCallback((id: string) => statusAction(id, { to_status: "pending_manager" }), [statusAction]);
   const onMarkPaid = useCallback((id: string) => {
-    statusAction(id, { to_status: "paid", paid_date: new Date().toISOString().split("T")[0] });
+    statusAction(id, { to_status: "paid", paid_date: new Date().toISOString().split("T")[0] }, () => { triggerPaidAnimation(); });
   }, [statusAction]);
 
   const onDeleteInvoice = useCallback(async (id: string) => {
@@ -472,9 +482,19 @@ export function FreelancerBoard({
 
   const submitReject = useCallback(async () => {
     if (!rejectModalId || !rejectReason.trim()) return;
+    setRejectBtnShaking(true);
+    setTimeout(() => setRejectBtnShaking(false), 400);
     setActionLoadingId(rejectModalId);
-    try { await fetch(`/api/invoices/${rejectModalId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "rejected", rejection_reason: rejectReason }) }); setRejectModalId(null); setRejectReason(""); refreshAndKeepVisible(); }
-    finally { setActionLoadingId(null); }
+    try {
+      const res = await fetch(`/api/invoices/${rejectModalId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to_status: "rejected", rejection_reason: rejectReason }) });
+      if (res.ok) {
+        setRejectModalId(null);
+        setRejectReason("");
+        refreshAndKeepVisible();
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
   }, [rejectModalId, rejectReason, refreshAndKeepVisible]);
 
   const addNote = useCallback(async () => {
@@ -1401,7 +1421,7 @@ export function FreelancerBoard({
             <textarea autoFocus value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Enter rejection reason..." rows={3} aria-label="Rejection reason" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
             <div className="mt-4 flex items-center justify-end gap-2">
               <button onClick={() => { setRejectModalId(null); setRejectReason(""); }} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">Cancel</button>
-              <button onClick={() => void submitReject()} disabled={!rejectReason.trim() || actionLoadingId === rejectModalId} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 shadow-sm">{actionLoadingId === rejectModalId ? "Rejecting..." : "Reject Invoice"}</button>
+              <button onClick={() => void submitReject()} disabled={!rejectReason.trim() || actionLoadingId === rejectModalId} className={`rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 shadow-sm ${rejectBtnShaking ? "animate-shake-reject" : ""}`}>{actionLoadingId === rejectModalId ? "Rejecting..." : "✗ Reject Invoice"}</button>
             </div>
           </div>
         </div>

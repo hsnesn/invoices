@@ -11,6 +11,7 @@ import { useExportLocale } from "@/contexts/ExportLocaleContext";
 import { ExportLocaleSelector } from "./ExportLocaleSelector";
 import { LogoLoader } from "./LogoLoader";
 import { UploadOverlay } from "./UploadOverlay";
+import { triggerPaidAnimation } from "./PaidIconOverlay";
 
 function unwrap<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
@@ -322,6 +323,7 @@ export function OtherInvoicesBoard({
         });
         const d = (await res.json().catch(() => ({}))) as { error?: string };
         if (res.ok) {
+          triggerPaidAnimation();
           toast.success("Marked as paid");
           refresh();
         } else {
@@ -357,7 +359,10 @@ export function OtherInvoicesBoard({
       if (res.ok) {
         const s = d.success ?? 0;
         const f = d.failed?.length ?? 0;
-        if (s > 0) toast.success(`${s} marked as paid`);
+        if (s > 0) {
+          triggerPaidAnimation();
+          toast.success(`${s} marked as paid`);
+        }
         if (f > 0) toast.error(`${f} failed`);
         setSelectedIds(new Set());
         refresh();
