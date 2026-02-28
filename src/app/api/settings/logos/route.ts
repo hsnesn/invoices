@@ -10,8 +10,18 @@ export const dynamic = "force-dynamic";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 function toLogoUrl(value: unknown): string {
-  if (typeof value !== "string" || !value.trim()) return "";
-  const v = value.trim();
+  // jsonb column can return string, object, or other types
+  let v: string;
+  if (typeof value === "string") {
+    v = value.trim();
+  } else if (value && typeof value === "object" && "url" in (value as Record<string, unknown>)) {
+    v = String((value as Record<string, string>).url).trim();
+  } else if (value !== null && value !== undefined) {
+    v = String(value).trim();
+  } else {
+    return "";
+  }
+  if (!v) return "";
   if (v.startsWith("http://") || v.startsWith("https://")) return v;
   return `/${v.startsWith("/") ? v.slice(1) : v}`;
 }

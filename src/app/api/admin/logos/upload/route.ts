@@ -93,11 +93,41 @@ export async function POST(request: NextRequest) {
     const logoValue = urlData.publicUrl;
 
     const nowIso = new Date().toISOString();
-    const { error: settingsError } = await supabase
-      .from("app_settings")
-      .upsert({ key, value: logoValue, updated_at: nowIso }, { onConflict: "key" });
 
-    if (settingsError) throw settingsError;
+    // Try update first, then insert if row doesn't exist
+    const { data: updated, error: updateError } = await supabase
+      .from("app_settings")
+      .update({ value: logoValue, updated_at: nowIso })
+      .eq("key", key)
+      .select("key")
+      .maybeSingle();
+
+    if (updateError) {
+      return NextResponse.json({ error: `DB update failed: ${updateError.message}` }, { status: 500 });
+    }
+
+    if (!updated) {
+      const { error: insertError } = await supabase
+        .from("app_settings")
+        .insert({ key, value: logoValue, updated_at: nowIso });
+      if (insertError) {
+        return NextResponse.json({ error: `DB insert failed: ${insertError.message}` }, { status: 500 });
+      }
+    }
+
+    // Verify the save actually persisted
+    const { data: verify } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", key)
+      .single();
+
+    const savedValue = typeof verify?.value === "string" ? verify.value : JSON.stringify(verify?.value);
+    if (savedValue !== logoValue && savedValue !== `"${logoValue}"`) {
+      return NextResponse.json({
+        error: `DB save failed silently. Expected: ${logoValue}, Got: ${savedValue}`,
+      }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true, value: logoValue });
   } catch (e) {
