@@ -88,8 +88,8 @@ export function Nav({ profile }: { profile: Profile }) {
                 </button>
                 {submitMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setSubmitMenuOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setSubmitMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-[9999] w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
                       <Link
                         href="/submit"
                         onClick={() => setSubmitMenuOpen(false)}
