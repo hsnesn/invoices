@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
 import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
@@ -104,6 +104,7 @@ export function InvitedGuestsClient({
     program_name: "",
   });
   const [invoiceNumberConflict, setInvoiceNumberConflict] = useState(false);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
   useEffect(() => {
@@ -143,6 +144,7 @@ export function InvitedGuestsClient({
         setAcceptanceModal(null);
         setBulkInviteModal(false);
         setBulkAcceptModal(false);
+        setExpandedGroupKeys(new Set());
       }
     };
     window.addEventListener("keydown", handler);
@@ -185,6 +187,52 @@ export function InvitedGuestsClient({
           (g.title ?? "").toLowerCase().includes(searchLower)
       )
     : filteredGuests;
+
+  function groupKey(g: ProducerGuest): string {
+    return `${g.producer_user_id}|${(g.guest_name || "").toLowerCase().trim()}|${(g.email || "").toLowerCase().trim()}`;
+  }
+
+  type GroupedGuest = {
+    key: string;
+    appearances: ProducerGuest[];
+    appearanceCount: number;
+    lastAppearanceDate: string | null;
+    paidAmounts: { amount: number; currency: string }[];
+    anyPaid: boolean;
+    anyUnpaid: boolean;
+  };
+
+  const groupedByKey = useMemo(() => {
+    const map = new Map<string, ProducerGuest[]>();
+    for (const g of displayedGuests) {
+      const k = groupKey(g);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(g);
+    }
+    for (const arr of Array.from(map.values())) {
+      arr.sort((a, b) => {
+        const da = a.recording_date || a.matched_at || a.invited_at || a.created_at || "";
+        const db = b.recording_date || b.matched_at || b.invited_at || b.created_at || "";
+        return new Date(db).getTime() - new Date(da).getTime();
+      });
+    }
+    return map;
+  }, [displayedGuests]);
+
+  const groupedList = useMemo((): GroupedGuest[] => {
+    return Array.from(groupedByKey.entries()).map(([key, appearances]) => {
+      const dates = appearances
+        .map((a) => a.recording_date || a.matched_at || a.invited_at)
+        .filter(Boolean) as string[];
+      const lastDate = dates.length ? dates.reduce((a, b) => (new Date(a) > new Date(b) ? a : b)) : null;
+      const paidAmounts = appearances
+        .filter((a) => a.payment_received && a.payment_amount != null && a.payment_amount > 0)
+        .map((a) => ({ amount: a.payment_amount!, currency: a.payment_currency || "GBP" }));
+      const anyPaid = appearances.some((a) => a.payment_received);
+      const anyUnpaid = appearances.some((a) => a.accepted === true && !a.payment_received);
+      return { key, appearances, appearanceCount: appearances.length, lastAppearanceDate: lastDate, paidAmounts, anyPaid, anyUnpaid };
+    });
+  }, [groupedByKey]);
 
   const selectedGuests = filteredGuests.filter((g) => selectedIds.has(g.id));
   const selectedWithEmail = selectedGuests.filter((g) => g.email && g.email.includes("@"));
@@ -372,7 +420,12 @@ export function InvitedGuestsClient({
   };
 
   const exportToCsv = () => {
-    const headers = ["Guest", "Title", "Program", "Email", "Invited", "Matched", "Accepted", "Payment", "Recording Date"];
+    const headers = ["Guest", "Title", "Program", "Email", "Invited", "Matched", "Accepted", "Payment", "Recording Date", "Appearances"];
+    const guestToCount = new Map<string, number>();
+    for (const g of displayedGuests) {
+      const k = groupKey(g);
+      guestToCount.set(k, (guestToCount.get(k) ?? 0) + 1);
+    }
     const rows = displayedGuests.map((g) => [
       g.guest_name,
       g.title || "",
@@ -383,6 +436,7 @@ export function InvitedGuestsClient({
       g.accepted === true ? "Yes" : g.accepted === false ? "No" : "—",
       g.payment_received ? `${g.payment_amount ?? 0} ${g.payment_currency ?? ""}` : "Unpaid",
       g.recording_date ? new Date(g.recording_date).toLocaleDateString() : "",
+      guestToCount.get(groupKey(g)) ?? 1,
     ]);
     const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -615,10 +669,11 @@ export function InvitedGuestsClient({
                 <th className="px-4 py-2">
                   <input
                     type="checkbox"
-                    checked={displayedGuests.length > 0 && displayedGuests.filter((g) => g.email).every((g) => selectedIds.has(g.id))}
+                    checked={groupedList.length > 0 && groupedList.flatMap((grp) => grp.appearances).filter((g) => g.email).every((g) => selectedIds.has(g.id))}
                     onChange={(e) => {
                       const checked = e.target.checked;
-                      setSelectedIds(checked ? new Set(displayedGuests.filter((g) => g.email).map((g) => g.id)) : new Set());
+                      const allIds = groupedList.flatMap((grp) => grp.appearances).filter((g) => g.email).map((g) => g.id);
+                      setSelectedIds(checked ? new Set(allIds) : new Set());
                     }}
                     className="h-4 w-4 rounded"
                   />
@@ -628,52 +683,71 @@ export function InvitedGuestsClient({
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Title</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Program</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Email</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Appearances</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Invited</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Matched</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Accepted</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Payment</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Recorded</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Last appearance</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
               {guests.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 13 : 12} className="px-4 py-8 text-center text-gray-500">
                     No invited guests yet. Click &quot;Invite Guest&quot; to add one.
                   </td>
                 </tr>
-              ) : displayedGuests.length === 0 ? (
+              ) : groupedList.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 13 : 12} className="px-4 py-8 text-center text-gray-500">
                     No guests match your search.
                   </td>
                 </tr>
               ) : (
-                displayedGuests.map((g) => {
-                  const noMatch = g.invited_at && !g.matched_at;
+                groupedList.flatMap((grp) => {
+                  const first = grp.appearances[0]!;
+                  const isExpanded = expandedGroupKeys.has(grp.key);
+                  const noMatch = first.invited_at && !first.matched_at;
                   const rowBg =
-                    g.accepted === true
+                    first.accepted === true
                       ? "bg-green-50 dark:bg-green-950/20"
-                      : g.accepted === false
+                      : first.accepted === false
                         ? "bg-red-50 dark:bg-red-950/20"
-                        : g.accepted === null && g.invited_at
+                        : first.accepted === null && first.invited_at
                           ? "bg-orange-50 dark:bg-orange-950/20"
                           : noMatch
                             ? "bg-amber-50 dark:bg-amber-950/20"
                             : "";
-                  return (
-                    <tr key={g.id} className={rowBg}>
-                      <td className="px-4 py-2">
-                        {g.email && (
+                  const allIds = grp.appearances.map((a) => a.id);
+                  const allSelected = allIds.every((id) => selectedIds.has(id));
+                  const paymentTooltip = grp.paidAmounts.length
+                    ? grp.paidAmounts.map((p) => `${p.amount} ${p.currency}`).join(", ")
+                    : "";
+                  const rows: React.ReactNode[] = [];
+                  rows.push(
+                    <tr
+                      key={grp.key}
+                      className={`${rowBg} cursor-pointer hover:bg-gray-100/50 dark:hover:bg-gray-800/50`}
+                      onClick={() => setExpandedGroupKeys((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(grp.key)) next.delete(grp.key);
+                        else next.add(grp.key);
+                        return next;
+                      })}
+                    >
+                      <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                        {first.email && (
                           <input
                             type="checkbox"
-                            checked={selectedIds.has(g.id)}
-                            onChange={() => {
+                            checked={allSelected}
+                            onChange={(e) => {
+                              e.stopPropagation();
                               setSelectedIds((prev) => {
                                 const next = new Set(prev);
-                                if (next.has(g.id)) next.delete(g.id);
-                                else next.add(g.id);
+                                if (e.target.checked) allIds.forEach((id) => next.add(id));
+                                else allIds.forEach((id) => next.delete(id));
                                 return next;
                               });
                             }}
@@ -682,125 +756,103 @@ export function InvitedGuestsClient({
                         )}
                       </td>
                       {isAdmin && (
-                        <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{g.producer_name}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{first.producer_name}</td>
                       )}
-                      <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">{g.guest_name}</td>
-                      <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">{g.title || "—"}</td>
-                      <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">{g.program_name || "—"}</td>
+                      <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                        {first.guest_name}
+                        {grp.appearanceCount > 1 && (
+                          <span className="ml-1 text-gray-500">({grp.appearanceCount})</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-                        {g.email ? (
-                          <span className="truncate max-w-[180px] block" title={g.email}>{g.email}</span>
+                        {grp.appearanceCount === 1 ? (first.title || "—") : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
+                        {grp.appearanceCount === 1 ? (first.program_name || "—") : "Multiple"}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
+                        {first.email ? (
+                          <span className="truncate max-w-[180px] block" title={first.email}>{first.email}</span>
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}
                       </td>
+                      <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 font-medium">
+                        {grp.appearanceCount}
+                      </td>
                       <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-                        {g.invited_at ? new Date(g.invited_at).toLocaleDateString() : "—"}
+                        {(() => {
+                          const dates = grp.appearances.map((a) => a.invited_at).filter(Boolean) as string[];
+                          return dates.length ? new Date(dates.reduce((a, b) => (a > b ? a : b))).toLocaleDateString() : "—";
+                        })()}
                       </td>
                       <td className="px-4 py-2 text-sm">
-                        {g.matched_at ? (
-                          g.matched_invoice_id ? (
-                            <Link href={`/invoices/${g.matched_invoice_id}`} className="text-sky-600 hover:underline">
-                              {new Date(g.matched_at).toLocaleDateString()}
-                            </Link>
+                        {grp.appearances.some((a) => a.matched_at) ? (
+                          grp.appearances.filter((a) => a.matched_at).length === grp.appearanceCount ? (
+                            first.matched_invoice_id ? (
+                              <Link href={`/invoices/${first.matched_invoice_id}`} className="text-sky-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                                {new Date(first.matched_at!).toLocaleDateString()}
+                              </Link>
+                            ) : (
+                              new Date(first.matched_at!).toLocaleDateString()
+                            )
                           ) : (
-                            new Date(g.matched_at).toLocaleDateString()
+                            <span>{grp.appearances.filter((a) => a.matched_at).length} of {grp.appearanceCount}</span>
                           )
                         ) : (
                           <span className={noMatch ? "text-amber-600 dark:text-amber-400" : "text-gray-400"}>—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2">
-                        <select
-                          value={g.accepted === true ? "yes" : g.accepted === false ? "no" : ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v === "yes") {
-                              setAcceptanceModal(g);
-                              const baseForm = {
-                                payment_received: true,
-                                payment_amount: 0,
-                                payment_currency: "GBP" as const,
-                                recording_date: new Date().toISOString().slice(0, 10),
-                                recording_topic: "",
-                                program_name: g.program_name || defaultProgramName,
-                                generate_invoice: false,
-                                save_as_template: false,
-                                invoice_number: "",
-                                invoice_date: new Date().toISOString().slice(0, 10),
-                                account_name: "",
-                                account_number: "",
-                                sort_code: "",
-                                bank_name: "",
-                                bank_address: "",
-                                paypal: "",
-                              };
-                              setAcceptanceForm(baseForm);
-                              fetch(`/api/producer-guests/${g.id}/last-invitation`, { credentials: "same-origin" })
-                                .then((r) => r.json())
-                                .then((data) => {
-                                  if (data?.record_date) {
-                                    setAcceptanceForm((p) => ({ ...p, recording_date: data.record_date }));
-                                  }
-                                  if (data?.program_name && !baseForm.program_name) {
-                                    setAcceptanceForm((p) => ({ ...p, program_name: data.program_name }));
-                                  }
-                                })
-                                .catch(() => {});
-                            } else {
-                              updateAccepted(g.id, v === "no" ? false : null);
-                            }
-                          }}
-                          className="rounded border px-2 py-1 text-xs"
-                        >
-                          <option value="">—</option>
-                          <option value="yes">Yes</option>
-                          <option value="no">No</option>
-                        </select>
+                      <td className="px-4 py-2 text-sm">
+                        {grp.appearances.every((a) => a.accepted === true)
+                          ? "Yes"
+                          : grp.appearances.every((a) => a.accepted === false)
+                            ? "No"
+                            : grp.appearances.some((a) => a.accepted !== null)
+                              ? "Mixed"
+                              : "—"}
                       </td>
                       <td className="px-4 py-2 text-sm">
-                        {g.payment_received ? (
-                          <span className="text-emerald-600 dark:text-emerald-400">
-                            {g.payment_amount != null ? `${g.payment_amount} ${g.payment_currency ?? ""}` : "Paid"}
-                          </span>
-                        ) : g.accepted === true ? (
-                          <span className="text-gray-500">Unpaid</span>
-                        ) : (
-                          "—"
-                        )}
+                        <span
+                          title={paymentTooltip || undefined}
+                          className={
+                            grp.anyPaid
+                              ? "text-emerald-600 dark:text-emerald-400 cursor-help"
+                              : grp.anyUnpaid
+                                ? "text-gray-500 cursor-help"
+                                : "cursor-default"
+                          }
+                        >
+                          {grp.anyPaid
+                            ? grp.paidAmounts.length
+                              ? (() => {
+                                  const byCurr = new Map<string, number>();
+                                  for (const p of grp.paidAmounts) {
+                                    byCurr.set(p.currency, (byCurr.get(p.currency) ?? 0) + p.amount);
+                                  }
+                                  const parts = Array.from(byCurr.entries()).map(([c, a]) => `${a.toLocaleString()} ${c}`);
+                                  return parts.length === 1 ? parts[0]! : parts.join(" + ");
+                                })()
+                              : "Paid"
+                            : grp.anyUnpaid
+                              ? "Unpaid"
+                              : "—"}
+                        </span>
                       </td>
                       <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-                        {g.recording_date ? new Date(g.recording_date).toLocaleDateString() : "—"}
+                        {grp.lastAppearanceDate ? new Date(grp.lastAppearanceDate).toLocaleDateString() : "—"}
                       </td>
-                      <td className="px-4 py-2 flex flex-wrap gap-1">
-                        {g.accepted === true && g.email?.includes("@") && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const res = await fetch(`/api/producer-guests/${g.id}/resend-post-recording-email`, {
-                                  method: "POST",
-                                  credentials: "same-origin",
-                                });
-                                const data = await res.json();
-                                if (res.ok) toast.success(data.message ?? "Email resent");
-                                else toast.error(data.error ?? "Failed");
-                              } catch {
-                                toast.error("Failed to resend");
-                              }
-                            }}
-                            className="text-amber-600 hover:underline text-xs"
-                          >
-                            Resend email
-                          </button>
-                        )}
+                      <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-gray-400 text-xs mr-1">{isExpanded ? "▼" : "▶"}</span>
                         <button
-                          onClick={() => {
-                            setInviteModal(g);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInviteModal(first);
                             setForm({
-                              guest_name: g.guest_name,
-                              email: g.email || "",
-                              title: g.title || "",
-                              program_name: g.program_name || defaultProgramName,
+                              guest_name: first.guest_name,
+                              email: first.email || "",
+                              title: first.title || "",
+                              program_name: first.program_name || defaultProgramName,
                               general_topic: "",
                               program_specific_topic: "",
                               record_date: "",
@@ -820,6 +872,164 @@ export function InvitedGuestsClient({
                       </td>
                     </tr>
                   );
+                  if (isExpanded) {
+                    grp.appearances.forEach((g) => {
+                      const subNoMatch = g.invited_at && !g.matched_at;
+                      const subRowBg =
+                        g.accepted === true
+                          ? "bg-green-50/70 dark:bg-green-950/10"
+                          : g.accepted === false
+                            ? "bg-red-50/70 dark:bg-red-950/10"
+                            : "";
+                      rows.push(
+                        <tr key={g.id} className={`${subRowBg} border-l-4 border-sky-200 dark:border-sky-800`}>
+                          <td className="px-4 py-2 pl-8">
+                            {g.email && (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(g.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(g.id)) next.delete(g.id);
+                                    else next.add(g.id);
+                                    return next;
+                                  });
+                                }}
+                                className="h-4 w-4 rounded"
+                              />
+                            )}
+                          </td>
+                          {isAdmin && <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.producer_name}</td>}
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.guest_name}</td>
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.title || "—"}</td>
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.program_name || "—"}</td>
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{g.email || "—"}</td>
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">—</td>
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            {g.invited_at ? new Date(g.invited_at).toLocaleDateString() : "—"}
+                          </td>
+                          <td className="px-4 py-2 text-sm">
+                            {g.matched_at ? (
+                              g.matched_invoice_id ? (
+                                <Link href={`/invoices/${g.matched_invoice_id}`} className="text-sky-600 hover:underline">
+                                  {new Date(g.matched_at).toLocaleDateString()}
+                                </Link>
+                              ) : (
+                                new Date(g.matched_at).toLocaleDateString()
+                              )
+                            ) : (
+                              <span className={subNoMatch ? "text-amber-600 dark:text-amber-400" : "text-gray-400"}>—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            <select
+                              value={g.accepted === true ? "yes" : g.accepted === false ? "no" : ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "yes") {
+                                  setAcceptanceModal(g);
+                                  const baseForm = {
+                                    payment_received: true,
+                                    payment_amount: 0,
+                                    payment_currency: "GBP" as const,
+                                    recording_date: new Date().toISOString().slice(0, 10),
+                                    recording_topic: "",
+                                    program_name: g.program_name || defaultProgramName,
+                                    generate_invoice: false,
+                                    save_as_template: false,
+                                    invoice_number: "",
+                                    invoice_date: new Date().toISOString().slice(0, 10),
+                                    account_name: "",
+                                    account_number: "",
+                                    sort_code: "",
+                                    bank_name: "",
+                                    bank_address: "",
+                                    paypal: "",
+                                  };
+                                  setAcceptanceForm(baseForm);
+                                  fetch(`/api/producer-guests/${g.id}/last-invitation`, { credentials: "same-origin" })
+                                    .then((r) => r.json())
+                                    .then((data) => {
+                                      if (data?.record_date) setAcceptanceForm((p) => ({ ...p, recording_date: data.record_date }));
+                                      if (data?.program_name && !baseForm.program_name) setAcceptanceForm((p) => ({ ...p, program_name: data.program_name }));
+                                    })
+                                    .catch(() => {});
+                                } else {
+                                  updateAccepted(g.id, v === "no" ? false : null);
+                                }
+                              }}
+                              className="rounded border px-2 py-1 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <option value="">—</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </td>
+                          <td className="px-4 py-2 text-sm">
+                            {g.payment_received ? (
+                              <span title={g.payment_amount != null ? `${g.payment_amount} ${g.payment_currency ?? ""}` : ""} className="text-emerald-600 dark:text-emerald-400 cursor-help">
+                                {g.payment_amount != null ? `${g.payment_amount} ${g.payment_currency ?? ""}` : "Paid"}
+                              </span>
+                            ) : g.accepted === true ? (
+                              <span className="text-gray-500">Unpaid</span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            {g.recording_date ? new Date(g.recording_date).toLocaleDateString() : "—"}
+                          </td>
+                          <td className="px-4 py-2 flex flex-wrap gap-1">
+                            {g.accepted === true && g.email?.includes("@") && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`/api/producer-guests/${g.id}/resend-post-recording-email`, { method: "POST", credentials: "same-origin" });
+                                    const data = await res.json();
+                                    if (res.ok) toast.success(data.message ?? "Email resent");
+                                    else toast.error(data.error ?? "Failed");
+                                  } catch {
+                                    toast.error("Failed to resend");
+                                  }
+                                }}
+                                className="text-amber-600 hover:underline text-xs"
+                              >
+                                Resend email
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setInviteModal(g);
+                                setForm({
+                                  guest_name: g.guest_name,
+                                  email: g.email || "",
+                                  title: g.title || "",
+                                  program_name: g.program_name || defaultProgramName,
+                                  general_topic: "",
+                                  program_specific_topic: "",
+                                  record_date: "",
+                                  record_time: "",
+                                  format: "remote",
+                                  studio_address: "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ",
+                                  include_program_description: true,
+                                  attach_calendar: true,
+                                  bcc_producer: true,
+                                  greeting_type: "dear",
+                                });
+                              }}
+                              className="text-sky-600 hover:underline text-xs"
+                            >
+                              Invite again
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  }
+                  return rows;
                 })
               )}
             </tbody>
