@@ -12,6 +12,7 @@ const LOGO_OPTIONS = [
 export function LogosSetupSection() {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>({});
+  const [uploadFilenames, setUploadFilenames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -52,7 +53,8 @@ export function LogosSetupSection() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Saved. Changes apply to all users." });
+        setMessage({ type: "success", text: "Saved and applied." });
+        window.dispatchEvent(new CustomEvent("logos-updated"));
         router.refresh();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to save." });
@@ -75,13 +77,16 @@ export function LogosSetupSection() {
       const formData = new FormData();
       formData.set("key", key);
       formData.set("file", file);
+      const customName = uploadFilenames[key]?.trim();
+      if (customName) formData.set("filename", customName);
 
       const res = await fetch("/api/admin/logos/upload", { method: "POST", body: formData });
       const data = await res.json();
 
       if (res.ok) {
         setValues((prev) => ({ ...prev, [key]: data.value }));
-        setMessage({ type: "success", text: "Logo uploaded. Changes apply to all users." });
+        setMessage({ type: "success", text: "Logo uploaded and applied." });
+        window.dispatchEvent(new CustomEvent("logos-updated"));
         router.refresh();
       } else {
         setMessage({ type: "error", text: data.error || "Upload failed." });
@@ -109,7 +114,7 @@ export function LogosSetupSection() {
           Logos
         </h2>
         <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          Different logos for different scenarios. Changes apply to everyone. Use a filename (e.g. trt-logo.png) if the file is in public/, or upload to Supabase Storage (create a public &quot;logos&quot; bucket first).
+          Different logos for different scenarios. Upload with a custom name (e.g. trt-logo.png) or enter a path/URL below. Changes apply immediately.
         </p>
 
         {message && (
@@ -149,7 +154,14 @@ export function LogosSetupSection() {
                   placeholder="trt-logo.png or https://..."
                   className="flex-1 min-w-[140px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <input
+                    type="text"
+                    value={uploadFilenames[key] ?? ""}
+                    onChange={(e) => setUploadFilenames((prev) => ({ ...prev, [key]: e.target.value }))}
+                    placeholder="Save as (e.g. trt-logo.png)"
+                    className="w-36 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  />
                   <label className="cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                     {uploading === key ? "Uploading..." : "Upload"}
                     <input

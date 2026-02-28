@@ -81,6 +81,7 @@ export function InvoiceMobileCards({
   onMarkPaid,
   onDeleteInvoice,
   onStartEdit,
+  rejectInlineShakeId = null,
   openPdf,
   actionLoadingId,
   expandedRowId = null,
@@ -113,6 +114,7 @@ export function InvoiceMobileCards({
   onMarkPaid: (id: string) => void;
   onDeleteInvoice?: (id: string) => void;
   onStartEdit?: (row: DisplayRow) => void;
+  rejectInlineShakeId?: string | null;
   openPdf: (id: string, storagePath?: string) => void;
   actionLoadingId: string | null;
   expandedRowId?: string | null;
@@ -221,7 +223,7 @@ export function InvoiceMobileCards({
                       <button
                         onClick={() => void onRejectInvoice(r.id)}
                         disabled={actionLoadingId === r.id}
-                        className="flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 touch-manipulation"
+                        className={`flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 touch-manipulation ${rejectInlineShakeId === r.id ? "animate-shake-reject" : ""}`}
                         aria-label="Reject invoice"
                       >
                         ✗ Reject
@@ -252,7 +254,7 @@ export function InvoiceMobileCards({
                     <button
                       onClick={() => void onRejectInvoice(r.id)}
                       disabled={actionLoadingId === r.id}
-                      className="flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 touch-manipulation"
+                      className={`flex-1 min-w-[100px] min-h-[44px] rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 touch-manipulation ${rejectInlineShakeId === r.id ? "animate-shake-reject" : ""}`}
                       aria-label="Reject invoice"
                     >
                       ✗ Reject

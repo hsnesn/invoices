@@ -1,7 +1,6 @@
 /**
  * Admin: upload logo file and update app_settings.
- * Uploads to Supabase Storage "logos" bucket (must exist, public).
- * Falls back to storing filename if bucket missing - admin can add file to public/.
+ * Auto-creates public "logos" bucket if missing. Supports custom filename.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -12,6 +11,14 @@ const LOGO_KEYS = ["logo_trt", "logo_trt_world", "logo_email"] as const;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const MAX_SIZE = 2 * 1024 * 1024; // 2MB
 
+function sanitizeFilename(name: string): string {
+  const base = name.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "logo";
+  const ext = base.includes(".") ? base.split(".").pop()?.toLowerCase() ?? "png" : "png";
+  const safeExt = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) ? ext : "png";
+  const stem = base.replace(/\.[^.]+$/, "") || "logo";
+  return `${stem}.${safeExt}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin();
@@ -19,6 +26,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const key = formData.get("key") as string | null;
     const file = formData.get("file") as File | null;
+    const customName = (formData.get("filename") as string | null)?.trim();
 
     if (!key || !LOGO_KEYS.includes(key as (typeof LOGO_KEYS)[number])) {
       return NextResponse.json({ error: "Invalid key. Use logo_trt, logo_trt_world, or logo_email." }, { status: 400 });
@@ -35,11 +43,28 @@ export async function POST(request: NextRequest) {
 
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
     const safeExt = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) ? ext : "png";
-    const storagePath = `${key.replace("logo_", "")}-${Date.now()}.${safeExt}`;
+    const storagePath = customName
+      ? sanitizeFilename(customName)
+      : `${key.replace("logo_", "")}-${Date.now()}.${safeExt}`;
 
     const supabase = createAdminClient();
 
-    // Try upload to storage
+    // Ensure logos bucket exists (create if not)
+    const { data: buckets } = await supabase.storage.listBuckets();
+    if (!buckets?.some((b) => b.name === BUCKET)) {
+      const { error: bucketErr } = await supabase.storage.createBucket(BUCKET, {
+        public: true,
+        fileSizeLimit: MAX_SIZE,
+        allowedMimeTypes: ALLOWED_TYPES,
+      });
+      if (bucketErr) {
+        return NextResponse.json(
+          { error: `Could not create logos bucket: ${bucketErr.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(BUCKET)
@@ -49,12 +74,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      return NextResponse.json(
-        {
-          error: `Upload failed: ${uploadError.message}. Create a public "logos" bucket in Supabase Dashboard (Storage → New bucket → logos, set Public). Or use the path field to enter a filename (e.g. trt-logo.png) if the file is in public/.`,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 400 });
     }
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(uploadData!.path);
     const logoValue = urlData.publicUrl;
