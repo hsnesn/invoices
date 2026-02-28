@@ -291,25 +291,23 @@ export function DashboardHome({ profile }: { profile: Profile }) {
   });
 
   return (
-    <div className="mx-auto max-w-5xl min-w-0 w-full pb-24 sm:pb-16">
+    <div className="mx-auto max-w-5xl min-w-0 w-full pb-8">
       {/* Hero Header */}
-      <div className="mb-8 sm:mb-12 flex flex-col items-start gap-6 sm:flex-row sm:items-end sm:justify-between min-w-0">
-        <div className="flex items-center gap-4 sm:gap-5 min-w-0 w-full sm:w-auto">
-          <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-white shadow-md ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
-            <img src={logos.logo_trt || "/trt-logo.png"} alt="TRT" className="h-6 sm:h-8 object-contain dark:mix-blend-multiply" />
-          </div>
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white break-words">
-              {getGreeting()}, {profile.full_name || "User"}
-            </h1>
-            <p className="mt-0.5 text-xs sm:text-sm text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="truncate">Invoice Approval Workflow</span>
-              <span className="text-gray-300 dark:text-gray-600 shrink-0">·</span>
-              <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300 shrink-0">
-                {profile.role}
-              </span>
-            </p>
-          </div>
+      <div className="mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white shadow ring-1 ring-gray-200/80 dark:bg-gray-800 dark:ring-gray-700/80">
+          <img src={logos.logo_trt || "/trt-logo.png"} alt="TRT" className="h-5 sm:h-6 object-contain dark:mix-blend-multiply" />
+        </div>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-white truncate">
+            {getGreeting()}, {profile.full_name || "User"}
+          </h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+            <span className="truncate">Invoice Approval Workflow</span>
+            <span className="text-gray-300 dark:text-gray-600">·</span>
+            <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300 shrink-0">
+              {profile.role}
+            </span>
+          </p>
         </div>
       </div>
 
@@ -324,22 +322,18 @@ export function DashboardHome({ profile }: { profile: Profile }) {
           actions.push({ count: contractorStats.pendingCount, label: "assignments to review", href: "/contractor-availability" });
         if (actions.length === 0) return null;
         return (
-          <div className="mb-8 min-w-0">
-            <h2 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Your Pending Actions</h2>
-            <div className="flex gap-3 overflow-x-auto pb-1 min-w-0">
+          <div className="mb-4 min-w-0">
+            <h2 className="mb-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">Your Pending Actions</h2>
+            <div className="flex gap-2 overflow-x-auto pb-1 min-w-0">
               {actions.map((a) => (
                 <Link
                   key={a.href}
                   href={a.href}
-                  className="flex min-w-[180px] shrink-0 items-start gap-3 rounded-lg border-l-4 border-amber-400 bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200/80 transition-colors hover:bg-amber-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-amber-950/30"
+                  className="flex min-w-[140px] shrink-0 items-center gap-2 rounded-lg border-l-3 border-amber-400 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 transition-colors hover:bg-amber-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-amber-950/30"
                 >
-                  <div className="flex flex-col">
-                    <span className="text-2xl font-bold text-amber-700 dark:text-amber-300">{a.count}</span>
-                    <span className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{a.label}</span>
-                  </div>
-                  <span className="ml-auto mt-1 whitespace-nowrap text-xs font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">
-                    View →
-                  </span>
+                  <span className="text-lg font-bold text-amber-700 dark:text-amber-300">{a.count}</span>
+                  <span className="text-[11px] leading-tight text-gray-600 dark:text-gray-400">{a.label}</span>
+                  <span className="ml-auto whitespace-nowrap text-[11px] font-medium text-amber-600 dark:text-amber-400">→</span>
                 </Link>
               ))}
             </div>
@@ -349,76 +343,67 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
       {/* Submitter: My Pending Invoices */}
       {isSubmitter && submitterStats && (
-        <div className="mb-8 min-w-0">
-          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+        <div className="mb-4 min-w-0">
+          <div className="mb-1.5 flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-gray-700 dark:text-gray-300">My Pending</h2>
             <button
               type="button"
               onClick={() => void mutateSubmitter(undefined, { revalidate: true })}
               disabled={submitterValidating}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+              className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
             >
-              {submitterValidating ? "Refreshing…" : "Refresh"}
+              {submitterValidating ? "…" : "Refresh"}
             </button>
           </div>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
-            <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
-              <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">My Pending Invoices</p>
-              <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{submitterStats.totalPending}</p>
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                {submitterStats.guestPending} guest · {submitterStats.freelancerPending} contractor
-              </p>
-              <Link href="/invoices?group=pending" className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
-                View →
-              </Link>
-            </div>
-          </div>
+          <Link
+            href="/invoices?group=pending"
+            className="flex items-center gap-3 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30 hover:bg-amber-100/80 dark:hover:bg-amber-950/50 transition-colors"
+          >
+            <span className="text-lg font-bold text-amber-800 dark:text-amber-200">{submitterStats.totalPending}</span>
+            <span className="text-xs text-amber-700 dark:text-amber-300">{submitterStats.guestPending} guest · {submitterStats.freelancerPending} contractor</span>
+            <span className="ml-auto text-xs font-medium text-amber-600 dark:text-amber-400">View →</span>
+          </Link>
         </div>
       )}
 
       {/* Producer: Your guests this month, response rate, most frequent */}
       {canSeeStats && producerStats && (
-        <div className="mb-8 min-w-0">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Your Guests</h2>
+        <div className="mb-4 min-w-0">
+          <div className="mb-1.5 flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Your Guests</h2>
             <button
               type="button"
               onClick={() => void mutateProducer(undefined, { revalidate: true })}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+              className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
             >
               Refresh
             </button>
           </div>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
-            <div className="rounded-xl border border-violet-200/80 bg-violet-50/80 p-4 shadow-sm dark:border-violet-800/60 dark:bg-violet-950/30">
-              <p className="text-xs font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">Guests this month</p>
-              <p className="mt-1 text-2xl font-bold text-violet-800 dark:text-violet-200">{producerStats.guests_this_month}</p>
-              <Link href="/invoices/invited-guests" className="mt-2 inline-block text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
-                Invited Guests →
-              </Link>
+          <div className="grid gap-2 grid-cols-3 min-w-0">
+            <div className="rounded-lg border border-violet-200/80 bg-violet-50/80 px-3 py-2 shadow-sm dark:border-violet-800/60 dark:bg-violet-950/30">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">This month</p>
+              <p className="text-lg font-bold text-violet-800 dark:text-violet-200">{producerStats.guests_this_month}</p>
+              <Link href="/invoices/invited-guests" className="text-[11px] font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400">Invited Guests →</Link>
             </div>
-            <div className="rounded-xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
-              <p className="text-xs font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Response rate</p>
-              <p className="mt-1 text-2xl font-bold text-sky-800 dark:text-sky-200">
+            <div className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Response rate</p>
+              <p className="text-lg font-bold text-sky-800 dark:text-sky-200">
                 {producerStats.response_rate != null ? `${producerStats.response_rate}%` : "—"}
               </p>
-              <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">
-                {producerStats.total_invited} invited total
-              </p>
+              <p className="text-[11px] text-sky-700 dark:text-sky-300">{producerStats.total_invited} invited</p>
             </div>
-            <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
-              <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Most frequent guests</p>
-              <ul className="mt-1 space-y-0.5 text-sm text-amber-800 dark:text-amber-200">
+            <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Frequent guests</p>
+              <ul className="mt-0.5 space-y-0 text-[11px] text-amber-800 dark:text-amber-200 leading-tight">
                 {producerStats.most_frequent_guests.length === 0 ? (
                   <li className="text-amber-600 dark:text-amber-400">None yet</li>
                 ) : (
-                  producerStats.most_frequent_guests.map((g, i) => (
-                    <li key={i}>{g.guest_name} <span className="text-amber-600 dark:text-amber-400">({g.count})</span></li>
+                  producerStats.most_frequent_guests.slice(0, 3).map((g, i) => (
+                    <li key={i} className="truncate">{g.guest_name} <span className="text-amber-600 dark:text-amber-400">({g.count})</span></li>
                   ))
                 )}
               </ul>
-              <Link href="/invoices/invited-guests" className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
-                View all →
-              </Link>
+              <Link href="/invoices/invited-guests" className="text-[11px] font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">View all →</Link>
             </div>
           </div>
         </div>
@@ -426,29 +411,27 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
       {/* Contractor Availability Widget - admin/operations/manager */}
       {canManageAvailability && contractorStats && (contractorStats.pendingCount > 0 || contractorStats.slotsShort > 0) && (
-        <div className="mb-8 min-w-0">
-          <h2 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">My Availability (this week)</h2>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 min-w-0">
+        <div className="mb-4 min-w-0">
+          <h2 className="mb-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">Availability (this week)</h2>
+          <div className="flex gap-2 overflow-x-auto min-w-0">
             {contractorStats.pendingCount > 0 && (
               <Link
                 href="/contractor-availability?tab=assignments"
-                className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30 hover:bg-amber-100/80 dark:hover:bg-amber-950/50 transition-colors"
+                className="flex min-w-[160px] shrink-0 items-center gap-2 rounded-lg border-l-3 border-amber-400 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 hover:bg-amber-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-amber-950/30 transition-colors"
               >
-                <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Assignments pending review</p>
-                <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{contractorStats.pendingCount}</p>
-                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Review and approve to send confirmations</p>
-                <span className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">Review →</span>
+                <span className="text-lg font-bold text-amber-700 dark:text-amber-300">{contractorStats.pendingCount}</span>
+                <span className="text-[11px] leading-tight text-gray-600 dark:text-gray-400">assignments pending</span>
+                <span className="ml-auto text-[11px] font-medium text-amber-600 dark:text-amber-400">→</span>
               </Link>
             )}
             {contractorStats.slotsShort > 0 && (
               <Link
                 href="/request"
-                className="rounded-xl border border-rose-200/80 bg-rose-50/80 p-4 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/30 hover:bg-rose-100/80 dark:hover:bg-rose-950/50 transition-colors"
+                className="flex min-w-[160px] shrink-0 items-center gap-2 rounded-lg border-l-3 border-rose-400 bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/80 hover:bg-rose-50 dark:bg-gray-900/60 dark:ring-gray-700/60 dark:hover:bg-rose-950/30 transition-colors"
               >
-                <p className="text-xs font-medium uppercase tracking-wider text-rose-600 dark:text-rose-400">Slots short this week</p>
-                <p className="mt-1 text-2xl font-bold text-rose-800 dark:text-rose-200">{contractorStats.slotsShort}</p>
-                <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">More people needed vs requirements</p>
-                <span className="mt-2 inline-block text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">View Request →</span>
+                <span className="text-lg font-bold text-rose-700 dark:text-rose-300">{contractorStats.slotsShort}</span>
+                <span className="text-[11px] leading-tight text-gray-600 dark:text-gray-400">slots short</span>
+                <span className="ml-auto text-[11px] font-medium text-rose-600 dark:text-rose-400">→</span>
               </Link>
             )}
           </div>
@@ -457,79 +440,61 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
       {/* Metric Cards - hidden from submitters */}
       {canSeeStats && (
-        <div className="mb-8 min-w-0">
-          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+        <div className="mb-4 min-w-0">
+          <div className="mb-1.5 flex items-center justify-end">
             <button
               type="button"
               onClick={() => void mutate(undefined, { revalidate: true })}
               disabled={statsValidating}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
+              className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 shrink-0"
             >
-              {statsValidating ? "Refreshing…" : "Refresh"}
+              {statsValidating ? "…" : "Refresh"}
             </button>
           </div>
           {!stats ? (
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 min-w-0">
+            <div className="grid gap-2 grid-cols-3 lg:grid-cols-6 min-w-0">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="rounded-xl border border-gray-200/80 bg-gray-50/80 p-4 dark:border-gray-700/60 dark:bg-gray-800/40 animate-pulse">
-                  <div className="h-3 w-24 rounded bg-gray-200 dark:bg-gray-600" />
-                  <div className="mt-2 h-8 w-12 rounded bg-gray-200 dark:bg-gray-600" />
-                  <div className="mt-2 h-4 w-16 rounded bg-gray-200 dark:bg-gray-600" />
+                <div key={i} className="rounded-lg border border-gray-200/80 bg-gray-50/80 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40 animate-pulse">
+                  <div className="h-2.5 w-16 rounded bg-gray-200 dark:bg-gray-600" />
+                  <div className="mt-1.5 h-6 w-8 rounded bg-gray-200 dark:bg-gray-600" />
                 </div>
               ))}
             </div>
           ) : (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 min-w-0">
-          <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
-            <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Guest Pending</p>
-            <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{stats.guest.pending}</p>
-            <Link href="/invoices?group=pending" className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
-              View →
-            </Link>
+          <div className="grid gap-2 grid-cols-3 lg:grid-cols-6 min-w-0">
+          <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Guest Pending</p>
+            <p className="text-lg font-bold text-amber-800 dark:text-amber-200">{stats.guest.pending}</p>
+            <Link href="/invoices?group=pending" className="text-[11px] font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">View →</Link>
           </div>
-          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30">
-            <p className="text-xs font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Guest Paid</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-800 dark:text-emerald-200">{stats.guest.paid}</p>
-            <Link href="/invoices?group=paid" className="mt-2 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
-              View →
-            </Link>
+          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Guest Paid</p>
+            <p className="text-lg font-bold text-emerald-800 dark:text-emerald-200">{stats.guest.paid}</p>
+            <Link href="/invoices?group=paid" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">View →</Link>
           </div>
-          <div className="rounded-xl border border-teal-200/80 bg-teal-50/80 p-4 shadow-sm dark:border-teal-800/60 dark:bg-teal-950/30">
-            <p className="text-xs font-medium uppercase tracking-wider text-teal-600 dark:text-teal-400">Contractor Pending</p>
-            <p className="mt-1 text-2xl font-bold text-teal-800 dark:text-teal-200">{stats.freelancer.pending}</p>
-            <Link href="/freelancer-invoices?group=pending" className="mt-2 inline-block text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
-              View →
-            </Link>
+          <div className="rounded-lg border border-teal-200/80 bg-teal-50/80 px-3 py-2 shadow-sm dark:border-teal-800/60 dark:bg-teal-950/30">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-teal-600 dark:text-teal-400">Contr. Pending</p>
+            <p className="text-lg font-bold text-teal-800 dark:text-teal-200">{stats.freelancer.pending}</p>
+            <Link href="/freelancer-invoices?group=pending" className="text-[11px] font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">View →</Link>
           </div>
-          <div className="rounded-xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
-            <p className="text-xs font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Contractor Paid</p>
-            <p className="mt-1 text-2xl font-bold text-sky-800 dark:text-sky-200">{stats.freelancer.paid}</p>
-            <Link href="/freelancer-invoices?group=paid" className="mt-2 inline-block text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">
-              View →
-            </Link>
+          <div className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/30">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-sky-600 dark:text-sky-400">Contr. Paid</p>
+            <p className="text-lg font-bold text-sky-800 dark:text-sky-200">{stats.freelancer.paid}</p>
+            <Link href="/freelancer-invoices?group=paid" className="text-[11px] font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400">View →</Link>
           </div>
-          <div className="rounded-xl border border-rose-200/80 bg-rose-50/80 p-4 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/30">
-            <p className="text-xs font-medium uppercase tracking-wider text-rose-600 dark:text-rose-400">Rejected</p>
-            <p className="mt-1 text-2xl font-bold text-rose-800 dark:text-rose-200">{stats.guest.rejected + stats.freelancer.rejected}</p>
-            <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">
-              {stats.guest.rejected} guest · {stats.freelancer.rejected} contractor
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Link href="/invoices?group=rejected" className="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300">
-                Guest →
-              </Link>
-              <Link href="/freelancer-invoices?group=rejected" className="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300">
-                Contractor →
-              </Link>
+          <div className="rounded-lg border border-rose-200/80 bg-rose-50/80 px-3 py-2 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/30">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-rose-600 dark:text-rose-400">Rejected</p>
+            <p className="text-lg font-bold text-rose-800 dark:text-rose-200">{stats.guest.rejected + stats.freelancer.rejected}</p>
+            <div className="flex gap-1.5">
+              <Link href="/invoices?group=rejected" className="text-[11px] font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">Guest →</Link>
+              <Link href="/freelancer-invoices?group=rejected" className="text-[11px] font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">Contr. →</Link>
             </div>
           </div>
           {stats.other != null && (
-            <div className="rounded-xl border border-orange-200/80 bg-orange-50/80 p-4 shadow-sm dark:border-orange-800/60 dark:bg-orange-950/30">
-              <p className="text-xs font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">Other Pending</p>
-              <p className="mt-1 text-2xl font-bold text-orange-800 dark:text-orange-200">{stats.other.pending}</p>
-              <Link href="/other-invoices" className="mt-2 inline-block text-sm font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300">
-                View →
-              </Link>
+            <div className="rounded-lg border border-orange-200/80 bg-orange-50/80 px-3 py-2 shadow-sm dark:border-orange-800/60 dark:bg-orange-950/30">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">Other Pending</p>
+              <p className="text-lg font-bold text-orange-800 dark:text-orange-200">{stats.other.pending}</p>
+              <Link href="/other-invoices" className="text-[11px] font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400">View →</Link>
             </div>
           )}
         </div>
@@ -539,16 +504,16 @@ export function DashboardHome({ profile }: { profile: Profile }) {
 
       {/* Mini Chart - hidden from submitters */}
       {canSeeStats && stats?.monthlyTrend?.length ? (
-        <div className="mb-8 rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Invoices by Month</h2>
-          <div className="mt-4 h-40">
+        <div className="mb-4 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+          <h2 className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Invoices by Month</h2>
+          <div className="mt-1 h-28">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.monthlyTrend}>
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} width={30} />
                 <Tooltip />
-                <Bar dataKey="guest" fill="#3b82f6" name="Guest" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="freelancer" fill="#14b8a6" name="Contractor" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="guest" fill="#3b82f6" name="Guest" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="freelancer" fill="#14b8a6" name="Contractor" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -556,43 +521,30 @@ export function DashboardHome({ profile }: { profile: Profile }) {
       ) : null}
 
       {/* Page Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
         {visiblePages.map((page) => (
           <Link
             key={page.href}
             href={page.href}
-            className="group flex flex-col rounded-xl border border-gray-200/80 bg-white p-6 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md hover:shadow-gray-200/50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:border-gray-600 dark:hover:shadow-gray-900/50"
+            className="group flex items-center gap-2.5 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:border-gray-600"
           >
-            <div className="flex items-start justify-between">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-lg bg-gray-50 ${page.color} dark:bg-gray-800/80`}>
-                {page.icon}
-              </div>
-              <svg
-                className="h-5 w-5 shrink-0 text-gray-300 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-              </svg>
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-50 ${page.color} dark:bg-gray-800/80 [&>svg]:h-5 [&>svg]:w-5`}>
+              {page.icon}
             </div>
-            <h3 className="mt-4 font-semibold text-gray-900 dark:text-white">
-              {page.title}
-            </h3>
-            <p className="mt-1.5 flex-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-              {page.description}
-            </p>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">{page.title}</h3>
+              <p className="text-[10px] leading-tight text-gray-500 dark:text-gray-400 line-clamp-1">{page.description}</p>
+            </div>
+            <svg className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-500 dark:text-gray-600 dark:group-hover:text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
           </Link>
         ))}
       </div>
 
       {/* Quick Overview */}
-      <div className="mt-8 rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-          Quick Overview
-        </h2>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+      <div className="mt-4 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+        <p className="text-[11px] text-gray-500 dark:text-gray-400">
           Navigate to Invoices to view statistics, apply filters and generate reports.
         </p>
       </div>
