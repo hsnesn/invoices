@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useLogos } from "@/contexts/LogoContext";
 import useSWR from "swr";
@@ -266,6 +267,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     statsFetcher,
     { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
+  const [chartOpen, setChartOpen] = useState(false);
   const canManageAvailability = ["admin", "operations", "manager"].includes(profile?.role ?? "");
   const { data: contractorStats } = useSWR<ContractorAvailabilityStats>(
     canManageAvailability ? "/api/contractor-availability/dashboard-stats" : null,
@@ -502,21 +504,34 @@ export function DashboardHome({ profile }: { profile: Profile }) {
         </div>
       )}
 
-      {/* Mini Chart - hidden from submitters */}
+      {/* Mini Chart - collapsible, hidden from submitters */}
       {canSeeStats && stats?.monthlyTrend?.length ? (
-        <div className="mb-4 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
-          <h2 className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Invoices by Month</h2>
-          <div className="mt-1 h-28">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.monthlyTrend}>
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <Tooltip />
-                <Bar dataKey="guest" fill="#3b82f6" name="Guest" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="freelancer" fill="#14b8a6" name="Contractor" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="mb-4 min-w-0">
+          <button
+            type="button"
+            onClick={() => setChartOpen((v) => !v)}
+            className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-3 py-1.5 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/60 dark:hover:bg-gray-800/60"
+          >
+            <svg className={`h-3 w-3 text-gray-400 transition-transform ${chartOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Invoices by Month</span>
+          </button>
+          {chartOpen && (
+            <div className="mt-1 rounded-lg border border-gray-200/80 bg-white px-3 py-2 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/60">
+              <div className="h-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.monthlyTrend}>
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} width={30} />
+                    <Tooltip />
+                    <Bar dataKey="guest" fill="#3b82f6" name="Guest" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="freelancer" fill="#14b8a6" name="Contractor" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 
