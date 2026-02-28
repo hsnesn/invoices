@@ -136,13 +136,19 @@ export function RequestClient() {
   const handleSetRequirement = async (dateStr: string, role: string, count: number) => {
     if (!selectedDepartment) return;
     setReqSaving(true);
+    setMessage(null);
     try {
       if (count <= 0) {
         const params = new URLSearchParams({ date: dateStr, role: encodeURIComponent(role), department_id: selectedDepartment });
         if (selectedProgram) params.set("program_id", selectedProgram);
-        await fetch(`/api/contractor-availability/requirements?${params}`, { method: "DELETE" });
+        const res = await fetch(`/api/contractor-availability/requirements?${params}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setMessage({ type: "error", text: data.error || `Failed to save (${res.status}).` });
+          return;
+        }
       } else {
-        await fetch("/api/contractor-availability/requirements", {
+        const res = await fetch("/api/contractor-availability/requirements", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -153,6 +159,11 @@ export function RequestClient() {
             program_id: selectedProgram || undefined,
           }),
         });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setMessage({ type: "error", text: data.error || `Failed to save (${res.status}).` });
+          return;
+        }
       }
       setReqByDate((prev) => {
         const next = { ...prev };
