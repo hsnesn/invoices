@@ -95,9 +95,20 @@ export function LogosSetupSection() {
       if (res.ok && data.ok) {
         setValues((prev) => ({ ...prev, [key]: data.value ?? prev[key] }));
         setPreviewStamp(Date.now());
-        setMessage({ type: "success", text: `Logo uploaded successfully. URL: ${data.value}` });
+
+        // Verify the database actually saved the new URL
+        let verifyMsg = "";
+        try {
+          const checkRes = await fetch(`/api/settings/logos?_=${Date.now()}`, { cache: "no-store" });
+          const checkData = await checkRes.json();
+          const savedUrl = checkData?.[key] || "(empty)";
+          verifyMsg = ` | DB check: ${savedUrl}`;
+        } catch {
+          verifyMsg = " | DB check failed";
+        }
+
+        setMessage({ type: "success", text: `Upload OK. New URL: ${data.value}${verifyMsg}` });
         window.dispatchEvent(new CustomEvent("logos-updated"));
-        router.refresh();
       } else {
         setMessage({ type: "error", text: data.error || `Upload failed (HTTP ${res.status}). Please refresh and try again.` });
       }
@@ -129,7 +140,7 @@ export function LogosSetupSection() {
 
         {message && (
           <div
-            className={`mb-4 rounded-lg border p-3 text-sm ${
+            className={`mb-4 rounded-lg border p-3 text-xs break-all select-all ${
               message.type === "success"
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200"
                 : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-200"
