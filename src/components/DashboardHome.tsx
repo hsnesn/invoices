@@ -304,7 +304,7 @@ export function DashboardHome({ profile }: { profile: Profile }) {
             {getGreeting()}, {profile.full_name || "User"}
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-            <span className="truncate">Invoice Approval Workflow</span>
+            <span className="truncate">TRT UK Operations Platform</span>
             <span className="text-gray-300 dark:text-gray-600">·</span>
             <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300 shrink-0">
               {profile.role}

@@ -19,14 +19,14 @@ export default async function HelpPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Help & Documentation</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Step-by-step guide to using the Invoice Approval system.
+          Step-by-step guide to using the TRT UK Operations Platform.
         </p>
       </div>
 
       <section id="about" className="mb-10 scroll-mt-24 rounded-xl border border-sky-200 bg-sky-50/50 p-6 dark:border-sky-800 dark:bg-sky-950/30">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">About This System</h2>
         <p className="mt-2 text-gray-700 dark:text-gray-300">
-          <strong>Invoice Approval</strong> is a central system for managing guest, contractor, and other invoices at TRT World UK. It was built to:
+          <strong>TRT UK Operations Platform</strong> is a central system for managing guest, contractor, and other invoices at TRT World UK. It was built to:
         </p>
         <ol className="mt-3 list-inside list-decimal space-y-2 text-gray-700 dark:text-gray-300">
           <li><strong>Streamline approval workflows</strong> — Submitters upload invoices; managers approve or reject; finance marks them paid. Each step is tracked and auditable.</li>

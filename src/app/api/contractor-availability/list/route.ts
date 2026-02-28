@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
       : null;
 
     let requirements: { date: string; role: string; count_needed: number }[] = [];
+    let assignmentNamesByDateRole: Record<string, string[]> = {};
     let coverage: { slotsFilled: number; slotsShort: number; byDateRole: Record<string, { needed: number; filled: number }> } = {
       slotsFilled: 0,
       slotsShort: 0,
@@ -105,7 +106,7 @@ export async function GET(request: NextRequest) {
 
       let assignQuery = supabase
         .from("output_schedule_assignments")
-        .select("date, role")
+        .select("date, role, user_id")
         .gte("date", start)
         .lte("date", end)
         .in("status", ["pending", "confirmed"]);
@@ -113,10 +114,16 @@ export async function GET(request: NextRequest) {
       if (programId) assignQuery = assignQuery.eq("program_id", programId);
       const { data: assignRows } = await assignQuery;
       const filledByKey = new Map<string, number>();
+      const namesByKey = new Map<string, string[]>();
       for (const a of assignRows ?? []) {
         const key = `${(a as { date: string }).date}|${(a as { role: string }).role || ""}`;
         filledByKey.set(key, (filledByKey.get(key) ?? 0) + 1);
+        const uid = (a as { user_id: string }).user_id;
+        const arr = namesByKey.get(key) ?? [];
+        arr.push(nameMap.get(uid) ?? "Unknown");
+        namesByKey.set(key, arr);
       }
+      assignmentNamesByDateRole = Object.fromEntries(namesByKey);
       let slotsFilled = 0;
       let slotsShort = 0;
       const byDateRole: Record<string, { needed: number; filled: number }> = {};
@@ -136,6 +143,7 @@ export async function GET(request: NextRequest) {
       monthLabel,
       requirements,
       coverage,
+      assignmentNamesByDateRole,
       records: rows ?? [],
       byUser: Object.entries(byUser).map(([id, v]) => ({ userId: id, ...v })),
     });

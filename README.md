@@ -1,6 +1,6 @@
-# Invoice Approval Workflow
+# TRT UK Operations Platform
 
-Production-ready internal invoice approval system with AI extraction, multi-stage workflow, and role-based access control.
+Production-ready finance and operations platform with AI extraction, multi-stage workflow, and role-based access control.
 
 ## Tech Stack
 

@@ -5,8 +5,17 @@ import { LogoProvider } from "@/contexts/LogoContext";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "Invoice Approval Workflow",
-  description: "Internal invoice approval system",
+  title: "TRT UK Operations Platform",
+  description: "Finance, operations and workflow management for TRT World UK",
+  openGraph: {
+    title: "TRT UK Operations Platform",
+    description: "Finance, operations and workflow management for TRT World UK",
+  },
+  twitter: {
+    card: "summary",
+    title: "TRT UK Operations Platform",
+    description: "Finance, operations and workflow management for TRT World UK",
+  },
 };
 
 export default function RootLayout({

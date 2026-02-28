@@ -7,7 +7,7 @@ function getResend() {
   return new Resend(key);
 }
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "TRT World UK Payment System";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "TRT UK Operations Platform";
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? `${APP_NAME} <noreply@example.com>`;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -39,7 +39,7 @@ ${body}
 </div></div></body></html>`;
 }
 
-/** Salary payment confirmation: no Invoice Approval Workflow header/footer, TRT World UK Finance Team at bottom */
+/** Salary payment confirmation: no TRT UK Operations Platform header/footer, TRT World UK Finance Team at bottom */
 function wrapSalaryPayment(body: string, logoUrl: string = DEFAULT_LOGO_URL) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">

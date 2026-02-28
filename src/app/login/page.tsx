@@ -78,7 +78,7 @@ function LoginPageContent() {
       <div className="w-full max-w-sm space-y-8 rounded-xl border border-slate-700 bg-slate-900/50 p-8 shadow-xl">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
-            Invoice Approval Workflow
+            TRT UK Operations Platform
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             Invite-only access
