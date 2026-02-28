@@ -119,15 +119,34 @@ export function InvitedGuestsClient({
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
-  useEffect(() => {
+  const loadGuests = React.useCallback(() => {
+    setLoading(true);
     fetch("/api/producer-guests", { credentials: "same-origin" })
-      .then((r) => r.json())
-      .then((data) => {
-        setGuests(Array.isArray(data) ? data : []);
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) {
+          const err = (data as { error?: string }).error || `HTTP ${r.status}`;
+          toast.error(`Failed to load guests: ${err}`);
+          return [];
+        }
+        if (Array.isArray(data)) return data;
+        if ((data as { error?: string }).error) {
+          toast.error(`Failed to load guests: ${(data as { error?: string }).error}`);
+          return [];
+        }
+        return [];
       })
-      .catch(() => setGuests([]))
+      .then(setGuests)
+      .catch((err) => {
+        toast.error("Failed to load invited guests");
+        setGuests([]);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadGuests();
+  }, [loadGuests]);
 
   useEffect(() => {
     if (acceptanceModal && acceptanceForm.generate_invoice) {
@@ -659,6 +678,13 @@ export function InvitedGuestsClient({
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => loadGuests()}
+            disabled={loading}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {loading ? "Loading…" : "Refresh"}
+          </button>
           <input
             type="search"
             placeholder="Search guest, email, program..."

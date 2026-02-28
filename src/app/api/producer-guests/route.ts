@@ -40,9 +40,8 @@ export async function GET(request: NextRequest) {
       .order("sent_at", { ascending: false });
     if (!isAdmin) {
       invQuery = invQuery.or(`producer_user_id.eq.${session.user.id},producer_user_id.is.null`);
-    } else {
-      invQuery = invQuery.not("producer_user_id", "is", null);
     }
+    // Admin sees all invitations (including those with producer_user_id null from Guest Contacts bulk email)
     const { data: invitations } = await invQuery;
 
     const pgKeys = new Set(
@@ -52,10 +51,10 @@ export async function GET(request: NextRequest) {
     const extraFromInv: typeof guests = [];
     for (const inv of invitations ?? []) {
       let pid = (inv as { producer_user_id?: string | null }).producer_user_id;
-      if (!pid && !isAdmin) pid = session.user.id;
+      if (!pid) pid = session.user.id; // Use current user for display when producer unknown (e.g. Guest Contacts bulk)
       const gname = (inv as { guest_name?: string }).guest_name ?? "";
       const gemail = (inv as { guest_email?: string }).guest_email ?? "";
-      if (!pid || !gname.trim()) continue;
+      if (!gname.trim()) continue;
       const key = `${pid}|${normalizeName(gname)}|${gemail.toLowerCase()}`;
       if (pgKeys.has(key) || seenInvKeys.has(key)) continue;
       seenInvKeys.add(key);
