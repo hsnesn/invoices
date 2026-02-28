@@ -187,12 +187,42 @@ export function ContractorAvailabilityClient() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Month</label>
-              <input
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              />
+              <div className="flex gap-2">
+                <select
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const m = String(i + 1).padStart(2, "0");
+                    const y = month.split("-")[0];
+                    const label = new Date(2000, i).toLocaleString("en-GB", { month: "long" });
+                    return (
+                      <option key={m} value={`${y}-${m}`}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+                <select
+                  value={month.split("-")[0]}
+                  onChange={(e) => {
+                    const y = e.target.value;
+                    const m = month.split("-")[1];
+                    setMonth(`${y}-${m}`);
+                  }}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  {Array.from({ length: 4 }, (_, i) => {
+                    const y = new Date().getFullYear() - 1 + i;
+                    return (
+                      <option key={y} value={String(y)}>
+                        {y}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -265,12 +295,42 @@ export function ContractorAvailabilityClient() {
           <h2 className="mb-4 font-medium text-gray-900 dark:text-white">All contractor availability records</h2>
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Month</label>
-            <input
-              type="month"
-              value={listMonth}
-              onChange={(e) => setListMonth(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            />
+            <div className="flex gap-2">
+              <select
+                value={listMonth}
+                onChange={(e) => setListMonth(e.target.value)}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              >
+                {Array.from({ length: 12 }, (_, i) => {
+                  const m = String(i + 1).padStart(2, "0");
+                  const y = listMonth.split("-")[0];
+                  const label = new Date(2000, i).toLocaleString("en-GB", { month: "long" });
+                  return (
+                    <option key={m} value={`${y}-${m}`}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+              <select
+                value={listMonth.split("-")[0]}
+                onChange={(e) => {
+                  const y = e.target.value;
+                  const m = listMonth.split("-")[1];
+                  setListMonth(`${y}-${m}`);
+                }}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              >
+                {Array.from({ length: 4 }, (_, i) => {
+                  const yr = new Date().getFullYear() - 1 + i;
+                  return (
+                    <option key={yr} value={String(yr)}>
+                      {yr}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
           {byUser.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">No records for this month.</p>
