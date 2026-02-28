@@ -107,6 +107,12 @@ export async function requirePageAccess(pageKey: PageKey) {
     if (profile.role === "viewer" && profile.allowed_pages?.includes("other_invoices")) return { session, profile };
     redirect("/dashboard");
   }
+  if (pageKey === "output_schedule") {
+    if (["admin", "operations"].includes(profile.role)) return { session, profile };
+    if (profile.allowed_pages?.includes("output_schedule")) return { session, profile };
+    if (!profile.allowed_pages || profile.allowed_pages.length === 0) return { session, profile };
+    redirect("/dashboard");
+  }
   const pages = profile.allowed_pages;
   if (!pages || pages.length === 0) return { session, profile };
   if (pages.includes(pageKey)) return { session, profile };
