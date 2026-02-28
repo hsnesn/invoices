@@ -67,7 +67,6 @@ export function RequestClient() {
       .then((d) => {
         const arr = Array.isArray(d) ? d : [];
         setDepartments(arr);
-        if (arr.length > 0 && !selectedDepartment) setSelectedDepartment(arr[0].id);
       })
       .catch(() => setDepartments([]));
   }, []);

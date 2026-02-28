@@ -15,14 +15,14 @@ function canRunAiSuggest(role: string) {
 }
 
 /** Fair assignment: fill each (date, role) slot from available people.
- * 1. Per-user preference: people who appear in more users' lists get higher score.
+ * 1. Per-user preference (scoped by dept/program/role): higher score = more preferred.
  * 2. Assignment count (most assigned first) per role.
  * 3. Minimize variance in shifts. */
 function suggestAssignments(
   requirements: { date: string; role: string; count_needed: number }[],
   availability: { user_id: string; date: string; role: string | null }[],
   preferenceByRole: Map<string, Map<string, number>>,
-  prefScoreByUser: Map<string, number>
+  prefScoreByRoleAndUser: Map<string, Map<string, number>>
 ): { user_id: string; date: string; role: string }[] {
   const availByDateRole = new Map<string, Set<string>>();
   for (const a of availability) {
@@ -43,9 +43,10 @@ function suggestAssignments(
 
     const prefMap = preferenceByRole.get(req.role);
 
+    const prefScores = prefScoreByRoleAndUser.get(req.role);
     const sorted = Array.from(available).sort((a, b) => {
-      const scoreA = prefScoreByUser.get(a) ?? 0;
-      const scoreB = prefScoreByUser.get(b) ?? 0;
+      const scoreA = prefScores?.get(a) ?? 0;
+      const scoreB = prefScores?.get(b) ?? 0;
       if (scoreB !== scoreA) return scoreB - scoreA;
       const prefA = prefMap?.get(a) ?? 0;
       const prefB = prefMap?.get(b) ?? 0;
@@ -127,16 +128,29 @@ export async function POST(request: NextRequest) {
 
     const { data: perUserPrefs } = await supabase
       .from("contractor_preference_per_user")
-      .select("user_id, preferred_user_id, sort_order");
-    const prefScoreByUser = new Map<string, number>();
+      .select("user_id, preferred_user_id, sort_order, department_id, program_id, role");
+    const prefScoreByRoleAndUser = new Map<string, Map<string, number>>();
+    const rolesInReqs = Array.from(new Set(requirements.map((r) => r.role)));
+    for (const roleKey of rolesInReqs) {
+      prefScoreByRoleAndUser.set(roleKey, new Map());
+    }
     for (const r of perUserPrefs ?? []) {
       const preferred = (r as { preferred_user_id: string }).preferred_user_id;
-      const sortOrder = (r as { sort_order: number }).sort_order;
-      const score = 1000 - sortOrder;
-      prefScoreByUser.set(preferred, (prefScoreByUser.get(preferred) ?? 0) + score);
+      const dept = (r as { department_id: string | null }).department_id;
+      const prog = (r as { program_id: string | null }).program_id;
+      const roleVal = ((r as { role: string | null }).role ?? "").trim();
+      const matchesDept = !dept || dept === departmentId;
+      const matchesProg = !prog || prog === (progId ?? "");
+      if (!matchesDept || !matchesProg) continue;
+      const weight = 1000 - (r as { sort_order: number }).sort_order;
+      const targetRoles = roleVal ? (rolesInReqs.includes(roleVal) ? [roleVal] : []) : rolesInReqs;
+      for (const roleKey of targetRoles) {
+        const m = prefScoreByRoleAndUser.get(roleKey)!;
+        m.set(preferred, (m.get(preferred) ?? 0) + weight);
+      }
     }
 
-    const suggested = suggestAssignments(requirements, availability, preferenceByRole, prefScoreByUser);
+    const suggested = suggestAssignments(requirements, availability, preferenceByRole, prefScoreByRoleAndUser);
     const suggestedSeen = new Set<string>();
     const suggestedDeduped = suggested.filter((s) => {
       const key = `${s.user_id}|${s.date}`;

@@ -121,8 +121,6 @@ export function ContractorAvailabilityClient() {
       .then((d) => {
         const arr = Array.isArray(d) ? d : [];
         setDepartments(arr);
-        if (arr.length > 0 && !selectedDepartment) setSelectedDepartment(arr[0].id);
-        if (arr.length > 0 && !listDepartment) setListDepartment(arr[0].id);
       })
       .catch(() => setDepartments([]));
   }, []);

@@ -23,28 +23,44 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("contractor_preference_per_user")
-      .select("preferred_user_id, sort_order")
+      .select("id, preferred_user_id, sort_order, department_id, program_id, role")
       .eq("user_id", profile.id)
       .order("sort_order");
 
-    const ids = (data ?? []).map((r: { preferred_user_id: string }) => r.preferred_user_id);
+    const rows = (data ?? []) as { id: string; preferred_user_id: string; sort_order: number; department_id: string | null; program_id: string | null; role: string | null }[];
+    const ids = Array.from(new Set(rows.map((r) => r.preferred_user_id)));
     if (ids.length === 0) {
       return NextResponse.json({ users: [] });
     }
 
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", ids);
-
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
     const nameMap = new Map<string, string>();
     for (const p of profiles ?? []) {
       nameMap.set((p as { id: string }).id, (p as { full_name: string | null }).full_name ?? "Unknown");
     }
 
-    const users = ids.map((user_id) => ({
-      user_id,
-      full_name: nameMap.get(user_id) ?? "Unknown",
+    const { data: deptRows } = await supabase.from("departments").select("id, name").in("id", rows.map((r) => r.department_id).filter(Boolean) as string[]);
+    const deptMap = new Map<string, string>();
+    for (const d of deptRows ?? []) {
+      deptMap.set((d as { id: string }).id, (d as { name: string }).name ?? "");
+    }
+
+    const progIds = rows.map((r) => r.program_id).filter(Boolean) as string[];
+    const { data: progRows } = progIds.length > 0 ? await supabase.from("programs").select("id, name").in("id", progIds) : { data: [] };
+    const progMap = new Map<string, string>();
+    for (const p of progRows ?? []) {
+      progMap.set((p as { id: string }).id, (p as { name: string }).name ?? "");
+    }
+
+    const users = rows.map((r) => ({
+      id: r.id,
+      user_id: r.preferred_user_id,
+      full_name: nameMap.get(r.preferred_user_id) ?? "Unknown",
+      department_id: r.department_id,
+      department_name: r.department_id ? deptMap.get(r.department_id) ?? "" : null,
+      program_id: r.program_id,
+      program_name: r.program_id ? progMap.get(r.program_id) ?? "" : null,
+      role: r.role?.trim() || null,
     }));
 
     return NextResponse.json({ users });
@@ -62,30 +78,51 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const userIds = body.user_ids as unknown;
-    if (!Array.isArray(userIds)) {
-      return NextResponse.json({ error: "user_ids must be an array of UUIDs." }, { status: 400 });
+    let items: unknown[] = [];
+    if (Array.isArray(body.items)) {
+      items = body.items;
+    } else if (Array.isArray(body.user_ids)) {
+      items = body.user_ids.map((id: unknown) => ({ preferred_user_id: id }));
     }
-    const valid = userIds.filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x));
+
+    const valid: { preferred_user_id: string; department_id: string | null; program_id: string | null; role: string | null }[] = [];
+    for (const it of items) {
+      const preferred = typeof it === "object" && it && typeof (it as { preferred_user_id?: unknown }).preferred_user_id === "string"
+        ? (it as { preferred_user_id: string }).preferred_user_id
+        : typeof it === "string"
+          ? it
+          : null;
+      if (!preferred || !/^[0-9a-f-]{36}$/i.test(preferred)) continue;
+      const dept = typeof (it as { department_id?: unknown })?.department_id === "string" && /^[0-9a-f-]{36}$/i.test((it as { department_id: string }).department_id)
+        ? (it as { department_id: string }).department_id
+        : null;
+      const prog = typeof (it as { program_id?: unknown })?.program_id === "string" && /^[0-9a-f-]{36}$/i.test((it as { program_id: string }).program_id)
+        ? (it as { program_id: string }).program_id
+        : null;
+      const role = typeof (it as { role?: unknown })?.role === "string" && (it as { role: string }).role.trim()
+        ? (it as { role: string }).role.trim()
+        : null;
+      valid.push({ preferred_user_id: preferred, department_id: dept, program_id: prog, role });
+    }
 
     const supabase = createAdminClient();
 
-    await supabase
-      .from("contractor_preference_per_user")
-      .delete()
-      .eq("user_id", profile.id);
+    await supabase.from("contractor_preference_per_user").delete().eq("user_id", profile.id);
 
     if (valid.length > 0) {
-      const rows = valid.map((preferred_user_id, i) => ({
+      const rows = valid.map((v, i) => ({
         user_id: profile.id,
-        preferred_user_id,
+        preferred_user_id: v.preferred_user_id,
+        department_id: v.department_id,
+        program_id: v.program_id,
+        role: v.role,
         sort_order: i,
       }));
       const { error } = await supabase.from("contractor_preference_per_user").insert(rows);
       if (error) throw error;
     }
 
-    return NextResponse.json({ ok: true, user_ids: valid });
+    return NextResponse.json({ ok: true });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

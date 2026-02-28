@@ -17,12 +17,14 @@ import { DeletePermissionsSection } from "@/components/DeletePermissionsSection"
 interface Department {
   id: string;
   name: string;
+  sort_order?: number;
 }
 
 interface Program {
   id: string;
   department_id: string;
   name: string;
+  sort_order?: number;
 }
 
 const TABS = [
@@ -127,6 +129,70 @@ function GuestInvoiceSetup() {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  const moveDepartment = async (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= departments.length) return;
+    const arr = [...departments];
+    [arr[index], arr[newIndex]] = [arr[newIndex], arr[index]];
+    const ids = arr.map((d) => d.id);
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/departments/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        setDepartments(arr);
+        setMessage({ type: "success", text: "Order updated." });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMessage({ type: "error", text: (data as { error?: string }).error || "Failed to reorder." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Connection error." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const moveProgram = async (deptId: string, index: number, direction: "up" | "down") => {
+    const deptPrograms = programs.filter((p) => p.department_id === deptId);
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= deptPrograms.length) return;
+    const arr = [...deptPrograms];
+    [arr[index], arr[newIndex]] = [arr[newIndex], arr[index]];
+    const ids = arr.map((p) => p.id);
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/programs/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ department_id: deptId, ids }),
+      });
+      if (res.ok) {
+        setPrograms((prev) => {
+          const result: Program[] = [];
+          for (const d of departments) {
+            if (d.id === deptId) result.push(...arr);
+            else result.push(...prev.filter((p) => p.department_id === d.id));
+          }
+          return result;
+        });
+        setMessage({ type: "success", text: "Order updated." });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMessage({ type: "error", text: (data as { error?: string }).error || "Failed to reorder." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Connection error." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const addDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -323,6 +389,7 @@ function GuestInvoiceSetup() {
       {/* Departments */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
         <h2 className="mb-4 font-medium text-gray-900 dark:text-white">Departments</h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Use arrows to reorder. Order applies to dropdowns across the app.</p>
         <form onSubmit={addDepartment} className="mb-4 flex gap-2">
           <input
             type="text"
@@ -336,8 +403,8 @@ function GuestInvoiceSetup() {
           </button>
         </form>
         <ul className="space-y-1 text-sm">
-          {departments.map((d) => (
-            <li key={d.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+          {departments.map((d, i) => (
+            <li key={d.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
               {editingDept?.id === d.id ? (
                 <form className="flex flex-1 gap-2" onSubmit={(e) => { e.preventDefault(); const inp = e.currentTarget.querySelector("input"); if (inp) updateDepartment(inp.value); }}>
                   <input type="text" defaultValue={d.name} autoFocus className="flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" onKeyDown={(e) => e.key === "Escape" && setEditingDept(null)} />
@@ -346,8 +413,14 @@ function GuestInvoiceSetup() {
                 </form>
               ) : (
                 <>
-                  <span className="text-gray-800 dark:text-gray-200">{d.name}</span>
-                  <div className="flex gap-1">
+                  <span className="flex-1 text-gray-800 dark:text-gray-200">{d.name}</span>
+                  <div className="flex items-center gap-0.5">
+                    <button type="button" onClick={() => moveDepartment(i, "up")} disabled={loading || i === 0} className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200 disabled:opacity-40" title="Move up">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    <button type="button" onClick={() => moveDepartment(i, "down")} disabled={loading || i === departments.length - 1} className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200 disabled:opacity-40" title="Move down">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
                     <button type="button" onClick={() => setEditingDept(d)} className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200" title="Edit">
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
@@ -365,6 +438,7 @@ function GuestInvoiceSetup() {
       {/* Programs */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
         <h2 className="mb-4 font-medium text-gray-900 dark:text-white">Programs</h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Use arrows to reorder. Order applies to dropdowns across the app.</p>
         <form onSubmit={addProgram} className="mb-4 flex flex-wrap gap-2">
           <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
             <option value="">Select department</option>
@@ -376,32 +450,41 @@ function GuestInvoiceSetup() {
           </button>
         </form>
         <ul className="space-y-1 text-sm">
-          {programs.map((p) => (
-            <li key={p.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-              {editingProg?.id === p.id ? (
-                <form className="flex flex-1 flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); const inp = e.currentTarget.querySelector<HTMLInputElement>("input[name=progName]"); const sel = e.currentTarget.querySelector<HTMLSelectElement>("select[name=progDept]"); if (inp && sel) updateProgram(inp.value, sel.value); }}>
-                  <select name="progDept" defaultValue={p.department_id} className="rounded border border-gray-300 bg-white px-2 py-1 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-                    {departments.map((d) => (<option key={d.id} value={d.id}>{d.name}</option>))}
-                  </select>
-                  <input name="progName" type="text" defaultValue={p.name} autoFocus className="min-w-[120px] flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" onKeyDown={(e) => e.key === "Escape" && setEditingProg(null)} />
-                  <button type="submit" className="rounded bg-blue-600 px-2 py-1 text-sm text-white">Save</button>
-                  <button type="button" onClick={() => setEditingProg(null)} className="rounded bg-gray-200 px-2 py-1 text-sm text-gray-700 dark:bg-gray-600 dark:text-gray-200">Cancel</button>
-                </form>
-              ) : (
-                <>
-                  <span className="text-gray-800 dark:text-gray-200">{p.name} <span className="text-gray-400">({departments.find((d) => d.id === p.department_id)?.name ?? "—"})</span></span>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => setEditingProg(p)} className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200" title="Edit">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                    </button>
-                    <button type="button" onClick={() => setDeleteConfirm({ type: "prog", id: p.id })} className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-300" title="Delete">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
+          {departments.map((dept) => {
+            const deptPrograms = programs.filter((p) => p.department_id === dept.id);
+            return deptPrograms.map((p, progIdx) => (
+              <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+                {editingProg?.id === p.id ? (
+                  <form className="flex flex-1 flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); const inp = e.currentTarget.querySelector<HTMLInputElement>("input[name=progName]"); const sel = e.currentTarget.querySelector<HTMLSelectElement>("select[name=progDept]"); if (inp && sel) updateProgram(inp.value, sel.value); }}>
+                    <select name="progDept" defaultValue={p.department_id} className="rounded border border-gray-300 bg-white px-2 py-1 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                      {departments.map((d) => (<option key={d.id} value={d.id}>{d.name}</option>))}
+                    </select>
+                    <input name="progName" type="text" defaultValue={p.name} autoFocus className="min-w-[120px] flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" onKeyDown={(e) => e.key === "Escape" && setEditingProg(null)} />
+                    <button type="submit" className="rounded bg-blue-600 px-2 py-1 text-sm text-white">Save</button>
+                    <button type="button" onClick={() => setEditingProg(null)} className="rounded bg-gray-200 px-2 py-1 text-sm text-gray-700 dark:bg-gray-600 dark:text-gray-200">Cancel</button>
+                  </form>
+                ) : (
+                  <>
+                    <span className="flex-1 text-gray-800 dark:text-gray-200">{p.name} <span className="text-gray-400">({dept.name})</span></span>
+                    <div className="flex items-center gap-0.5">
+                      <button type="button" onClick={() => moveProgram(dept.id, progIdx, "up")} disabled={loading || progIdx === 0} className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200 disabled:opacity-40" title="Move up">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                      </button>
+                      <button type="button" onClick={() => moveProgram(dept.id, progIdx, "down")} disabled={loading || progIdx === deptPrograms.length - 1} className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200 disabled:opacity-40" title="Move down">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      <button type="button" onClick={() => setEditingProg(p)} className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200" title="Edit">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                      <button type="button" onClick={() => setDeleteConfirm({ type: "prog", id: p.id })} className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-300" title="Delete">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ));
+          })}
         </ul>
       </div>
 

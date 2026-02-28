@@ -9,7 +9,8 @@ export async function GET() {
     const { data, error } = await supabase
       .from("departments")
       .select("*")
-      .order("name");
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
     if (error) throw error;
     return NextResponse.json(data ?? []);
   } catch (e) {

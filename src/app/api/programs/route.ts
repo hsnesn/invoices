@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const departmentId = searchParams.get("department_id");
 
     const supabase = createAdminClient();
-    let query = supabase.from("programs").select("*").order("name");
+    let query = supabase.from("programs").select("*").order("sort_order", { ascending: true }).order("name", { ascending: true });
     if (departmentId) {
       query = query.eq("department_id", departmentId);
     }

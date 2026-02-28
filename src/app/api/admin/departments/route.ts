@@ -8,8 +8,9 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("departments")
-      .select("id, name")
-      .order("name");
+      .select("id, name, sort_order")
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
     if (error) throw error;
     return NextResponse.json(data ?? []);
   } catch (e) {
@@ -33,9 +34,11 @@ export async function POST(request: NextRequest) {
       );
     }
     const supabase = createAdminClient();
+    const { data: maxRow } = await supabase.from("departments").select("sort_order").order("sort_order", { ascending: false }).limit(1).single();
+    const nextOrder = (maxRow as { sort_order?: number } | null)?.sort_order != null ? (maxRow as { sort_order: number }).sort_order + 1 : 0;
     const { data, error } = await supabase
       .from("departments")
-      .insert({ name: name.trim() })
+      .insert({ name: name.trim(), sort_order: nextOrder })
       .select()
       .single();
     if (error) throw error;

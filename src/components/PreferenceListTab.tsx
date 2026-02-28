@@ -2,16 +2,34 @@
 
 import { useState, useEffect } from "react";
 
-type PrefUser = { user_id: string; full_name: string };
+type PrefUser = {
+  id: string;
+  user_id: string;
+  full_name: string;
+  department_id: string | null;
+  department_name: string | null;
+  program_id: string | null;
+  program_name: string | null;
+  role: string | null;
+};
 type UserOption = { id: string; full_name: string };
+type DeptOption = { id: string; name: string };
+type ProgOption = { id: string; name: string; department_id: string };
+type RoleOption = { id: string; value: string };
 
 export function PreferenceListTab() {
   const [users, setUsers] = useState<PrefUser[]>([]);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
+  const [departments, setDepartments] = useState<DeptOption[]>([]);
+  const [programs, setPrograms] = useState<ProgOption[]>([]);
+  const [roles, setRoles] = useState<RoleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [addUserId, setAddUserId] = useState("");
+  const [addDeptId, setAddDeptId] = useState("");
+  const [addProgId, setAddProgId] = useState("");
+  const [addRole, setAddRole] = useState("");
 
   const fetchList = () => {
     fetch("/api/contractor-availability/preference-list-mine")
@@ -32,21 +50,65 @@ export function PreferenceListTab() {
       .catch(() => setAllUsers([]));
   }, []);
 
+  useEffect(() => {
+    fetch("/api/departments")
+      .then((r) => r.json())
+      .then((d) => setDepartments(Array.isArray(d) ? d : []))
+      .catch(() => setDepartments([]));
+  }, []);
+
+  useEffect(() => {
+    if (!addDeptId) {
+      setPrograms([]);
+      setAddProgId("");
+      return;
+    }
+    fetch(`/api/programs?department_id=${addDeptId}`)
+      .then((r) => r.json())
+      .then((d) => setPrograms(Array.isArray(d) ? d : []))
+      .catch(() => setPrograms([]));
+    setAddProgId("");
+  }, [addDeptId]);
+
+  useEffect(() => {
+    fetch("/api/contractor-availability/roles")
+      .then((r) => r.json())
+      .then((d) => setRoles(Array.isArray(d) ? d : []))
+      .catch(() => setRoles([]));
+  }, []);
+
   const addUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addUserId.trim()) return;
-    const newIds = [...users.map((u) => u.user_id), addUserId];
+    const newItem = {
+      preferred_user_id: addUserId,
+      department_id: addDeptId || null,
+      program_id: addProgId || null,
+      role: addRole?.trim() || null,
+    };
+    const newItems = [
+      ...users.map((u) => ({
+        preferred_user_id: u.user_id,
+        department_id: u.department_id,
+        program_id: u.program_id,
+        role: u.role,
+      })),
+      newItem,
+    ];
     setSaving(true);
     setMessage(null);
     try {
       const res = await fetch("/api/contractor-availability/preference-list-mine", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_ids: newIds }),
+        body: JSON.stringify({ items: newItems }),
       });
       const data = await res.json();
       if (res.ok) {
         setAddUserId("");
+        setAddDeptId("");
+        setAddProgId("");
+        setAddRole("");
         setMessage({ type: "success", text: "Added to your preference list." });
         fetchList();
       } else {
@@ -59,15 +121,20 @@ export function PreferenceListTab() {
     }
   };
 
-  const removeUser = async (userId: string) => {
-    const newIds = users.map((u) => u.user_id).filter((id) => id !== userId);
+  const removeUser = async (itemId: string) => {
+    const newItems = users.filter((u) => u.id !== itemId).map((u) => ({
+      preferred_user_id: u.user_id,
+      department_id: u.department_id,
+      program_id: u.program_id,
+      role: u.role,
+    }));
     setSaving(true);
     setMessage(null);
     try {
       const res = await fetch("/api/contractor-availability/preference-list-mine", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_ids: newIds }),
+        body: JSON.stringify({ items: newItems }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -85,15 +152,15 @@ export function PreferenceListTab() {
 
   const moveUp = async (index: number) => {
     if (index <= 0) return;
-    const ids = users.map((u) => u.user_id);
-    [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
+    const items = users.map((u) => ({ preferred_user_id: u.user_id, department_id: u.department_id, program_id: u.program_id, role: u.role }));
+    [items[index - 1], items[index]] = [items[index], items[index - 1]];
     setSaving(true);
     setMessage(null);
     try {
       const res = await fetch("/api/contractor-availability/preference-list-mine", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_ids: ids }),
+        body: JSON.stringify({ items }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -111,15 +178,15 @@ export function PreferenceListTab() {
 
   const moveDown = async (index: number) => {
     if (index >= users.length - 1) return;
-    const ids = users.map((u) => u.user_id);
-    [ids[index], ids[index + 1]] = [ids[index + 1], ids[index]];
+    const items = users.map((u) => ({ preferred_user_id: u.user_id, department_id: u.department_id, program_id: u.program_id, role: u.role }));
+    [items[index], items[index + 1]] = [items[index + 1], items[index]];
     setSaving(true);
     setMessage(null);
     try {
       const res = await fetch("/api/contractor-availability/preference-list-mine", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_ids: ids }),
+        body: JSON.stringify({ items }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -135,8 +202,10 @@ export function PreferenceListTab() {
     }
   };
 
-  const inList = new Set(users.map((u) => u.user_id));
-  const availableUsers = allUsers.filter((u) => !inList.has(u.id));
+  const addCtx = { dept: addDeptId || null, prog: addProgId || null, role: addRole?.trim() || null };
+  const existingKeys = new Set(users.map((u) => `${u.user_id}|${u.department_id}|${u.program_id}|${u.role}`));
+  const addKey = (id: string) => `${id}|${addCtx.dept}|${addCtx.prog}|${addCtx.role}`;
+  const availableUsers = allUsers.filter((u) => !existingKeys.has(addKey(u.id)));
 
   if (loading) {
     return (
@@ -169,19 +238,67 @@ export function PreferenceListTab() {
         </div>
       )}
 
-      <form onSubmit={addUser} className="mb-4 flex flex-wrap gap-2">
-        <select
-          value={addUserId}
-          onChange={(e) => setAddUserId(e.target.value)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white min-w-[200px]"
-        >
-          <option value="">Select person to add</option>
-          {availableUsers.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.full_name}
-            </option>
-          ))}
-        </select>
+      <form onSubmit={addUser} className="mb-4 flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Person</label>
+          <select
+            value={addUserId}
+            onChange={(e) => setAddUserId(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white min-w-[160px]"
+          >
+            <option value="">Select...</option>
+            {availableUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Department</label>
+          <select
+            value={addDeptId}
+            onChange={(e) => setAddDeptId(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white min-w-[120px]"
+          >
+            <option value="">All</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Program</label>
+          <select
+            value={addProgId}
+            onChange={(e) => setAddProgId(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white min-w-[120px]"
+          >
+            <option value="">All</option>
+            {programs.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Role</label>
+          <select
+            value={addRole}
+            onChange={(e) => setAddRole(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white min-w-[100px]"
+          >
+            <option value="">All</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.value}>
+                {r.value}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="submit"
           disabled={saving || !addUserId}
@@ -194,12 +311,18 @@ export function PreferenceListTab() {
       <ul className="space-y-2">
         {users.map((u, i) => (
           <li
-            key={u.user_id}
+            key={u.id}
             className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-800"
           >
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-6 shrink-0">{i + 1}.</span>
               <span className="font-medium text-gray-900 dark:text-white truncate">{u.full_name}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-2 gap-y-0.5">
+                {u.department_name && <span title="Department">Dept: {u.department_name}</span>}
+                {u.program_name && <span title="Program">Prog: {u.program_name}</span>}
+                {u.role && <span title="Role" className="font-medium text-violet-600 dark:text-violet-400">Role: {u.role}</span>}
+                {!u.department_name && !u.program_name && !u.role && <span>All contexts</span>}
+              </span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
@@ -226,7 +349,7 @@ export function PreferenceListTab() {
               </button>
               <button
                 type="button"
-                onClick={() => removeUser(u.user_id)}
+                onClick={() => removeUser(u.id)}
                 disabled={saving}
                 className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 disabled:opacity-50"
               >
