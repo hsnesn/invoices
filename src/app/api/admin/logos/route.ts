@@ -9,7 +9,14 @@ const LOGO_KEYS = ["logo_trt", "logo_trt_world", "logo_email"] as const;
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireAdmin();
+    try {
+      await requireAdmin();
+    } catch (e) {
+      if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") {
+        return NextResponse.json({ error: "Not authorised. Please refresh and log in again." }, { status: 401 });
+      }
+      throw e;
+    }
 
     const body = await request.json();
     const { key, value } = body as { key: string; value: string };

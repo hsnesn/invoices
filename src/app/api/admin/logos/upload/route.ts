@@ -21,7 +21,20 @@ function sanitizeFilename(name: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    let adminProfile;
+    try {
+      adminProfile = await requireAdmin();
+    } catch (e) {
+      if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") {
+        return NextResponse.json(
+          { error: "Not authorised. Please refresh the page and log in again." },
+          { status: 401 }
+        );
+      }
+      throw e;
+    }
+
+    void adminProfile;
 
     const formData = await request.formData();
     const key = formData.get("key") as string | null;

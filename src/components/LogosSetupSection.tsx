@@ -83,19 +83,26 @@ export function LogosSetupSection() {
       if (customName) formData.set("filename", customName);
 
       const res = await fetch("/api/admin/logos/upload", { method: "POST", body: formData });
-      const data = await res.json();
 
-      if (res.ok) {
-        setValues((prev) => ({ ...prev, [key]: data.value }));
+      let data: { ok?: boolean; value?: string; error?: string };
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        data = { error: `Server returned ${res.status}. Please refresh the page and try again.` };
+      }
+
+      if (res.ok && data.ok) {
+        setValues((prev) => ({ ...prev, [key]: data.value ?? prev[key] }));
         setPreviewStamp(Date.now());
-        setMessage({ type: "success", text: "Logo uploaded and applied." });
+        setMessage({ type: "success", text: `Logo uploaded successfully. URL: ${data.value}` });
         window.dispatchEvent(new CustomEvent("logos-updated"));
         router.refresh();
       } else {
-        setMessage({ type: "error", text: data.error || "Upload failed." });
+        setMessage({ type: "error", text: data.error || `Upload failed (HTTP ${res.status}). Please refresh and try again.` });
       }
-    } catch {
-      setMessage({ type: "error", text: "Connection error." });
+    } catch (err) {
+      setMessage({ type: "error", text: `Upload error: ${(err as Error).message}. Please refresh the page.` });
     } finally {
       setUploading(null);
     }
