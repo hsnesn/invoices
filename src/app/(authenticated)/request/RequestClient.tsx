@@ -8,6 +8,7 @@ type Profile = { id: string; full_name: string | null; role: string };
 type RoleItem = { id: string; value: string; sort_order: number };
 type ByUserItem = { userId: string; name: string; email: string; role: string; dates: string[] };
 type ReqItem = { date: string; role: string; count_needed: number };
+type RecurringItem = { id: string; day_of_week: number; role: string; count_needed: number; dayLabel?: string };
 
 function getDaysInMonth(year: number, month: number): Date[] {
   const start = new Date(year, month - 1, 1);
@@ -38,9 +39,17 @@ export function RequestClient() {
   const [aiLoading, setAiLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [recurring, setRecurring] = useState<RecurringItem[]>([]);
+  const [recurringSaving, setRecurringSaving] = useState(false);
+  const [applyRecurringLoading, setApplyRecurringLoading] = useState(false);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [programs, setPrograms] = useState<{ id: string; name: string; department_id: string }[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [selectedProgram, setSelectedProgram] = useState("");
 
   /** Only admin and operations can run AI suggest. Manager can only enter demand. */
   const canRunAiSuggest = profile?.role === "admin" || profile?.role === "operations";
+  const canManage = profile?.role === "admin" || profile?.role === "operations" || profile?.role === "manager";
 
   const [y, m] = month.split("-").map(Number);
   const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
@@ -53,6 +62,30 @@ export function RequestClient() {
   }, []);
 
   useEffect(() => {
+    fetch("/api/departments")
+      .then((r) => r.json())
+      .then((d) => {
+        const arr = Array.isArray(d) ? d : [];
+        setDepartments(arr);
+        if (arr.length > 0 && !selectedDepartment) setSelectedDepartment(arr[0].id);
+      })
+      .catch(() => setDepartments([]));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDepartment) {
+      setPrograms([]);
+      setSelectedProgram("");
+      return;
+    }
+    fetch(`/api/programs?department_id=${selectedDepartment}`)
+      .then((r) => r.json())
+      .then((d) => setPrograms(Array.isArray(d) ? d : []))
+      .catch(() => setPrograms([]));
+    setSelectedProgram("");
+  }, [selectedDepartment]);
+
+  useEffect(() => {
     fetch("/api/contractor-availability/roles")
       .then((r) => r.json())
       .then((d) => setRoles(Array.isArray(d) ? d : []))
@@ -60,10 +93,18 @@ export function RequestClient() {
   }, []);
 
   useEffect(() => {
+    if (!selectedDepartment) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    const reqParams = new URLSearchParams({ month, department_id: selectedDepartment });
+    if (selectedProgram) reqParams.set("program_id", selectedProgram);
+    const listParams = new URLSearchParams({ month, department_id: selectedDepartment });
+    if (selectedProgram) listParams.set("program_id", selectedProgram);
     Promise.all([
-      fetch(`/api/contractor-availability/requirements?month=${month}`).then((r) => r.json()),
-      fetch(`/api/contractor-availability/list?month=${month}`).then((r) => r.json()),
+      fetch(`/api/contractor-availability/requirements?${reqParams}`).then((r) => r.json()),
+      fetch(`/api/contractor-availability/list?${listParams}`).then((r) => r.json()),
     ])
       .then(([reqData, listData]) => {
         const byDate: Record<string, Record<string, number>> = {};
@@ -81,20 +122,37 @@ export function RequestClient() {
         setByUser([]);
       })
       .finally(() => setLoading(false));
-  }, [month]);
+  }, [month, selectedDepartment, selectedProgram]);
+
+  useEffect(() => {
+    if (!canManage || !selectedDepartment) return;
+    const params = new URLSearchParams({ department_id: selectedDepartment });
+    if (selectedProgram) params.set("program_id", selectedProgram);
+    fetch(`/api/contractor-availability/recurring-requirements?${params}`)
+      .then((r) => r.json())
+      .then((d) => setRecurring(Array.isArray(d) ? d : []))
+      .catch(() => setRecurring([]));
+  }, [canManage, selectedDepartment, selectedProgram]);
 
   const handleSetRequirement = async (dateStr: string, role: string, count: number) => {
+    if (!selectedDepartment) return;
     setReqSaving(true);
     try {
       if (count <= 0) {
-        await fetch(`/api/contractor-availability/requirements?date=${dateStr}&role=${encodeURIComponent(role)}`, {
-          method: "DELETE",
-        });
+        const params = new URLSearchParams({ date: dateStr, role: encodeURIComponent(role), department_id: selectedDepartment });
+        if (selectedProgram) params.set("program_id", selectedProgram);
+        await fetch(`/api/contractor-availability/requirements?${params}`, { method: "DELETE" });
       } else {
         await fetch("/api/contractor-availability/requirements", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: dateStr, role, count_needed: count }),
+          body: JSON.stringify({
+            date: dateStr,
+            role,
+            count_needed: count,
+            department_id: selectedDepartment,
+            program_id: selectedProgram || undefined,
+          }),
         });
       }
       setReqByDate((prev) => {
@@ -156,6 +214,28 @@ export function RequestClient() {
   return (
     <div className="space-y-4 sm:space-y-6 min-w-0">
       <div className="flex flex-wrap gap-2 items-center min-w-0">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Department <span className="text-red-500">*</span></label>
+        <select
+          value={selectedDepartment}
+          onChange={(e) => setSelectedDepartment(e.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+        >
+          <option value="">Select department...</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Program</label>
+        <select
+          value={selectedProgram}
+          onChange={(e) => setSelectedProgram(e.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+        >
+          <option value="">All programs</option>
+          {programs.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Month</label>
         <select
           value={month}
@@ -202,6 +282,158 @@ export function RequestClient() {
           }`}
         >
           {message.text}
+        </div>
+      )}
+
+      {canManage && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-4 sm:p-6 dark:border-violet-800 dark:bg-violet-950/20 min-w-0 overflow-hidden">
+          <h2 className="mb-2 font-medium text-violet-900 dark:text-violet-100 text-sm sm:text-base">Recurring requirements</h2>
+          <p className="mb-3 text-xs sm:text-sm text-violet-800/80 dark:text-violet-200/80">
+            e.g. &quot;Every Monday 2 Output&quot; – applied when no explicit requirement exists. Use &quot;Apply to month&quot; to generate requirements.
+          </p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            <select
+              id="req-rec-day"
+              className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            >
+              {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => (
+                <option key={d} value={i}>{d}</option>
+              ))}
+            </select>
+            <select
+              id="req-rec-role"
+              className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            >
+              {roles.map((r) => (
+                <option key={r.id} value={r.value}>{r.value}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              id="req-rec-count"
+              min={1}
+              max={99}
+              defaultValue={1}
+              className="w-14 rounded border border-gray-300 px-2 py-1.5 text-sm text-center dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!selectedDepartment) {
+                  setMessage({ type: "error", text: "Please select a department first." });
+                  return;
+                }
+                const dayEl = document.getElementById("req-rec-day") as HTMLSelectElement;
+                const roleEl = document.getElementById("req-rec-role") as HTMLSelectElement;
+                const countEl = document.getElementById("req-rec-count") as HTMLInputElement;
+                if (!dayEl || !roleEl || !countEl) return;
+                const day_of_week = parseInt(dayEl.value, 10);
+                const role = roleEl.value;
+                const count = Math.max(1, Math.min(99, parseInt(countEl.value, 10) || 1));
+                if (!role) return;
+                setRecurringSaving(true);
+                try {
+                  const res = await fetch("/api/contractor-availability/recurring-requirements", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      day_of_week,
+                      role,
+                      count_needed: count,
+                      department_id: selectedDepartment,
+                      program_id: selectedProgram || undefined,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setRecurring((prev) => [...prev.filter((x) => !(x.day_of_week === day_of_week && x.role === role)), { id: data.id, day_of_week, role, count_needed: count, dayLabel: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][day_of_week] }]);
+                    countEl.value = "1";
+                  } else {
+                    setMessage({ type: "error", text: data.error || "Failed to add recurring." });
+                  }
+                } catch {
+                  setMessage({ type: "error", text: "Connection error." });
+                } finally {
+                  setRecurringSaving(false);
+                }
+              }}
+              disabled={recurringSaving || roles.length === 0}
+              className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setApplyRecurringLoading(true);
+                setMessage(null);
+                try {
+                  const res = await fetch("/api/contractor-availability/requirements/apply-recurring", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      month,
+                      department_id: selectedDepartment,
+                      program_id: selectedProgram || undefined,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setMessage({ type: "success", text: `Applied ${data.count ?? 0} requirements from recurring rules.` });
+                    setTimeout(() => setMessage(null), 3000);
+                    const reqParams = new URLSearchParams({ month, department_id: selectedDepartment });
+                    if (selectedProgram) reqParams.set("program_id", selectedProgram);
+                    const r = await fetch(`/api/contractor-availability/requirements?${reqParams}`);
+                    const d = await r.json();
+                    const byDate: Record<string, Record<string, number>> = {};
+                    for (const x of d.requirements ?? []) {
+                      if (!byDate[x.date]) byDate[x.date] = {};
+                      byDate[x.date][x.role] = x.count_needed;
+                    }
+                    setReqByDate(byDate);
+                    setRequirements(d.requirements ?? []);
+                  } else {
+                    setMessage({ type: "error", text: data.error || "Apply failed." });
+                  }
+                } catch {
+                  setMessage({ type: "error", text: "Connection error." });
+                } finally {
+                  setApplyRecurringLoading(false);
+                }
+              }}
+              disabled={applyRecurringLoading}
+              className="rounded-lg border border-violet-500/50 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/30 disabled:opacity-50"
+            >
+              {applyRecurringLoading ? "Applying..." : "Apply to month"}
+            </button>
+          </div>
+          {recurring.length > 0 && (
+            <ul className="space-y-1 text-sm">
+              {recurring.map((r) => (
+                <li key={r.id} className="flex items-center gap-2">
+                  <span className="rounded bg-violet-100 px-2 py-0.5 dark:bg-violet-900/50">
+                    Every {(r.dayLabel ?? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][r.day_of_week])} – {r.role}: {r.count_needed}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setRecurringSaving(true);
+                      try {
+                        const res = await fetch(`/api/contractor-availability/recurring-requirements?id=${r.id}`, { method: "DELETE" });
+                        if (res.ok) setRecurring((prev) => prev.filter((x) => x.id !== r.id));
+                      } finally {
+                        setRecurringSaving(false);
+                      }
+                    }}
+                    disabled={recurringSaving}
+                    className="text-red-600 hover:text-red-700 text-xs dark:text-red-400"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

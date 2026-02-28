@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { getMergedRequirements } from "@/lib/contractor-requirements";
 
 export const dynamic = "force-dynamic";
 
@@ -62,31 +63,36 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const month = (body.month as string) ?? new URL(request.url).searchParams.get("month");
+    const departmentId = body.department_id as string | undefined;
+    const programId = body.program_id as string | undefined;
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return NextResponse.json({ error: "Invalid month. Use YYYY-MM." }, { status: 400 });
+    }
+    if (!departmentId || !/^[0-9a-f-]{36}$/i.test(departmentId)) {
+      return NextResponse.json({ error: "department_id is required." }, { status: 400 });
     }
 
     const [y, m] = month.split("-").map(Number);
     const start = new Date(y, m - 1, 1).toISOString().slice(0, 10);
     const end = new Date(y, m, 0).toISOString().slice(0, 10);
+    const progId = programId && /^[0-9a-f-]{36}$/i.test(programId) ? programId : null;
 
     const supabase = createAdminClient();
 
-    const { data: reqRows } = await supabase
-      .from("contractor_availability_requirements")
-      .select("date, role, count_needed")
-      .gte("date", start)
-      .lte("date", end);
-    const requirements = (reqRows ?? []) as { date: string; role: string; count_needed: number }[];
+    const requirements = await getMergedRequirements(supabase, start, end, departmentId, progId);
     if (requirements.length === 0) {
       return NextResponse.json({ error: "No requirements set for this month. Set daily requirements first." }, { status: 400 });
     }
 
-    const { data: availRows } = await supabase
+    let availQuery = supabase
       .from("output_schedule_availability")
       .select("user_id, date, role")
+      .eq("department_id", departmentId)
       .gte("date", start)
       .lte("date", end);
+    if (progId) availQuery = availQuery.eq("program_id", progId);
+    else availQuery = availQuery.is("program_id", null);
+    const { data: availRows } = await availQuery;
     const availability = (availRows ?? []) as { user_id: string; date: string; role: string | null }[];
 
     const suggested = suggestAssignments(requirements, availability);
@@ -98,12 +104,16 @@ export async function POST(request: NextRequest) {
       return true;
     });
 
-    const { data: existing } = await supabase
+    let existingQuery = supabase
       .from("output_schedule_assignments")
       .select("id, user_id, date")
+      .eq("department_id", departmentId)
       .gte("date", start)
       .lte("date", end)
       .eq("status", "pending");
+    if (progId) existingQuery = existingQuery.eq("program_id", progId);
+    else existingQuery = existingQuery.is("program_id", null);
+    const { data: existing } = await existingQuery;
     const existingIds = (existing ?? []).map((r: { id: string }) => r.id);
     const existingKeys = new Set((existing ?? []).map((r: { user_id: string; date: string }) => `${r.user_id}|${r.date}`));
 
@@ -111,12 +121,16 @@ export async function POST(request: NextRequest) {
       await supabase.from("output_schedule_assignments").delete().in("id", existingIds);
     }
 
-    const { data: confirmed } = await supabase
+    let confirmedQuery = supabase
       .from("output_schedule_assignments")
       .select("user_id, date")
+      .eq("department_id", departmentId)
       .gte("date", start)
       .lte("date", end)
       .eq("status", "confirmed");
+    if (progId) confirmedQuery = confirmedQuery.eq("program_id", progId);
+    else confirmedQuery = confirmedQuery.is("program_id", null);
+    const { data: confirmed } = await confirmedQuery;
     for (const r of confirmed ?? []) {
       existingKeys.add(`${(r as { user_id: string }).user_id}|${(r as { date: string }).date}`);
     }
@@ -127,6 +141,8 @@ export async function POST(request: NextRequest) {
         user_id: s.user_id,
         date: s.date,
         role: s.role,
+        department_id: departmentId,
+        program_id: progId,
         status: "pending",
       }));
       const { error: insErr } = await supabase.from("output_schedule_assignments").insert(rows);

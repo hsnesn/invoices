@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month");
     const userId = searchParams.get("userId");
+    const departmentId = searchParams.get("department_id") || undefined;
+    const programId = searchParams.get("program_id") || undefined;
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return NextResponse.json({ error: "Invalid month. Use YYYY-MM." }, { status: 400 });
@@ -45,10 +47,19 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("output_schedule_assignments")
-      .select("id, user_id, date, role, status")
+      .select("id, user_id, date, role, status, department_id, program_id")
       .gte("date", start)
       .lte("date", end)
       .order("date");
+
+    if (departmentId && /^[0-9a-f-]{36}$/i.test(departmentId)) {
+      query = query.eq("department_id", departmentId);
+      if (programId && /^[0-9a-f-]{36}$/i.test(programId)) {
+        query = query.eq("program_id", programId);
+      } else {
+        query = query.is("program_id", null);
+      }
+    }
 
     const isManager = canManage(profile.role);
     if (!isManager || !userId) {
@@ -80,17 +91,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, month, assignments, user_id: cancelUserId, date: cancelDate } = body as {
+    const { action, month, assignments, user_id: cancelUserId, date: cancelDate, department_id: departmentId, program_id: programId } = body as {
       action?: "approve" | "save" | "cancel";
       month?: string;
       assignments?: { user_id: string; date: string; role?: string }[];
       user_id?: string;
       date?: string;
+      department_id?: string;
+      program_id?: string;
     };
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return NextResponse.json({ error: "Invalid month. Use YYYY-MM." }, { status: 400 });
     }
+    const deptId = departmentId && /^[0-9a-f-]{36}$/i.test(departmentId) ? departmentId : null;
+    const progId = programId && /^[0-9a-f-]{36}$/i.test(programId) ? programId : null;
 
     const [y, m] = month.split("-").map(Number);
     const start = new Date(y, m - 1, 1).toISOString().slice(0, 10);
@@ -109,12 +124,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "approve") {
-      const { data: pending } = await supabase
+      let pendingQuery = supabase
         .from("output_schedule_assignments")
         .select("id, user_id, date, role")
         .gte("date", start)
         .lte("date", end)
         .eq("status", "pending");
+      if (deptId) {
+        pendingQuery = pendingQuery.eq("department_id", deptId);
+        if (progId) pendingQuery = pendingQuery.eq("program_id", progId);
+        else pendingQuery = pendingQuery.is("program_id", null);
+      }
+      const { data: pending } = await pendingQuery;
 
       if (!pending || pending.length === 0) {
         return NextResponse.json({ error: "No pending assignments to approve." }, { status: 400 });
@@ -174,23 +195,35 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "save" && Array.isArray(assignments)) {
-      const { data: existing } = await supabase
+      let existingQuery = supabase
         .from("output_schedule_assignments")
         .select("id")
         .gte("date", start)
         .lte("date", end)
         .eq("status", "pending");
+      if (deptId) {
+        existingQuery = existingQuery.eq("department_id", deptId);
+        if (progId) existingQuery = existingQuery.eq("program_id", progId);
+        else existingQuery = existingQuery.is("program_id", null);
+      }
+      const { data: existing } = await existingQuery;
       const existingIds = (existing ?? []).map((r: { id: string }) => r.id);
       if (existingIds.length > 0) {
         await supabase.from("output_schedule_assignments").delete().in("id", existingIds);
       }
 
-      const { data: confirmed } = await supabase
+      let confirmedQuery = supabase
         .from("output_schedule_assignments")
         .select("user_id, date")
         .gte("date", start)
         .lte("date", end)
         .eq("status", "confirmed");
+      if (deptId) {
+        confirmedQuery = confirmedQuery.eq("department_id", deptId);
+        if (progId) confirmedQuery = confirmedQuery.eq("program_id", progId);
+        else confirmedQuery = confirmedQuery.is("program_id", null);
+      }
+      const { data: confirmed } = await confirmedQuery;
       const confirmedKeys = new Set((confirmed ?? []).map((r: { user_id: string; date: string }) => `${r.user_id}|${r.date}`));
 
       const valid = assignments.filter(
@@ -204,11 +237,13 @@ export async function POST(request: NextRequest) {
         seen.add(key);
         return true;
       });
-      if (deduped.length > 0) {
+      if (deduped.length > 0 && deptId) {
         const rows = deduped.map((a) => ({
           user_id: a.user_id,
           date: a.date,
           role: a.role?.trim() || null,
+          department_id: deptId,
+          program_id: progId,
           status: "pending",
         }));
         const { error: insErr } = await supabase.from("output_schedule_assignments").insert(rows);

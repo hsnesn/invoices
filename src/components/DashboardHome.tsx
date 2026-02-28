@@ -29,6 +29,11 @@ type ProducerStats = {
   total_invited: number;
 };
 
+type ContractorAvailabilityStats = {
+  pendingCount: number;
+  slotsShort: number;
+};
+
 interface PageCard {
   title: string;
   description: string;
@@ -261,6 +266,12 @@ export function DashboardHome({ profile }: { profile: Profile }) {
     statsFetcher,
     { revalidateOnFocus: false, dedupingInterval: 2000 }
   );
+  const canManageAvailability = ["admin", "operations", "manager"].includes(profile?.role ?? "");
+  const { data: contractorStats } = useSWR<ContractorAvailabilityStats>(
+    canManageAvailability ? "/api/contractor-availability/dashboard-stats" : null,
+    statsFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 3000 }
+  );
 
   const role = profile?.role ?? "";
   const visiblePages = PAGES.filter((p) => {
@@ -375,6 +386,37 @@ export function DashboardHome({ profile }: { profile: Profile }) {
                 View all →
               </Link>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contractor Availability Widget - admin/operations/manager */}
+      {canManageAvailability && contractorStats && (contractorStats.pendingCount > 0 || contractorStats.slotsShort > 0) && (
+        <div className="mb-8 min-w-0">
+          <h2 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">My Availability (this week)</h2>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 min-w-0">
+            {contractorStats.pendingCount > 0 && (
+              <Link
+                href="/contractor-availability?tab=assignments"
+                className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/30 hover:bg-amber-100/80 dark:hover:bg-amber-950/50 transition-colors"
+              >
+                <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">Assignments pending review</p>
+                <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-200">{contractorStats.pendingCount}</p>
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Review and approve to send confirmations</p>
+                <span className="mt-2 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400">Review →</span>
+              </Link>
+            )}
+            {contractorStats.slotsShort > 0 && (
+              <Link
+                href="/request"
+                className="rounded-xl border border-rose-200/80 bg-rose-50/80 p-4 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/30 hover:bg-rose-100/80 dark:hover:bg-rose-950/50 transition-colors"
+              >
+                <p className="text-xs font-medium uppercase tracking-wider text-rose-600 dark:text-rose-400">Slots short this week</p>
+                <p className="mt-1 text-2xl font-bold text-rose-800 dark:text-rose-200">{contractorStats.slotsShort}</p>
+                <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">More people needed vs requirements</p>
+                <span className="mt-2 inline-block text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">View Request →</span>
+              </Link>
+            )}
           </div>
         </div>
       )}

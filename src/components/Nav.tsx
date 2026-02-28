@@ -9,6 +9,7 @@ import { useLogos } from "@/contexts/LogoContext";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
 import { MessageNotificationSound } from "@/components/MessageNotificationSound";
 import { MessagesNavBadge } from "@/components/MessagesNavBadge";
+import { AssignmentsNavBadge } from "@/components/AssignmentsNavBadge";
 
 export function Nav({ profile }: { profile: Profile }) {
   const router = useRouter();
@@ -48,6 +49,7 @@ export function Nav({ profile }: { profile: Profile }) {
           </button>
         )}
         <NotificationDropdown profile={profile} />
+        <AssignmentsNavBadge profile={profile} />
         <MessagesNavBadge />
         <Link
           href="/help"

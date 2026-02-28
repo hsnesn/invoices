@@ -20,8 +20,13 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const month = (body.month as string) ?? new URL(request.url).searchParams.get("month");
+    const departmentId = body.department_id as string | undefined;
+    const programId = body.program_id as string | undefined;
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return NextResponse.json({ error: "Invalid month. Use YYYY-MM." }, { status: 400 });
+    }
+    if (!departmentId || !/^[0-9a-f-]{36}$/i.test(departmentId)) {
+      return NextResponse.json({ error: "department_id is required." }, { status: 400 });
     }
 
     const [y, m] = month.split("-").map(Number);
@@ -32,11 +37,18 @@ export async function POST(request: NextRequest) {
     const currEnd = new Date(y, m, 0).toISOString().slice(0, 10);
 
     const supabase = createAdminClient();
-    const { data: prevReqs } = await supabase
+    let prevQuery = supabase
       .from("contractor_availability_requirements")
       .select("date, role, count_needed")
+      .eq("department_id", departmentId)
       .gte("date", prevStart)
       .lte("date", prevEnd);
+    if (programId) {
+      prevQuery = prevQuery.eq("program_id", programId);
+    } else {
+      prevQuery = prevQuery.is("program_id", null);
+    }
+    const { data: prevReqs } = await prevQuery;
 
     if (!prevReqs || prevReqs.length === 0) {
       return NextResponse.json({ error: "No requirements in previous month to copy." }, { status: 400 });
@@ -53,7 +65,8 @@ export async function POST(request: NextRequest) {
       dayOffsets.set(sortedPrev[i], i);
     }
 
-    const toInsert: { date: string; role: string; count_needed: number }[] = [];
+    const progId = programId && /^[0-9a-f-]{36}$/i.test(programId) ? programId : null;
+    const toInsert: { date: string; role: string; count_needed: number; department_id: string; program_id: string | null }[] = [];
     for (const r of prevReqs as { date: string; role: string; count_needed: number }[]) {
       const idx = sortedPrev.indexOf(r.date);
       if (idx >= 0 && idx < sortedCurr.length) {
@@ -61,6 +74,8 @@ export async function POST(request: NextRequest) {
           date: sortedCurr[idx],
           role: r.role,
           count_needed: r.count_needed,
+          department_id: departmentId,
+          program_id: progId,
         });
       }
     }
@@ -70,7 +85,7 @@ export async function POST(request: NextRequest) {
         .from("contractor_availability_requirements")
         .upsert(
           toInsert.map((x) => ({ ...x, updated_at: new Date().toISOString() })),
-          { onConflict: "date,role" }
+          { onConflict: "date,role,department_id,program_id" }
         );
       if (error) throw error;
     }
