@@ -3,7 +3,6 @@
 import { useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams } from "next/navigation";
-import { TrtLogo } from "@/components/TrtLogo";
 
 export default function LoginPage() {
   return (
@@ -77,16 +76,13 @@ function LoginPageContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-6 safe-area-pb">
       <div className="w-full max-w-sm space-y-8 rounded-xl border border-slate-700 bg-slate-900/50 p-6 sm:p-8 shadow-xl">
-        <div className="flex items-center gap-3">
-          <TrtLogo size="md" variant="dark" />
-          <div>
+        <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
-            TRT UK Operations Platform
+            Sign in
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             Invite-only access
           </p>
-          </div>
         </div>
 
         {errorParam === "deactivated" && (

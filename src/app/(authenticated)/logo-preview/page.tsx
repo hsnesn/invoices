@@ -9,7 +9,9 @@ import { useLogos } from "@/contexts/LogoContext";
 export default function LogoPreviewPage() {
   const logos = useLogos();
   const items = [
-    { src: logos.logo_trt || "/trt-logo.png", label: "TRT Logo (Nav, Dashboard, Upload overlay)" },
+    { src: logos.logo_trt_light || "/trt-logo-light.png", label: "Logo Light (light theme)" },
+    { src: logos.logo_trt_dark || "/trt-logo-dark.png", label: "Logo Dark (dark theme)" },
+    { src: logos.logo_trt || "/trt-logo.png", label: "TRT Logo (fallback)" },
     { src: logos.logo_trt_world || "/trt-world-logo.png", label: "TRT World Logo (Booking Form PDFs)" },
     { src: logos.logo_email || "/logo.png", label: "Logo (Emails)" },
   ];

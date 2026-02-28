@@ -8,7 +8,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/:path(trt-logo\\.png|trt-world-logo\\.png|logo\\.png)",
+        source: "/:path(trt-logo\\.png|trt-logo-light\\.png|trt-logo-dark\\.png|trt-world-logo\\.png|logo\\.png)",
         headers: [
           { key: "Cache-Control", value: "public, max-age=60, must-revalidate" },
         ],
