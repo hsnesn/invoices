@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { UploadOverlay } from "@/components/UploadOverlay";
 
 const CATEGORIES = [
   { value: "furniture", label: "Furniture" },
@@ -100,7 +101,9 @@ function AttachmentsModal({ requestId, requestTitle, onClose }: { requestId: str
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <>
+      {uploading && <UploadOverlay message="Uploading..." />}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900 shadow-xl">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Attachments: {requestTitle}</h3>
         <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx" onChange={handleUpload} />
@@ -126,6 +129,7 @@ function AttachmentsModal({ requestId, requestTitle, onClose }: { requestId: str
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -283,6 +287,22 @@ export function OfficeRequestsClient() {
       toast.error("Connection error");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async (r: RequestRow) => {
+    if (!confirm(`Delete request "${r.title}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/office-requests/${r.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Request deleted");
+        fetchRequests();
+      } else {
+        const d = await res.json();
+        toast.error(d.error || "Failed");
+      }
+    } catch {
+      toast.error("Connection error");
     }
   };
 
@@ -592,8 +612,13 @@ export function OfficeRequestsClient() {
                           </button>
                         )}
                         {canApprove && r.status === "pending" && (
-                          <button onClick={() => { setApproveModal(r); setRejectionReason(""); }} className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500">
+                          <button onClick={() => { setApproveModal(r); setRejectionReason(""); }} className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500 mr-1">
                             Reject
+                          </button>
+                        )}
+                        {canApprove && (
+                          <button onClick={() => handleDelete(r)} className="rounded bg-gray-600 px-2 py-1 text-xs font-medium text-white hover:bg-gray-500" title="Delete request">
+                            Delete
                           </button>
                         )}
                       </td>

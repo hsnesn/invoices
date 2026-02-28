@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { LogoLoader } from "@/components/LogoLoader";
+import { useTheme } from "@/components/ThemeProvider";
 
 type Profile = { id: string; full_name: string | null; role: string };
 type RoleItem = { id: string; value: string; sort_order: number };
@@ -30,6 +32,7 @@ function toYMD(d: Date): string {
 export function ContractorAvailabilityClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const theme = useTheme()?.theme ?? "dark";
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
@@ -408,8 +411,10 @@ export function ContractorAvailabilityClient() {
   ));
 
   if (loading) {
+    const isDark = theme === "dark";
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/80">
+      <div className="rounded-xl border border-gray-200 bg-white p-8 dark:border-gray-700 dark:bg-gray-900/80 flex flex-col items-center justify-center gap-4">
+        <LogoLoader size="md" variant={isDark ? "light" : "dark"} />
         <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
       </div>
     );

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
+import { UploadOverlay } from "@/components/UploadOverlay";
+import { LogoLoader } from "@/components/LogoLoader";
 
 type ProfileData = {
   id: string;
@@ -148,15 +150,11 @@ export default function ProfilePage() {
   };
 
   if (loading) {
+    const isDark = themeContext?.theme === "dark";
     return (
-      <div className="mx-auto max-w-xl py-12">
-        <div className="flex items-center justify-center gap-2 text-gray-500">
-          <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-            <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" />
-          </svg>
-          Loading...
-        </div>
+      <div className="mx-auto max-w-xl py-12 flex flex-col items-center justify-center gap-4">
+        <LogoLoader size="md" variant={isDark ? "light" : "dark"} />
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
       </div>
     );
   }
@@ -174,7 +172,9 @@ export default function ProfilePage() {
   if (!data) return null;
 
   return (
-    <div className="mx-auto max-w-xl py-8">
+    <>
+      {uploadingAvatar && <UploadOverlay message="Uploading..." />}
+      <div className="mx-auto max-w-xl py-8">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">My Profile</h1>
 
       {error && (
@@ -322,5 +322,6 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
