@@ -517,7 +517,8 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
         const rv = rp[key];
         if (key === "gross_amount") partialParsed[key] = typeof rv === "number" ? rv : parseNumberLike(String(rv));
         else if (key === "invoice_date" || key === "due_date") partialParsed[key] = String(rv).trim();
-        else partialParsed[key] = typeof rv === "string" ? rv.trim() : rv;
+        else if (typeof rv === "string") partialParsed[key] = rv.trim();
+        else if (typeof rv === "number" && Number.isFinite(rv)) partialParsed[key] = rv;
       }
     }
     if (Object.keys(partialParsed).length > 0) {
