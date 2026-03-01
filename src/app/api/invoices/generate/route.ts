@@ -8,6 +8,7 @@ import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance, type GuestInvoiceExpense } from "@/lib/guest-invoice-pdf";
+import { getCompanySettingsAsync, getPayeeAddressLines } from "@/lib/company-settings";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { runGuestContactSearch } from "@/lib/guest-contact-search";
 
@@ -105,6 +106,8 @@ export async function POST(request: NextRequest) {
     const progName = prog?.name ?? "";
 
     const invoiceId = crypto.randomUUID();
+    const company = await getCompanySettingsAsync();
+    const payeeLines = getPayeeAddressLines(company);
     const pdfData = {
       invNo: data.invNo.trim(),
       invoiceDate: data.invoiceDate || new Date().toISOString().slice(0, 10),
@@ -126,6 +129,7 @@ export async function POST(request: NextRequest) {
         ? { accountNumber: data.accountNumber!.trim(), sortCode: data.sortCode!.trim() }
         : { iban: data.iban!.trim(), swiftBic: data.swift_bic!.trim() }),
       bankAddress: data.bankAddress?.trim(),
+      ...(payeeLines.length > 0 ? { payeeAddressLines: payeeLines } : {}),
     };
 
     let pdfBuffer = generateGuestInvoicePdf(pdfData);

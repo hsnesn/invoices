@@ -237,7 +237,12 @@ export async function sendBookingFormEmailsForInvoice(
 
   if (!formData) return { ok: false, error: "Could not load form data" };
 
-  const pdfBuffer = generateBookingFormPdf(formData);
+  const company = await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync());
+  const pdfOptions = {
+    title: company.booking_form_title || undefined,
+    footer: company.booking_form_footer || undefined,
+  };
+  const pdfBuffer = generateBookingFormPdf(formData, undefined, undefined, pdfOptions);
   const idempotencyKey = `manual_${invoiceId}_${Date.now()}`;
   const ctx: ApprovalContext = {
     invoiceId,

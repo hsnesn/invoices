@@ -6,6 +6,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+async function getLinkExpiryDays(supabase: SupabaseClient): Promise<number> {
+  const { data } = await supabase.from("app_settings").select("value").eq("key", "guest_invoice_link_expiry_days").single();
+  if (!data?.value) return 7;
+  const n = Number(data.value);
+  return Number.isFinite(n) && n >= 1 && n <= 90 ? n : 7;
+}
+
 export type ProgramOverride = {
   program_name: string;
   recording_date: string;
@@ -20,8 +27,9 @@ export async function getOrCreateGuestSubmitLink(
   producerGuestId: string,
   programOverride?: ProgramOverride
 ): Promise<string> {
+  const expiryDays = await getLinkExpiryDays(supabase);
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
   if (!programOverride) {
     const { data: existing } = await supabase

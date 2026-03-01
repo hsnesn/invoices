@@ -21,6 +21,12 @@ const COMPANY_KEYS = [
   "invitation_body_intro",
   "invitation_broadcast_channel",
   "invitation_studio_intro",
+  "booking_form_title",
+  "booking_form_footer",
+  "ics_prodid",
+  "ics_summary_prefix",
+  "ics_description_broadcast",
+  "invoice_pdf_payee_address",
 ] as const;
 
 async function requireSetupAccess() {

@@ -20,6 +20,12 @@ export type CompanySettings = {
   invitation_body_intro: string;
   invitation_broadcast_channel: string;
   invitation_studio_intro: string;
+  booking_form_title: string;
+  booking_form_footer: string;
+  ics_prodid: string;
+  ics_summary_prefix: string;
+  ics_description_broadcast: string;
+  invoice_pdf_payee_address: string;
 };
 
 const DEFAULTS: CompanySettings = {
@@ -38,6 +44,12 @@ const DEFAULTS: CompanySettings = {
   invitation_body_intro: "I am writing to invite you to participate in <strong>{program}</strong>, which will be broadcast on {channel} and will focus on {topic}.",
   invitation_broadcast_channel: "TRT World",
   invitation_studio_intro: "The recording will take place in our studio. The address is:",
+  booking_form_title: "TRT WORLD LONDON — FREELANCE SERVICES BOOKING FORM",
+  booking_form_footer: "This booking form confirms the scope of services, delivery dates and fees as agreed between the Client and the Service Provider under the contract for services.",
+  ics_prodid: "-//TRT World//Guest Invitation//EN",
+  ics_summary_prefix: "TRT World:",
+  ics_description_broadcast: "Broadcast on TRT World",
+  invoice_pdf_payee_address: "TRT WORLD UK\n200 Grays Inn Road\nHolborn, London\nWC1X 8XZ",
 };
 
 const KEYS = [
@@ -56,6 +68,12 @@ const KEYS = [
   "invitation_body_intro",
   "invitation_broadcast_channel",
   "invitation_studio_intro",
+  "booking_form_title",
+  "booking_form_footer",
+  "ics_prodid",
+  "ics_summary_prefix",
+  "ics_description_broadcast",
+  "invoice_pdf_payee_address",
 ] as const;
 
 function unwrapJsonb(v: unknown): string {
@@ -85,6 +103,13 @@ export function getBankAccountByCurrency(
   const key = `bank_account_${currency.toLowerCase()}` as keyof CompanySettings;
   const v = (settings as Record<string, string>)[key];
   return (v?.trim() || "") || DEFAULTS[key];
+}
+
+/** Parse payee address (newline-separated) into lines for PDF. */
+export function getPayeeAddressLines(settings: CompanySettings): string[] {
+  const raw = settings.invoice_pdf_payee_address?.trim();
+  if (!raw) return [];
+  return raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
 
 /** Server-side: fetch company settings from DB. Use in API routes. */

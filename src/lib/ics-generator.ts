@@ -1,14 +1,26 @@
 /**
  * Generate .ics calendar file for guest invitation.
  */
-export function generateInviteIcs(params: {
-  programName: string;
-  topic: string;
-  recordDate: string;
-  recordTime: string;
-  studioAddress?: string;
-}): string {
+export type IcsOptions = {
+  prodid?: string;
+  summaryPrefix?: string;
+  descriptionBroadcast?: string;
+};
+
+export function generateInviteIcs(
+  params: {
+    programName: string;
+    topic: string;
+    recordDate: string;
+    recordTime: string;
+    studioAddress?: string;
+  },
+  options?: IcsOptions
+): string {
   const { programName, topic, recordDate, recordTime, studioAddress } = params;
+  const prodid = options?.prodid?.trim() || "-//TRT World//Guest Invitation//EN";
+  const summaryPrefix = options?.summaryPrefix?.trim() || "TRT World:";
+  const broadcast = options?.descriptionBroadcast?.trim() || "Broadcast on TRT World";
   const dateStr = recordDate || "TBD";
   const timeStr = recordTime || "TBD";
 
@@ -27,14 +39,14 @@ export function generateInviteIcs(params: {
     }
   }
 
-  const summary = `TRT World: ${programName}`;
-  const description = `Invitation to participate in ${programName}${topic ? ` (${topic})` : ""}. Broadcast on TRT World.`;
+  const summary = `${summaryPrefix} ${programName}`;
+  const description = `Invitation to participate in ${programName}${topic ? ` (${topic})` : ""}. ${broadcast}.`;
   const location = studioAddress || "";
 
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//TRT World//Guest Invitation//EN",
+    `PRODID:${prodid}`,
     "CALSCALE:GREGORIAN",
     "METHOD:REQUEST",
     "BEGIN:VEVENT",

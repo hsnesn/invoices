@@ -12,6 +12,7 @@ import { createAuditEvent } from "@/lib/audit";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { runGuestContactSearch } from "@/lib/guest-contact-search";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance, type GuestInvoiceExpense } from "@/lib/guest-invoice-pdf";
+import { getCompanySettingsAsync, getPayeeAddressLines } from "@/lib/company-settings";
 import { mergeSupportingFilesIntoPdf } from "@/lib/pdf-merge";
 import { sendPostRecordingWithInvoice, sendInvoiceToProducer, sendGuestSubmissionConfirmation } from "@/lib/post-recording-emails";
 
@@ -219,6 +220,8 @@ export async function POST(request: NextRequest) {
     const expensesTotal = expenses.reduce((s, e) => s + e.amount, 0);
     const totalAmount = amount + expensesTotal;
 
+    const company = await getCompanySettingsAsync();
+    const payeeLines = getPayeeAddressLines(company);
     const pdfData = {
       invNo,
       invoiceDate,
@@ -240,6 +243,7 @@ export async function POST(request: NextRequest) {
         : { iban, swiftBic }),
       bankAddress,
       bandGreen: true,
+      ...(payeeLines.length > 0 ? { payeeAddressLines: payeeLines } : {}),
     };
 
     let pdfBuffer: ArrayBuffer | Uint8Array = generateGuestInvoicePdf(pdfData);

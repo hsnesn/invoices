@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendReminderDueEmail } from "@/lib/email";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 import { validateCronAuth } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
@@ -28,12 +29,17 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
+    const stageEnabled = await isEmailStageEnabled("reminder_due");
+    const sendToAssignee = await isRecipientEnabled("reminder_due", "assignee");
+    const sendToAdmin = await isRecipientEnabled("reminder_due", "admin");
+
     let sent = 0;
     const errors: string[] = [];
 
     for (const r of reminders ?? []) {
       const assigneeId = (r as { assignee_user_id?: string | null }).assignee_user_id;
-      const userIds = assigneeId ? [assigneeId] : [];
+      let userIds: string[] = assigneeId ? [assigneeId] : [];
+      const isAssigneeCase = userIds.length > 0;
       if (userIds.length === 0) {
         const { data: admins } = await supabase
           .from("profiles")
@@ -42,6 +48,9 @@ export async function GET(request: Request) {
           .eq("is_active", true);
         for (const a of admins ?? []) userIds.push((a as { id: string }).id);
       }
+      const shouldSend = stageEnabled && (isAssigneeCase ? sendToAssignee : sendToAdmin);
+      if (!shouldSend) continue;
+
       for (const uid of userIds) {
         const { data: user } = await supabase.auth.admin.getUserById(uid);
         const email = user?.user?.email;

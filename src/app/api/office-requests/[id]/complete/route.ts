@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { sendOfficeRequestCompletedEmail, sendOfficeRequestCompletedToAdminEmail } from "@/lib/email";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,10 @@ export async function POST(
     const email = user?.user?.email;
     const link = `${APP_URL}/office-requests`;
 
-    if (email && email.includes("@")) {
+    const completedEnabled = await isEmailStageEnabled("office_request_completed");
+    const sendToRequester = await isRecipientEnabled("office_request_completed", "requester");
+    const sendToAdmin = await isRecipientEnabled("office_request_completed", "admin");
+    if (email && email.includes("@") && completedEnabled && sendToRequester) {
       await sendOfficeRequestCompletedEmail({
         to: email,
         title: (req as { title: string }).title,
@@ -125,17 +129,19 @@ export async function POST(
       .in("role", ["admin", "operations"])
       .eq("is_active", true);
     const adminIds = (adminProfiles ?? []).map((p) => p.id).filter((uid) => uid !== session.user.id);
-    for (const adminId of adminIds.slice(0, 5)) {
-      const { data: adminUser } = await supabase.auth.admin.getUserById(adminId);
-      const adminEmail = adminUser?.user?.email;
-      if (adminEmail && adminEmail.includes("@")) {
-        await sendOfficeRequestCompletedToAdminEmail({
-          to: adminEmail,
-          title: (req as { title: string }).title,
-          requesterName,
-          completedByName,
-          link,
-        }).catch(() => {});
+    if (completedEnabled && sendToAdmin) {
+      for (const adminId of adminIds.slice(0, 5)) {
+        const { data: adminUser } = await supabase.auth.admin.getUserById(adminId);
+        const adminEmail = adminUser?.user?.email;
+        if (adminEmail && adminEmail.includes("@")) {
+          await sendOfficeRequestCompletedToAdminEmail({
+            to: adminEmail,
+            title: (req as { title: string }).title,
+            requesterName,
+            completedByName,
+            link,
+          }).catch(() => {});
+        }
       }
     }
 

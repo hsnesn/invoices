@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateBookingFormPdf } from "@/lib/booking-form/pdf-generator";
 import { getLogoUrl } from "@/lib/get-logo-url";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 /** ASCII-only filename for Content-Disposition header (RFC 2616) */
 function asciiFilename(name: string): string {
@@ -134,6 +135,11 @@ export async function GET(
       logoPathOrUrl = logoUrl.replace(/^\//, "");
     }
 
+    const company = await getCompanySettingsAsync();
+    const pdfOptions = {
+      title: company.booking_form_title || undefined,
+      footer: company.booking_form_footer || undefined,
+    };
     const pdf = generateBookingFormPdf(
       {
         name: displayName,
@@ -152,7 +158,8 @@ export async function GET(
         approvalDate,
       },
       logoPathOrUrl,
-      logoDataBase64
+      logoDataBase64,
+      pdfOptions
     );
 
     const safeName = asciiFilename(`Booking_Form_${contractorName}_${displayMonth}.pdf`);

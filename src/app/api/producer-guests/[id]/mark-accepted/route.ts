@@ -17,6 +17,7 @@ import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/gues
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { createAuditEvent } from "@/lib/audit";
 import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
+import { getCompanySettingsAsync, getPayeeAddressLines } from "@/lib/company-settings";
 
 const BUCKET = "invoices";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -151,6 +152,8 @@ export async function POST(
           amount,
         }];
 
+        const company = await getCompanySettingsAsync();
+        const payeeLines = getPayeeAddressLines(company);
         const pdfData = {
           invNo: body.invoice_number!.trim(),
           invoiceDate: body.invoice_date || new Date().toISOString().slice(0, 10),
@@ -169,6 +172,7 @@ export async function POST(
           ...(bankType === "international"
             ? { bankType: "international" as const, iban: body.iban!.trim(), swiftBic: body.swift_bic!.trim() }
             : { accountNumber: body.account_number!.trim(), sortCode: body.sort_code!.trim() }),
+          ...(payeeLines.length > 0 ? { payeeAddressLines: payeeLines } : {}),
         };
 
         const pdfBuffer = generateGuestInvoicePdf(pdfData);

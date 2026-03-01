@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 
 const STAGE_LABELS: Record<string, string> = {
   submission: "Invoice submitted",
@@ -21,6 +21,9 @@ const STAGE_LABELS: Record<string, string> = {
   office_request_approved: "Office request — approved",
   office_request_assigned: "Office request — assigned",
   office_request_rejected: "Office request — rejected",
+  office_request_new: "Office request — new (to operations)",
+  office_request_completed: "Office request — completed",
+  reminder_due: "Reminder — due today",
 };
 
 const RECIPIENT_LABELS: Record<string, string> = {
@@ -38,25 +41,47 @@ const RECIPIENT_LABELS: Record<string, string> = {
   requester: "Requester",
 };
 
-const STAGE_RECIPIENTS: { stage: string; recipientTypes: string[] }[] = [
-  { stage: "submission", recipientTypes: ["submitter", "dept_ep"] },
-  { stage: "manager_approved", recipientTypes: ["submitter", "admin", "operations"] },
-  { stage: "manager_rejected", recipientTypes: ["submitter"] },
-  { stage: "ready_for_payment", recipientTypes: ["submitter", "finance"] },
-  { stage: "paid", recipientTypes: ["submitter", "admin", "producers", "guest"] },
-  { stage: "manager_assigned", recipientTypes: ["dept_ep"] },
-  { stage: "resubmitted", recipientTypes: ["dept_ep"] },
-  { stage: "admin_approved", recipientTypes: ["submitter", "finance"] },
-  { stage: "guest_link_sent", recipientTypes: ["guest"] },
-  { stage: "guest_invoice_submitted", recipientTypes: ["guest", "producer"] },
-  { stage: "availability_submitted", recipientTypes: ["operations"] },
-  { stage: "availability_cleared", recipientTypes: ["contractor"] },
-  { stage: "assignment_confirmed", recipientTypes: ["contractor", "operations"] },
-  { stage: "assignment_reminder", recipientTypes: ["contractor"] },
-  { stage: "booking_form_approved", recipientTypes: ["line_manager", "operations"] },
-  { stage: "office_request_approved", recipientTypes: ["requester"] },
-  { stage: "office_request_assigned", recipientTypes: ["assignee"] },
-  { stage: "office_request_rejected", recipientTypes: ["requester"] },
+const STAGE_GROUPS: { group: string; description: string; stages: { stage: string; recipientTypes: string[] }[] }[] = [
+  {
+    group: "Invoice",
+    description: "Workflow emails for invoice submission, approval, payment.",
+    stages: [
+      { stage: "submission", recipientTypes: ["submitter", "dept_ep"] },
+      { stage: "manager_approved", recipientTypes: ["submitter", "admin", "operations"] },
+      { stage: "manager_rejected", recipientTypes: ["submitter"] },
+      { stage: "ready_for_payment", recipientTypes: ["submitter", "finance"] },
+      { stage: "paid", recipientTypes: ["submitter", "admin", "producers", "guest"] },
+      { stage: "manager_assigned", recipientTypes: ["dept_ep"] },
+      { stage: "resubmitted", recipientTypes: ["dept_ep"] },
+      { stage: "admin_approved", recipientTypes: ["submitter", "finance"] },
+    ],
+  },
+  {
+    group: "Guest",
+    description: "Emails for guest invoices and invitations.",
+    stages: [
+      { stage: "guest_link_sent", recipientTypes: ["guest"] },
+      { stage: "guest_invoice_submitted", recipientTypes: ["guest", "producer"] },
+      { stage: "guest_invitation_sent", recipientTypes: ["guest", "producer"] },
+    ],
+  },
+  {
+    group: "Operational",
+    description: "Availability, assignments, booking forms, office requests, reminders.",
+    stages: [
+      { stage: "availability_submitted", recipientTypes: ["operations"] },
+      { stage: "availability_cleared", recipientTypes: ["contractor"] },
+      { stage: "assignment_confirmed", recipientTypes: ["contractor", "operations"] },
+      { stage: "assignment_reminder", recipientTypes: ["contractor"] },
+      { stage: "booking_form_approved", recipientTypes: ["line_manager", "operations"] },
+      { stage: "office_request_approved", recipientTypes: ["requester"] },
+      { stage: "office_request_assigned", recipientTypes: ["assignee"] },
+      { stage: "office_request_rejected", recipientTypes: ["requester"] },
+      { stage: "office_request_new", recipientTypes: ["operations"] },
+      { stage: "office_request_completed", recipientTypes: ["requester", "admin"] },
+      { stage: "reminder_due", recipientTypes: ["assignee", "admin"] },
+    ],
+  },
 ];
 
 const TEMPLATE_LABELS: Record<string, string> = {
@@ -70,6 +95,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
   admin_approved: "Admin approved",
   guest_link_sent: "Guest — Invoice submit link sent",
   guest_invoice_submitted: "Guest — Invoice submitted/created",
+  guest_invitation_sent: "Guest — Invitation sent",
   availability_submitted: "My availability — submitted",
   availability_cleared: "My availability — cancelled/cleared",
   assignment_confirmed: "Assignment — confirmed",
@@ -78,6 +104,9 @@ const TEMPLATE_LABELS: Record<string, string> = {
   office_request_approved: "Office request — approved",
   office_request_assigned: "Office request — assigned",
   office_request_rejected: "Office request — rejected",
+  office_request_new: "Office request — new (to operations)",
+  office_request_completed: "Office request — completed",
+  reminder_due: "Reminder — due today",
 };
 
 const PLACEHOLDERS = [
@@ -265,52 +294,66 @@ export function EmailSetupSection() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900/80">
-              {STAGE_RECIPIENTS.map(({ stage, recipientTypes }) => (
-                <tr key={stage} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap align-top pt-4">
-                    {STAGE_LABELS[stage] ?? stage}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-x-6 gap-y-3">
-                      {recipientTypes.map((rt) => {
-                        const key = `${stage}:${rt}`;
-                        const enabled = recipientMap[key] !== false;
-                        return (
-                          <label
-                            key={key}
-                            className={`flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300 select-none ${
-                              saving ? "opacity-60 cursor-not-allowed" : ""
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={enabled}
-                              onChange={(e) => !saving && toggleRecipient(stage, rt, e.target.checked)}
-                              disabled={saving}
-                              className="sr-only"
-                              aria-label={`${RECIPIENT_LABELS[rt] ?? rt} - ${enabled ? "enabled" : "disabled"}`}
-                            />
-                            <span
-                              role="presentation"
-                              className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 ${
-                                enabled
-                                  ? "border-cyan-600 bg-cyan-600"
-                                  : "border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-800"
-                              }`}
-                            >
-                              {enabled && (
-                                <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </span>
-                            <span>{RECIPIENT_LABELS[rt] ?? rt}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </td>
-                </tr>
+              {STAGE_GROUPS.map(({ group, description, stages: groupStages }) => (
+                <Fragment key={group}>
+                  <tr className="bg-cyan-100/50 dark:bg-cyan-900/30">
+                    <td colSpan={2} className="px-4 py-2 text-sm font-semibold text-cyan-800 dark:text-cyan-200">
+                      {group}
+                    </td>
+                  </tr>
+                  <tr className="bg-cyan-50/50 dark:bg-cyan-900/10">
+                    <td colSpan={2} className="px-4 py-1.5 text-xs text-gray-600 dark:text-gray-400">
+                      {description}
+                    </td>
+                  </tr>
+                  {groupStages.map(({ stage, recipientTypes }) => (
+                    <tr key={stage} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap align-top pt-4">
+                        {STAGE_LABELS[stage] ?? stage}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-x-6 gap-y-3">
+                          {recipientTypes.map((rt) => {
+                            const key = `${stage}:${rt}`;
+                            const enabled = recipientMap[key] !== false;
+                            return (
+                              <label
+                                key={key}
+                                className={`flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300 select-none ${
+                                  saving ? "opacity-60 cursor-not-allowed" : ""
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(e) => !saving && toggleRecipient(stage, rt, e.target.checked)}
+                                  disabled={saving}
+                                  className="sr-only"
+                                  aria-label={`${RECIPIENT_LABELS[rt] ?? rt} - ${enabled ? "enabled" : "disabled"}`}
+                                />
+                                <span
+                                  role="presentation"
+                                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 ${
+                                    enabled
+                                      ? "border-cyan-600 bg-cyan-600"
+                                      : "border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-800"
+                                  }`}
+                                >
+                                  {enabled && (
+                                    <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </span>
+                                <span>{RECIPIENT_LABELS[rt] ?? rt}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>

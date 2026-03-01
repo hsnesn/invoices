@@ -27,10 +27,16 @@ function getLogoDataSync(logoPathOrUrl: string): string | null {
  * Service delivery days, Month, Days, Agreed daily rate, Additional fees, Additional fees reason.
  * @param logoPathOrUrl - Filename (e.g. trt-world-logo.png) in public/, or full URL. If URL, pass logoData instead.
  */
+export type BookingFormPdfOptions = {
+  title?: string;
+  footer?: string;
+};
+
 export function generateBookingFormPdf(
   data: BookingFormData,
   logoPathOrUrl?: string,
-  logoDataBase64?: string
+  logoDataBase64?: string,
+  options?: BookingFormPdfOptions
 ): ArrayBuffer {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pw = 210;
@@ -56,10 +62,11 @@ export function generateBookingFormPdf(
     y += logoH + 12;
   }
 
+  const formTitle = options?.title?.trim() || "TRT WORLD LONDON — FREELANCE SERVICES BOOKING FORM";
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 30, 30);
-  doc.text("TRT WORLD LONDON — FREELANCE SERVICES BOOKING FORM", pw / 2, y, { align: "center" });
+  doc.text(formTitle, pw / 2, y, { align: "center" });
   y += 12;
 
   const fields: [string, string][] = [
@@ -104,13 +111,11 @@ export function generateBookingFormPdf(
 
   y += 10;
 
+  const footerText = options?.footer?.trim() || "This booking form confirms the scope of services, delivery dates and fees as agreed between the Client and the Service Provider under the contract for services.";
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(80, 80, 80);
-  const footerLines = doc.splitTextToSize(
-    "This booking form confirms the scope of services, delivery dates and fees as agreed between the Client and the Service Provider under the contract for services.",
-    cw - 10
-  );
+  const footerLines = doc.splitTextToSize(footerText, cw - 10);
   doc.text(footerLines, pw / 2, y, { align: "center" });
   y += footerLines.length * 5 + 4;
 

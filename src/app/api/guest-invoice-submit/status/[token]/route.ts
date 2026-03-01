@@ -30,7 +30,9 @@ export async function GET(
     }
 
     const createdAt = (statusRow as { created_at?: string }).created_at;
-    const EXPIRY_DAYS = 7;
+    const { data: expiryRow } = await supabase.from("app_settings").select("value").eq("key", "guest_invoice_link_expiry_days").single();
+    const expiryVal = expiryRow?.value;
+    const EXPIRY_DAYS = Number.isFinite(Number(expiryVal)) && Number(expiryVal) >= 1 ? Number(expiryVal) : 7;
     if (createdAt) {
       const created = new Date(createdAt).getTime();
       const expiry = created + EXPIRY_DAYS * 24 * 60 * 60 * 1000;
@@ -41,7 +43,7 @@ export async function GET(
           return NextResponse.redirect(statusPageUrl);
         }
         return NextResponse.json(
-          { error: "This link has expired. Status and download links are valid for 7 days." },
+          { error: `This link has expired. Status and download links are valid for ${EXPIRY_DAYS} days.` },
           { status: 410 }
         );
       }

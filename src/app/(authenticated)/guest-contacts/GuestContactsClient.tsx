@@ -2533,7 +2533,6 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
   const [studioAddress, setStudioAddress] = useState(DEFAULT_STUDIO);
   const [includeProgramDescription, setIncludeProgramDescription] = useState(true);
   const [attachCalendar, setAttachCalendar] = useState(true);
-  const [bccProducer, setBccProducer] = useState(true);
   const [customGreetings, setCustomGreetings] = useState<Record<string, string>>({});
   const [showPreview, setShowPreview] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -2628,7 +2627,6 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
         studio_address: format === "studio" ? studioAddress.trim() : "",
         include_program_description: includeProgramDescription,
         attach_calendar: attachCalendar,
-        bcc_producer: bccProducer,
         greeting_type: greetingType,
         custom_greetings: Object.keys(customGreetings).length ? customGreetings : undefined,
       });
@@ -2795,10 +2793,9 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
                   <input type="checkbox" checked={attachCalendar} onChange={(e) => setAttachCalendar(e.target.checked)} className="h-4 w-4 rounded text-sky-600" />
                   <span className="text-sm">Attach calendar (.ics) with recording date/time</span>
                 </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input type="checkbox" checked={bccProducer} onChange={(e) => setBccProducer(e.target.checked)} className="h-4 w-4 rounded text-sky-600" />
-                  <span className="text-sm">BCC producer (copy of each email)</span>
-                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Producer copy (BCC) is configured in Setup → Email recipients → Guest — Invitation sent.
+                </p>
               </div>
               {savedTemplates.length > 0 && (
                 <div>

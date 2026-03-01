@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { CompanySettings } from "@/lib/company-settings";
 
-const FIELDS: { key: keyof CompanySettings; label: string; placeholder: string; group: "company" | "contacts" | "bank" | "invitations" }[] = [
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isValidEmail(s: string): boolean {
+  return EMAIL_RE.test(String(s).trim());
+}
+
+const FIELDS: { key: keyof CompanySettings; label: string; placeholder: string; group: "company" | "contacts" | "bank" | "invitations" | "booking" | "ics" | "invoice_pdf" }[] = [
   { key: "company_name", label: "Company name", placeholder: "e.g. TRT WORLD (UK)", group: "company" },
   { key: "company_address", label: "Company address", placeholder: "e.g. 200 Grays Inn Road, London, WC1X 8XZ", group: "company" },
   { key: "signature_name", label: "Signature name", placeholder: "e.g. Hasan ESEN", group: "company" },
@@ -19,6 +24,12 @@ const FIELDS: { key: keyof CompanySettings; label: string; placeholder: string; 
   { key: "invitation_body_intro", label: "Invitation body intro", placeholder: "Use {program}, {topic}, {channel} as placeholders", group: "invitations" },
   { key: "invitation_broadcast_channel", label: "Broadcast channel name", placeholder: "TRT World", group: "invitations" },
   { key: "invitation_studio_intro", label: "Studio location intro", placeholder: "The recording will take place in our studio. The address is:", group: "invitations" },
+  { key: "booking_form_title", label: "Booking form title", placeholder: "TRT WORLD LONDON — FREELANCE SERVICES BOOKING FORM", group: "booking" },
+  { key: "booking_form_footer", label: "Booking form footer text", placeholder: "This booking form confirms...", group: "booking" },
+  { key: "ics_prodid", label: "ICS calendar PRODID", placeholder: "-//TRT World//Guest Invitation//EN", group: "ics" },
+  { key: "ics_summary_prefix", label: "ICS summary prefix", placeholder: "TRT World:", group: "ics" },
+  { key: "ics_description_broadcast", label: "ICS description (broadcast)", placeholder: "Broadcast on TRT World", group: "ics" },
+  { key: "invoice_pdf_payee_address", label: "Guest invoice PDF — Payee address (TO)", placeholder: "One line per address line, newline-separated", group: "invoice_pdf" },
 ];
 
 export function CompanyContactsSetupSection() {
@@ -44,7 +55,42 @@ export function CompanyContactsSetupSection() {
 
   useEffect(() => { fetchData(); }, []);
 
+  const isDirty = settings && JSON.stringify(edit) !== JSON.stringify(settings);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  const saveRef = useRef<() => Promise<void>>();
+  saveRef.current = () => save();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        if (isDirty && !saving && saveRef.current) void saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isDirty, saving]);
+
   const save = async (keys?: (keyof CompanySettings)[]) => {
+    const emailKeys: (keyof CompanySettings)[] = ["email_operations", "email_finance", "email_bank_transfer"];
+    const toValidate = keys ?? (Object.keys(edit) as (keyof CompanySettings)[]);
+    for (const k of toValidate) {
+      if (emailKeys.includes(k)) {
+        const v = edit[k];
+        if (v && typeof v === "string" && v.trim() && !isValidEmail(v)) {
+          setMessage({ type: "error", text: `Invalid email format: ${k.replace("email_", "")}` });
+          return;
+        }
+      }
+    }
     setSaving(true);
     setMessage(null);
     const payload = keys ? Object.fromEntries(keys.filter((k) => k in edit).map((k) => [k, edit[k]])) : edit;
@@ -73,6 +119,9 @@ export function CompanyContactsSetupSection() {
   const contactKeys: (keyof CompanySettings)[] = ["email_operations", "email_finance", "email_bank_transfer"];
   const invitationKeys: (keyof CompanySettings)[] = ["invitation_subject_prefix", "invitation_body_intro", "invitation_broadcast_channel", "invitation_studio_intro"];
   const bankKeys: (keyof CompanySettings)[] = ["bank_account_gbp", "bank_account_eur", "bank_account_usd"];
+  const bookingKeys: (keyof CompanySettings)[] = ["booking_form_title", "booking_form_footer"];
+  const icsKeys: (keyof CompanySettings)[] = ["ics_prodid", "ics_summary_prefix", "ics_description_broadcast"];
+  const invoicePdfKeys: (keyof CompanySettings)[] = ["invoice_pdf_payee_address"];
 
   const SaveBtn = ({ onClick }: { onClick: () => void }) => (
     <button
@@ -99,6 +148,9 @@ export function CompanyContactsSetupSection() {
     <div className="space-y-6">
       <p className="text-sm text-gray-600 dark:text-gray-400">
         Company details, contact emails, and bank account numbers used in bank transfer forms, invoices, invitations, and emails. Changes apply immediately across the app.
+        {isDirty && (
+          <span className="ml-2 text-amber-600 dark:text-amber-400">Unsaved changes. Press Ctrl+S (or Cmd+S) to save all.</span>
+        )}
       </p>
 
       {message && (
@@ -197,6 +249,81 @@ export function CompanyContactsSetupSection() {
           ))}
         </div>
         <SaveBtn onClick={() => void save(bankKeys)} />
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
+        <h2 className="mb-4 font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+          Booking form branding
+        </h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Title and footer shown on the freelancer booking form PDF.</p>
+        <div className="space-y-3">
+          {FIELDS.filter((f) => f.group === "booking").map((f) => (
+            <div key={f.key}>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{f.label}</label>
+              {f.key === "booking_form_footer" ? (
+                <textarea
+                  value={edit[f.key] ?? settings?.[f.key] ?? ""}
+                  onChange={(e) => setEdit((p) => ({ ...p, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  rows={2}
+                  className={inputCls}
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={edit[f.key] ?? settings?.[f.key] ?? ""}
+                  onChange={(e) => setEdit((p) => ({ ...p, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  className={inputCls}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <SaveBtn onClick={() => void save(bookingKeys)} />
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
+        <h2 className="mb-4 font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
+          ICS calendar (guest invitations)
+        </h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Branding for .ics calendar attachments sent with guest invitations.</p>
+        <div className="space-y-3">
+          {FIELDS.filter((f) => f.group === "ics").map((f) => (
+            <div key={f.key}>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{f.label}</label>
+              <input
+                type="text"
+                value={edit[f.key] ?? settings?.[f.key] ?? ""}
+                onChange={(e) => setEdit((p) => ({ ...p, [f.key]: e.target.value }))}
+                placeholder={f.placeholder}
+                className={inputCls}
+              />
+            </div>
+          ))}
+        </div>
+        <SaveBtn onClick={() => void save(icsKeys)} />
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
+        <h2 className="mb-4 font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+          Guest invoice PDF — Payee address
+        </h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Address shown in the &quot;TO&quot; field on guest-generated invoices. One line per row.</p>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Payee address (newline-separated lines)</label>
+          <textarea
+            value={edit.invoice_pdf_payee_address ?? settings?.invoice_pdf_payee_address ?? ""}
+            onChange={(e) => setEdit((p) => ({ ...p, invoice_pdf_payee_address: e.target.value }))}
+            placeholder="TRT WORLD UK (newline) 200 Grays Inn Road (newline) Holborn, London..."
+            rows={4}
+            className={inputCls}
+          />
+        </div>
+        <SaveBtn onClick={() => void save(invoicePdfKeys)} />
       </div>
     </div>
   );

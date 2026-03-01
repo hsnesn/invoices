@@ -15,6 +15,7 @@ export const EMAIL_STAGE_KEYS = [
   "admin_approved",
   "guest_link_sent",
   "guest_invoice_submitted",
+  "guest_invitation_sent",
   // Availability, booking, cancel, assign
   "availability_submitted",
   "availability_cleared",
@@ -24,6 +25,9 @@ export const EMAIL_STAGE_KEYS = [
   "office_request_approved",
   "office_request_assigned",
   "office_request_rejected",
+  "office_request_new",
+  "office_request_completed",
+  "reminder_due",
 ] as const;
 
 export type EmailStageKey = (typeof EMAIL_STAGE_KEYS)[number];

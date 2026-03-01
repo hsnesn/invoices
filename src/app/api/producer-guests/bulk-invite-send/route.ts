@@ -113,7 +113,16 @@ export async function POST(request: NextRequest) {
     const studioAddress = body.studio_address?.trim() || "";
     const includeProgramDescription = !!body.include_program_description;
     const attachCalendar = body.attach_calendar !== false;
-    const bccProducer = body.bcc_producer !== false && !!producerEmail;
+    const { isEmailStageEnabled, isRecipientEnabled } = await import("@/lib/email-settings");
+    const stageEnabled = await isEmailStageEnabled("guest_invitation_sent");
+    const sendToGuest = await isRecipientEnabled("guest_invitation_sent", "guest");
+    const sendToProducer = await isRecipientEnabled("guest_invitation_sent", "producer");
+    const bccProducer = sendToProducer && !!producerEmail;
+
+    if (!stageEnabled || !sendToGuest) {
+      return NextResponse.json({ error: "Guest invitation emails are disabled in Setup." }, { status: 403 });
+    }
+
     const valid: GreetingType[] = ["dear", "mr_ms", "mr", "ms", "mrs", "miss"];
     const greetingType = valid.includes(body.greeting_type as GreetingType) ? (body.greeting_type as GreetingType) : "dear";
 
@@ -146,7 +155,15 @@ export async function POST(request: NextRequest) {
 
       const attachments: { filename: string; content: Buffer | string }[] = [];
       if (attachCalendar) {
-        const ics = generateInviteIcs({ programName, topic, recordDate, recordTime, studioAddress: format === "studio" ? studioAddress : undefined });
+        const icsOptions = {
+          prodid: company.ics_prodid || undefined,
+          summaryPrefix: company.ics_summary_prefix || undefined,
+          descriptionBroadcast: company.ics_description_broadcast || undefined,
+        };
+        const ics = generateInviteIcs(
+          { programName, topic, recordDate, recordTime, studioAddress: format === "studio" ? studioAddress : undefined },
+          icsOptions
+        );
         attachments.push({ filename: "invitation.ics", content: ics });
       }
 

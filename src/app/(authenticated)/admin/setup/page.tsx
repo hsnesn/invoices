@@ -33,18 +33,18 @@ interface Program {
 }
 
 const TABS = [
-  { key: "company", label: "Company & contacts", color: "bg-slate-500" },
-  { key: "guest", label: "Guest Invoices", color: "bg-blue-500" },
-  { key: "freelancer", label: "Contractor Invoices", color: "bg-teal-500" },
-  { key: "guest_contacts", label: "Guest Contacts", color: "bg-violet-500" },
-  { key: "contractor_availability", label: "My Availability", color: "bg-sky-500" },
-  { key: "permissions", label: "Delete Permissions", color: "bg-red-500" },
-  { key: "logos", label: "Logos", color: "bg-rose-500" },
-  { key: "email", label: "Email", color: "bg-amber-500" },
-  { key: "salaries", label: "Salaries", color: "bg-indigo-500" },
-  { key: "vendors", label: "Vendors", color: "bg-slate-500" },
-  { key: "announcements", label: "Announcements", color: "bg-amber-500" },
-  { key: "recurring_invoices", label: "Recurring Invoices", color: "bg-emerald-500" },
+  { key: "company", label: "Company & contacts", color: "bg-slate-500", description: "Company details, bank accounts, booking form branding, ICS, PDF payee address." },
+  { key: "guest", label: "Guest Invoices", color: "bg-blue-500", description: "Departments, programs, managers, SLA, guest invoice link expiry, producer colors." },
+  { key: "freelancer", label: "Contractor Invoices", color: "bg-teal-500", description: "Contractor templates, departments, Operations Room, setup options." },
+  { key: "guest_contacts", label: "Guest Contacts", color: "bg-violet-500", description: "Producer scoping, export restrictions, contact settings." },
+  { key: "contractor_availability", label: "My Availability", color: "bg-sky-500", description: "Roles and preference pool for availability." },
+  { key: "permissions", label: "Delete Permissions", color: "bg-red-500", description: "Which roles can delete invoices." },
+  { key: "logos", label: "Logos", color: "bg-rose-500", description: "Company and invoice logos." },
+  { key: "email", label: "Email", color: "bg-amber-500", description: "Recipients, stage toggles, templates for all email types." },
+  { key: "salaries", label: "Salaries", color: "bg-indigo-500", description: "Salary invoice configuration." },
+  { key: "vendors", label: "Vendors", color: "bg-slate-500", description: "Vendor list and settings." },
+  { key: "announcements", label: "Announcements", color: "bg-amber-500", description: "Banner announcements for users." },
+  { key: "recurring_invoices", label: "Recurring Invoices", color: "bg-emerald-500", description: "Recurring invoice rules and templates." },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -73,6 +73,11 @@ export default function AdminSetupPage() {
           </button>
         ))}
       </div>
+
+      {/* Tab description */}
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        {TABS.find((t) => t.key === activeTab)?.description ?? ""}
+      </p>
 
       {/* Tab Content */}
       {activeTab === "company" && <CompanyContactsSetupSection />}
@@ -130,6 +135,9 @@ function GuestInvoiceSetup() {
   const [editingProg, setEditingProg] = useState<Program | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "dept" | "prog"; id: string } | null>(null);
 
+  const [linkExpiryDays, setLinkExpiryDays] = useState(7);
+  const [linkExpirySaving, setLinkExpirySaving] = useState(false);
+
   const refresh = () => {
     fetch("/api/admin/departments")
       .then((r) => r.json())
@@ -146,6 +154,19 @@ function GuestInvoiceSetup() {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/app-settings")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && typeof d === "object" && d.guest_invoice_link_expiry_days != null) {
+          const v = d.guest_invoice_link_expiry_days;
+          const n = typeof v === "number" ? v : Number(v);
+          if (Number.isFinite(n) && n >= 1) setLinkExpiryDays(Math.min(90, n));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const moveDepartment = async (index: number, direction: "up" | "down") => {
     const newIndex = direction === "up" ? index - 1 : index + 1;
@@ -360,8 +381,56 @@ function GuestInvoiceSetup() {
     }
   };
 
+  const saveLinkExpiry = async () => {
+    setLinkExpirySaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/app-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "guest_invoice_link_expiry_days", value: linkExpiryDays }),
+      });
+      if (res.ok) setMessage({ type: "success", text: "Guest invoice link expiry saved." });
+      else setMessage({ type: "error", text: "Failed to save." });
+    } catch {
+      setMessage({ type: "error", text: "Connection error." });
+    } finally {
+      setLinkExpirySaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Guest invoice link expiry */}
+      <div className="rounded-xl border border-gray-200 border-l-4 border-l-blue-500 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
+        <h2 className="mb-1 font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+          Guest invoice link
+        </h2>
+        <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          How many days guest submit links are valid. After expiry, guests cannot access the form or status page.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={1}
+            max={90}
+            value={linkExpiryDays}
+            onChange={(e) => setLinkExpiryDays(Math.max(1, Math.min(90, parseInt(e.target.value, 10) || 7)))}
+            className="w-20 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
+          <span className="text-sm text-gray-600 dark:text-gray-400">days</span>
+          <button
+            type="button"
+            onClick={() => void saveLinkExpiry()}
+            disabled={linkExpirySaving}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          >
+            {linkExpirySaving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+
       {message && (
         <div className={`rounded-lg border p-3 text-sm ${
           message.type === "success"

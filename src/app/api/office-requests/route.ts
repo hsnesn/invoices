@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { sendOfficeRequestNewToOperationsEmail } from "@/lib/email";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
@@ -199,25 +200,29 @@ export async function POST(request: NextRequest) {
     const link = `${appUrl}/office-requests`;
 
     if (requesterEmail && requesterEmail.includes("@")) {
-      let vendorName: string | null = null;
-      if (vendorId) {
-        const { data: v } = await supabase.from("vendors").select("name").eq("id", vendorId).single();
-        vendorName = (v as { name?: string } | null)?.name ?? null;
+      const enabled = await isEmailStageEnabled("office_request_new");
+      const sendToOps = await isRecipientEnabled("office_request_new", "operations");
+      if (enabled && sendToOps) {
+        let vendorName: string | null = null;
+        if (vendorId) {
+          const { data: v } = await supabase.from("vendors").select("name").eq("id", vendorId).single();
+          vendorName = (v as { name?: string } | null)?.name ?? null;
+        }
+        await sendOfficeRequestNewToOperationsEmail({
+          to: operationsEmail,
+          replyTo: requesterEmail,
+          fromName: requesterName,
+          title,
+          description: description || null,
+          category,
+          priority,
+          costEstimate: costEstimate ?? null,
+          vendorName,
+          requesterName,
+          requesterEmail,
+          link,
+        }).catch(() => {});
       }
-      await sendOfficeRequestNewToOperationsEmail({
-        to: operationsEmail,
-        replyTo: requesterEmail,
-        fromName: requesterName,
-        title,
-        description: description || null,
-        category,
-        priority,
-        costEstimate: costEstimate ?? null,
-        vendorName,
-        requesterName,
-        requesterEmail,
-        link,
-      }).catch(() => {});
     }
 
     return NextResponse.json(data);

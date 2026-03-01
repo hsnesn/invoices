@@ -204,8 +204,13 @@ export async function triggerBookingFormWorkflow(
   const BUCKET = "invoices";
 
   try {
+    const company = await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync());
+    const pdfOptions = {
+      title: company.booking_form_title || undefined,
+      footer: company.booking_form_footer || undefined,
+    };
     // 1. Generate form (PDF) first
-    const pdfBuffer = generateBookingFormPdf(formData);
+    const pdfBuffer = generateBookingFormPdf(formData, undefined, undefined, pdfOptions);
 
     // 2. Save form to storage before sending emails
     const filename = `BookingForm_${sanitizeFilenamePart(formData.name)}_${sanitizeFilenamePart(formData.month)}.pdf`;

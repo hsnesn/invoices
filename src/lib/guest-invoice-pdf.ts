@@ -44,6 +44,8 @@ export type GuestInvoicePdfData = {
   swiftBic?: string;
   /** When true, use dark orange band and thin red bottom line (guest-created invoices) */
   bandGreen?: boolean;
+  /** Override payee (TO) address lines. When not provided, uses default. */
+  payeeAddressLines?: string[];
 };
 
 function currencySymbol(c: string): string {
@@ -101,8 +103,9 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   });
   const fromBottom = fromLines.length > 0 ? toStartY + fromLines.length * 5.5 : toStartY;
 
+  const toAddressLines = (data.payeeAddressLines?.filter(Boolean).length ? data.payeeAddressLines! : TO_ADDRESS) as string[];
   let toY = toStartY;
-  TO_ADDRESS.forEach((line) => {
+  toAddressLines.forEach((line) => {
     doc.text(line, toX, toY, { align: "right" });
     toY += 5.5;
   });

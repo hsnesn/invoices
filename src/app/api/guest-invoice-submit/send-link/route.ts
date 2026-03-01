@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPostRecordingPaidRequestInvoice, sendPostRecordingWithInvoice } from "@/lib/post-recording-emails";
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/guest-invoice-pdf";
+import { getCompanySettingsAsync, getPayeeAddressLines } from "@/lib/company-settings";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { checkGuestInvoiceLinkLimit, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
 import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
@@ -218,6 +219,8 @@ export async function POST(request: NextRequest) {
         amount: Math.max(0, paymentAmount),
       }];
 
+      const company = await getCompanySettingsAsync();
+      const payeeLines = getPayeeAddressLines(company);
       const pdfData = {
         invNo,
         invoiceDate,
@@ -235,6 +238,7 @@ export async function POST(request: NextRequest) {
         bankType: bankType as "uk" | "international",
         ...(bankType === "uk" ? { accountNumber: accountNumber!, sortCode: sortCode! } : { iban: iban!, swiftBic: swiftBic! }),
         bankAddress,
+        ...(payeeLines.length > 0 ? { payeeAddressLines: payeeLines } : {}),
       };
 
       const pdfBuffer = generateGuestInvoicePdf(pdfData);

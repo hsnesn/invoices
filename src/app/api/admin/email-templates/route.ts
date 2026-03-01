@@ -14,6 +14,7 @@ const TEMPLATE_KEYS = [
   "admin_approved",
   "guest_link_sent",
   "guest_invoice_submitted",
+  "guest_invitation_sent",
   "availability_submitted",
   "availability_cleared",
   "assignment_confirmed",
@@ -22,6 +23,9 @@ const TEMPLATE_KEYS = [
   "office_request_approved",
   "office_request_assigned",
   "office_request_rejected",
+  "office_request_new",
+  "office_request_completed",
+  "reminder_due",
 ] as const;
 
 const RECIPIENT_TYPES = [
