@@ -57,7 +57,7 @@ export async function sendPostRecordingWithInvoice(params: {
   guestName: string;
   programName: string;
   invoiceNumber: string;
-  pdfBuffer: ArrayBuffer;
+  pdfBuffer: ArrayBuffer | Buffer | Uint8Array;
   producerName: string;
 }) {
   const body = `
@@ -67,6 +67,7 @@ export async function sendPostRecordingWithInvoice(params: {
 <p>Payment will be made as soon as possible. Please keep this invoice for your records.</p>
 <p>Best regards,<br/>${params.producerName}</p>
 `;
+  const buf = params.pdfBuffer instanceof Uint8Array ? Buffer.from(params.pdfBuffer) : params.pdfBuffer;
   return sendEmailWithAttachment({
     to: params.to,
     subject: `Thank you – ${params.programName} – Invoice #${params.invoiceNumber}`,
@@ -74,7 +75,36 @@ export async function sendPostRecordingWithInvoice(params: {
     attachments: [
       {
         filename: `Invoice_${params.invoiceNumber}.pdf`,
-        content: params.pdfBuffer,
+        content: buf,
+      },
+    ],
+  });
+}
+
+/** Send invoice PDF to producer (e.g. when guest generates via link). */
+export async function sendInvoiceToProducer(params: {
+  to: string;
+  producerName: string;
+  guestName: string;
+  programName: string;
+  invoiceNumber: string;
+  pdfBuffer: ArrayBuffer | Buffer | Uint8Array;
+}) {
+  const body = `
+<p>Dear ${params.producerName},</p>
+<p>Please find attached the invoice for <strong>${params.guestName}</strong> (${params.programName}).</p>
+<p>The invoice has been submitted to the system and is pending manager approval.</p>
+<p>Best regards,<br/>${APP_NAME}</p>
+`;
+  const buf = params.pdfBuffer instanceof Uint8Array ? Buffer.from(params.pdfBuffer) : params.pdfBuffer;
+  return sendEmailWithAttachment({
+    to: params.to,
+    subject: `Invoice #${params.invoiceNumber} – ${params.guestName} – ${params.programName}`,
+    html: wrap(body),
+    attachments: [
+      {
+        filename: `Invoice_${params.invoiceNumber}.pdf`,
+        content: buf,
       },
     ],
   });

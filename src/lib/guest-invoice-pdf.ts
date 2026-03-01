@@ -38,6 +38,8 @@ export type GuestInvoicePdfData = {
   accountNumber: string;
   sortCode: string;
   bankAddress?: string;
+  /** When true, use dark green band instead of blue (guest-generated invoices) */
+  bandGreen?: boolean;
 };
 
 function currencySymbol(c: string): string {
@@ -58,12 +60,13 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   const cw = pw - 2 * mx;
   const sym = currencySymbol(data.currency);
 
+  const accentRgb: [number, number, number] = data.bandGreen ? [16, 185, 129] : [30, 64, 120];
   let y = 20;
 
   // Top: INV NO (left) | DATE (right) — larger, accent color
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 64, 120);
+  doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
   doc.text(`INV NO: ${(data.invNo || "").toUpperCase()}`, mx, y);
   doc.text(`DATE: ${(data.invoiceDate || "").toUpperCase()}`, pw - mx, y, { align: "right" });
   y += 16;
@@ -75,7 +78,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   // FROM header (left) and TO header (right) on same line
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 64, 120);
+  doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
   doc.text("FROM", mx, y);
   doc.text("TO", toX, y, { align: "right" });
   const toStartY = y + 8;
@@ -102,14 +105,21 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
 
   y = Math.max(fromBottom, toY + 4) + 10;
 
-  // Department label — only department name (programme stays in table)
-  if (data.departmentName) {
+  // Department / Programme labels
+  if (data.departmentName || data.programmeName) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 64, 120);
-    doc.text(`Department: ${data.departmentName}`, mx, y);
+    doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+    if (data.departmentName) {
+      doc.text(`Department: ${data.departmentName}`, mx, y);
+      y += 6;
+    }
+    if (data.programmeName) {
+      doc.text(`Programme: ${data.programmeName}`, mx, y);
+      y += 6;
+    }
     doc.setTextColor(40, 40, 40);
-    y += 8;
+    y += 4;
   }
 
   // Table: Topic | Date | Amount — Amount right-aligned
@@ -117,7 +127,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   const headers = ["Topic", "Date", "Amount"];
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.setFillColor(30, 64, 120);
+  doc.setFillColor(accentRgb[0], accentRgb[1], accentRgb[2]);
   doc.rect(mx, y, cw, 10, "F");
   doc.setTextColor(255, 255, 255);
   let x = mx;
@@ -152,7 +162,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
     y += 6;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.setTextColor(30, 64, 120);
+    doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
     doc.text("Additional expenses", mx, y);
     doc.setTextColor(40, 40, 40);
     y += 7;
@@ -168,7 +178,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   y += 8;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.setTextColor(30, 64, 120);
+  doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
   doc.text(`TOTAL: ${fmtAmount(data.totalAmount, data.currency)}`, mx, y);
   doc.setTextColor(40, 40, 40);
   y += 20;
@@ -181,7 +191,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(30, 64, 120);
+  doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
   doc.text("PAYMENT DETAILS", mx, y);
   doc.setTextColor(40, 40, 40);
   y += 8;

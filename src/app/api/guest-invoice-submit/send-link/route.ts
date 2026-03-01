@@ -169,6 +169,8 @@ export async function POST(request: NextRequest) {
         currency: paymentCurrency,
         guestName,
         guestEmail: email,
+        departmentName: deptName,
+        programmeName: progName,
         appearances,
         expenses: [],
         totalAmount: Math.max(0, paymentAmount),

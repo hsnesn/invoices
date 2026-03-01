@@ -7,11 +7,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendSubmissionEmail } from "@/lib/email";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
-import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds } from "@/lib/email-settings";
+import { isEmailStageEnabled, isRecipientEnabled, getFilteredEmailsForUserIds, batchGetUserEmails } from "@/lib/email-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { runGuestContactSearch } from "@/lib/guest-contact-search";
-import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/guest-invoice-pdf";
+import { generateGuestInvoicePdf, type GuestInvoiceAppearance, type GuestInvoiceExpense } from "@/lib/guest-invoice-pdf";
+import { mergeSupportingFilesIntoPdf } from "@/lib/pdf-merge";
+import { sendPostRecordingWithInvoice, sendInvoiceToProducer } from "@/lib/post-recording-emails";
 
 const BUCKET = "invoices";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -26,14 +28,65 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const token = (body.token as string)?.trim();
-    const accountName = (body.account_name as string)?.trim();
-    const accountNumber = (body.account_number as string)?.trim();
-    const sortCode = (body.sort_code as string)?.trim();
-    const bankName = (body.bank_name as string)?.trim() || undefined;
-    const bankAddress = (body.bank_address as string)?.trim() || undefined;
-    const paypal = (body.paypal as string)?.trim() || undefined;
+    const contentType = request.headers.get("content-type") ?? "";
+    const isFormData = contentType.includes("multipart/form-data");
+    let token: string;
+    let accountName: string;
+    let accountNumber: string;
+    let sortCode: string;
+    let bankName: string | undefined;
+    let bankAddress: string | undefined;
+    let paypal: string | undefined;
+    let guestAddress: string | undefined;
+    let expenses: GuestInvoiceExpense[] = [];
+    let receiptFiles: { name: string; buf: Buffer }[] = [];
+
+    if (isFormData) {
+      const formData = await request.formData();
+      token = (formData.get("token") as string)?.trim() ?? "";
+      accountName = (formData.get("account_name") as string)?.trim() ?? "";
+      accountNumber = (formData.get("account_number") as string)?.trim() ?? "";
+      sortCode = (formData.get("sort_code") as string)?.trim() ?? "";
+      bankName = (formData.get("bank_name") as string)?.trim() || undefined;
+      bankAddress = (formData.get("bank_address") as string)?.trim() || undefined;
+      paypal = (formData.get("paypal") as string)?.trim() || undefined;
+      guestAddress = (formData.get("guest_address") as string)?.trim() || undefined;
+      const expensesJson = (formData.get("expenses") as string)?.trim();
+      if (expensesJson) {
+        try {
+          const parsed = JSON.parse(expensesJson) as { label?: string; amount?: number }[];
+          expenses = (Array.isArray(parsed) ? parsed : [])
+            .filter((e) => e && typeof e.label === "string" && typeof e.amount === "number" && e.amount > 0)
+            .map((e) => ({ label: String(e.label).trim(), amount: Number(e.amount) }));
+        } catch {
+          expenses = [];
+        }
+      }
+      const files = formData.getAll("receipt_files") as File[];
+      for (const f of files ?? []) {
+        if (!f?.name) continue;
+        const ext = (f.name.split(".").pop() ?? "").toLowerCase();
+        if (["pdf", "jpg", "jpeg", "png"].includes(ext)) {
+          receiptFiles.push({ name: f.name, buf: Buffer.from(await f.arrayBuffer()) });
+        }
+      }
+    } else {
+      const body = await request.json();
+      token = (body.token as string)?.trim() ?? "";
+      accountName = (body.account_name as string)?.trim() ?? "";
+      accountNumber = (body.account_number as string)?.trim() ?? "";
+      sortCode = (body.sort_code as string)?.trim() ?? "";
+      bankName = (body.bank_name as string)?.trim() || undefined;
+      bankAddress = (body.bank_address as string)?.trim() || undefined;
+      paypal = (body.paypal as string)?.trim() || undefined;
+      guestAddress = (body.guest_address as string)?.trim() || undefined;
+      const exp = body.expenses;
+      if (Array.isArray(exp)) {
+        expenses = exp
+          .filter((e: unknown) => e && typeof (e as { label?: unknown }).label === "string" && typeof (e as { amount?: unknown }).amount === "number")
+          .map((e: { label: string; amount: number }) => ({ label: String(e.label).trim(), amount: Number(e.amount) }));
+      }
+    }
 
     if (!token || !UUID_RE.test(token)) {
       return NextResponse.json({ error: "Invalid link" }, { status: 400 });
@@ -112,11 +165,16 @@ export async function POST(request: NextRequest) {
       .eq("id", submitterUserId)
       .single();
     const producerName = producerProfile?.full_name?.trim() || "The Producer";
+    const producerEmailMap = await batchGetUserEmails([submitterUserId]);
+    const producerEmail = producerEmailMap.get(submitterUserId)?.trim();
 
     const { data: prog } = await supabase.from("programs").select("name").eq("id", progId).single();
     const progName = prog?.name ?? g.program_name ?? "";
+    const { data: dept } = await supabase.from("departments").select("name").eq("id", deptId).single();
+    const deptName = dept?.name ?? "";
 
-    const invNo = `GUEST-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    const invNo = `INV-${yearSuffix}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const invoiceDate = new Date().toISOString().slice(0, 10);
 
     const appearances: GuestInvoiceAppearance[] = [{
@@ -126,28 +184,39 @@ export async function POST(request: NextRequest) {
       amount,
     }];
 
+    const expensesTotal = expenses.reduce((s, e) => s + e.amount, 0);
+    const totalAmount = amount + expensesTotal;
+
     const pdfData = {
       invNo,
       invoiceDate,
       currency,
       guestName: g.guest_name,
+      guestAddress: guestAddress || undefined,
       guestEmail: g.email ?? undefined,
+      departmentName: deptName,
+      programmeName: progName,
       appearances,
-      expenses: [],
-      totalAmount: amount,
+      expenses,
+      totalAmount,
       paypal,
       accountName,
       bankName,
       accountNumber,
       sortCode,
       bankAddress,
+      bandGreen: true,
     };
 
-    const pdfBuffer = generateGuestInvoicePdf(pdfData);
+    let pdfBuffer: ArrayBuffer | Uint8Array = generateGuestInvoicePdf(pdfData);
+    if (receiptFiles.length > 0) {
+      pdfBuffer = await mergeSupportingFilesIntoPdf(pdfBuffer as ArrayBuffer, receiptFiles);
+    }
     const invoiceId = crypto.randomUUID();
     const pdfPath = `guest-submit/${t.id}/${invoiceId}-generated.pdf`;
 
-    const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(pdfPath, Buffer.from(pdfBuffer), {
+    const uploadBuf = pdfBuffer instanceof Uint8Array ? pdfBuffer : new Uint8Array(pdfBuffer);
+    const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(pdfPath, Buffer.from(uploadBuf), {
       contentType: "application/pdf",
       upsert: false,
     });
@@ -180,7 +249,7 @@ export async function POST(request: NextRequest) {
       currency,
       storage_path: pdfPath,
       invoice_type: "guest",
-      generated_invoice_data: { appearances },
+      generated_invoice_data: { appearances, expenses },
     });
     if (invError) {
       await supabase.storage.from(BUCKET).remove([pdfPath]);
@@ -240,7 +309,7 @@ export async function POST(request: NextRequest) {
       const submitterEmail = submitterEmails[0];
       if (submitterEmail || managerEmails.length > 0) {
         const deptName = deptId ? ((await supabase.from("departments").select("name").eq("id", deptId).single()).data?.name ?? "—") : "—";
-        const guestDetails = buildGuestEmailDetails(serviceDesc, deptName, progName, { invoice_number: invNo, gross_amount: amount });
+        const guestDetails = buildGuestEmailDetails(serviceDesc, deptName, progName, { invoice_number: invNo, gross_amount: totalAmount });
         await sendSubmissionEmail({
           submitterEmail: submitterEmail ?? "",
           managerEmails,
@@ -250,6 +319,28 @@ export async function POST(request: NextRequest) {
           guestDetails,
         });
       }
+    }
+
+    const pdfBuf = uploadBuf;
+    if (g.email) {
+      sendPostRecordingWithInvoice({
+        to: g.email,
+        guestName: g.guest_name,
+        programName: progName,
+        invoiceNumber: invNo,
+        pdfBuffer: pdfBuf,
+        producerName,
+      }).catch((err) => console.error("[Guest invoice] Send to guest failed:", err));
+    }
+    if (producerEmail) {
+      sendInvoiceToProducer({
+        to: producerEmail,
+        producerName,
+        guestName: g.guest_name,
+        programName: progName,
+        invoiceNumber: invNo,
+        pdfBuffer: pdfBuf,
+      }).catch((err) => console.error("[Guest invoice] Send to producer failed:", err));
     }
 
     return NextResponse.json({

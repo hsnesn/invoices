@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument } from "pdf-lib";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mergeSupportingFilesIntoPdf } from "@/lib/pdf-merge";
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendSubmissionEmail } from "@/lib/email";
@@ -12,54 +12,6 @@ import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { runGuestContactSearch } from "@/lib/guest-contact-search";
 
 const BUCKET = "invoices";
-const A4_WIDTH = 595.28;
-const A4_HEIGHT = 841.89;
-
-async function mergeSupportingFilesIntoPdf(
-  mainPdfBuffer: ArrayBuffer,
-  supportingFiles: { file: File; buf: Buffer }[]
-): Promise<Uint8Array> {
-  const MERGEABLE_EXT = ["pdf", "jpg", "jpeg", "png"];
-  const toMerge = supportingFiles.filter(({ file }) => {
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    return ext && MERGEABLE_EXT.includes(ext);
-  });
-  if (toMerge.length === 0) return new Uint8Array(mainPdfBuffer);
-
-  const mainDoc = await PDFDocument.load(mainPdfBuffer);
-
-  for (const { file, buf } of toMerge) {
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext === "pdf") {
-      try {
-        const srcDoc = await PDFDocument.load(buf);
-        const pages = await mainDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-        pages.forEach((p) => mainDoc.addPage(p));
-      } catch {
-        // Skip invalid PDF
-      }
-    } else if (["jpg", "jpeg", "png"].includes(ext ?? "")) {
-      try {
-        const page = mainDoc.addPage([A4_WIDTH, A4_HEIGHT]);
-        const bytes = new Uint8Array(buf);
-        const image = ext === "png"
-          ? await mainDoc.embedPng(bytes)
-          : await mainDoc.embedJpg(bytes);
-        const dims = image.scaleToFit(A4_WIDTH - 40, A4_HEIGHT - 40);
-        page.drawImage(image, {
-          x: 20 + (A4_WIDTH - 40 - dims.width) / 2,
-          y: A4_HEIGHT - 20 - dims.height,
-          width: dims.width,
-          height: dims.height,
-        });
-      } catch {
-        // Skip invalid image
-      }
-    }
-  }
-
-  return mainDoc.save();
-}
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
@@ -164,12 +116,12 @@ export async function POST(request: NextRequest) {
     let pdfBuffer = generateGuestInvoicePdf(pdfData);
     const supportingFiles = formData.getAll("supporting_files") as File[];
     const ALLOWED_EXT = ["pdf", "docx", "doc", "xlsx", "xls", "jpg", "jpeg", "png"];
-    const supportingWithBuf: { file: File; buf: Buffer }[] = [];
+    const supportingWithBuf: { name: string; buf: Buffer }[] = [];
     for (const f of supportingFiles) {
       if (!f?.name) continue;
       const ext = f.name.split(".").pop()?.toLowerCase();
       if (!ext || !ALLOWED_EXT.includes(ext)) continue;
-      supportingWithBuf.push({ file: f, buf: Buffer.from(await f.arrayBuffer()) });
+      supportingWithBuf.push({ name: f.name, buf: Buffer.from(await f.arrayBuffer()) });
     }
 
     let finalPdfBuffer: ArrayBuffer | Uint8Array = pdfBuffer;
@@ -283,19 +235,20 @@ export async function POST(request: NextRequest) {
     // Add non-mergeable supporting files (docx, xlsx) as separate entries — PDFs and images were merged into main PDF
     const MERGEABLE_EXT = ["pdf", "jpg", "jpeg", "png"];
     let sortOrder = 1;
-    for (const { file: f, buf } of supportingWithBuf) {
-      const ext = f.name.split(".").pop()?.toLowerCase();
+    for (const { name: fileName, buf } of supportingWithBuf) {
+      const ext = fileName.split(".").pop()?.toLowerCase();
       if (ext && MERGEABLE_EXT.includes(ext)) continue; // already merged
-      const sp = `${session.user.id}/${invoiceId}-supporting-${sortOrder}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const sp = `${session.user.id}/${invoiceId}-supporting-${sortOrder}-${fileName.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const contentType = ext === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : ext === "xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/octet-stream";
       const { error: sfErr } = await supabaseAdmin.storage.from(BUCKET).upload(sp, buf, {
-        contentType: f.type || "application/octet-stream",
+        contentType,
         upsert: false,
       });
       if (!sfErr) {
         await supabaseAdmin.from("invoice_files").insert({
           invoice_id: invoiceId,
           storage_path: sp,
-          file_name: f.name,
+          file_name: fileName,
           sort_order: sortOrder,
         });
         sortOrder++;

@@ -31,6 +31,10 @@ export default function GuestInvoiceSubmitPage() {
   const [bankName, setBankName] = useState("");
   const [bankAddress, setBankAddress] = useState("");
   const [paypal, setPaypal] = useState("");
+  const [guestAddress, setGuestAddress] = useState("");
+  const [hasExpenses, setHasExpenses] = useState(false);
+  const [expenses, setExpenses] = useState<{ label: string; amount: string }[]>([{ label: "", amount: "" }]);
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (!token) return;
@@ -80,18 +84,42 @@ export default function GuestInvoiceSubmitPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const validExpenses = hasExpenses
+        ? expenses
+            .filter((e) => e.label.trim() && e.amount.trim() && !Number.isNaN(parseFloat(e.amount)))
+            .map((e) => ({ label: e.label.trim(), amount: parseFloat(e.amount) }))
+        : [];
+      const useFormData = receiptFiles.length > 0;
+      const body = useFormData
+        ? (() => {
+            const fd = new FormData();
+            fd.set("token", token);
+            fd.set("account_name", accountName.trim());
+            fd.set("account_number", accountNumber.trim());
+            fd.set("sort_code", sortCode.trim());
+            if (bankName.trim()) fd.set("bank_name", bankName.trim());
+            if (bankAddress.trim()) fd.set("bank_address", bankAddress.trim());
+            if (paypal.trim()) fd.set("paypal", paypal.trim());
+            if (guestAddress.trim()) fd.set("guest_address", guestAddress.trim());
+            if (validExpenses.length > 0) fd.set("expenses", JSON.stringify(validExpenses));
+            receiptFiles.forEach((f) => fd.append("receipt_files", f));
+            return fd;
+          })()
+        : JSON.stringify({
+            token,
+            account_name: accountName.trim(),
+            account_number: accountNumber.trim(),
+            sort_code: sortCode.trim(),
+            bank_name: bankName.trim() || undefined,
+            bank_address: bankAddress.trim() || undefined,
+            paypal: paypal.trim() || undefined,
+            guest_address: guestAddress.trim() || undefined,
+            expenses: validExpenses.length > 0 ? validExpenses : undefined,
+          });
       const res = await fetch("/api/guest-invoice-submit/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          account_name: accountName.trim(),
-          account_number: accountNumber.trim(),
-          sort_code: sortCode.trim(),
-          bank_name: bankName.trim() || undefined,
-          bank_address: bankAddress.trim() || undefined,
-          paypal: paypal.trim() || undefined,
-        }),
+        headers: useFormData ? {} : { "Content-Type": "application/json" },
+        body: body as BodyInit,
       });
       const d = await res.json();
       if (res.ok) {
@@ -253,6 +281,91 @@ export default function GuestInvoiceSubmitPage() {
                   className={`${inputCls} ${readOnlyCls}`}
                 />
               </div>
+              <hr className="border-gray-200 dark:border-gray-700" />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Address (optional)</label>
+                <input
+                  type="text"
+                  value={guestAddress}
+                  onChange={(e) => setGuestAddress(e.target.value)}
+                  placeholder="Street, city, postcode"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={hasExpenses}
+                    onChange={(e) => {
+                      setHasExpenses(e.target.checked);
+                      if (!e.target.checked) setExpenses([{ label: "", amount: "" }]);
+                    }}
+                  />
+                  Do you have expenses (e.g. train ticket, parking)?
+                </label>
+                {hasExpenses && (
+                  <div className="mt-2 space-y-2">
+                    {expenses.map((exp, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={exp.label}
+                          onChange={(e) => {
+                            const next = [...expenses];
+                            next[i] = { ...next[i], label: e.target.value };
+                            setExpenses(next);
+                          }}
+                          placeholder="e.g. Train ticket"
+                          className={`${inputCls} flex-1`}
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={exp.amount}
+                          onChange={(e) => {
+                            const next = [...expenses];
+                            next[i] = { ...next[i], amount: e.target.value };
+                            setExpenses(next);
+                          }}
+                          placeholder="Amount"
+                          className={`${inputCls} w-24`}
+                        />
+                        {expenses.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setExpenses(expenses.filter((_, j) => j !== i))}
+                            className="text-rose-600 hover:text-rose-700 text-sm"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setExpenses([...expenses, { label: "", amount: "" }])}
+                      className="text-sm text-emerald-600 hover:text-emerald-700"
+                    >
+                      + Add expense
+                    </button>
+                  </div>
+                )}
+              </div>
+              {hasExpenses && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Receipts (optional)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    multiple
+                    onChange={(e) => setReceiptFiles(Array.from(e.target.files ?? []))}
+                    className={inputCls}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG. Receipts will be appended to the invoice.</p>
+                </div>
+              )}
               <hr className="border-gray-200 dark:border-gray-700" />
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Your bank details</p>
               <div>

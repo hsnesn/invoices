@@ -152,6 +152,8 @@ export async function POST(
           currency,
           guestName: (guest as { guest_name: string }).guest_name,
           guestEmail: guestEmail || undefined,
+          departmentName: deptName,
+          programmeName: progName,
           appearances,
           expenses: [],
           totalAmount: amount,
