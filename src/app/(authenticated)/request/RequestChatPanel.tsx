@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { toUserFriendlyError } from "@/lib/error-messages";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -71,6 +72,7 @@ export function RequestChatPanel() {
           messages: chatHistory,
           department_id: dept || undefined,
         }),
+        credentials: "same-origin",
       });
 
       let data: { content?: string; links?: { label: string; url: string }[]; error?: string } = {};
@@ -96,10 +98,13 @@ export function RequestChatPanel() {
         ]);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Connection error. Please try again.";
+      const msg = toUserFriendlyError(err);
+      const hint = msg.toLowerCase().includes("connection") || msg.toLowerCase().includes("fetch")
+        ? " If this persists, the server may be timing out (Vercel Hobby: 10s limit). Try the Requirements tab → Freelancer request instead."
+        : "";
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `Error: ${msg}` },
+        { role: "assistant", content: `Error: ${msg}${hint}` },
       ]);
     } finally {
       setLoading(false);

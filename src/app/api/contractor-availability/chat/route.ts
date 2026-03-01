@@ -57,33 +57,34 @@ async function fetchContext(supabase: ReturnType<typeof createAdminClient>, depa
   const assignmentsByMonth: Record<string, { date: string; role: string; name: string }[]> = {};
   const requirementsByMonth: Record<string, { date: string; role: string; count_needed: number }[]> = {};
 
-  for (const m of months) {
-    let assignQuery = supabase
-      .from("output_schedule_assignments")
-      .select("date, role, user_id")
-      .gte("date", m.start)
-      .lte("date", m.end)
-      .in("status", ["pending", "confirmed"]);
-    if (deptId) {
-      assignQuery = assignQuery.eq("department_id", deptId);
-    }
-    const { data: assignRows } = await assignQuery;
-    assignmentsByMonth[m.key] = (assignRows ?? []).map((a) => ({
+  const [assignResults, reqResults] = await Promise.all([
+    Promise.all(
+      months.map(async (m) => {
+        let q = supabase.from("output_schedule_assignments").select("date, role, user_id").gte("date", m.start).lte("date", m.end).in("status", ["pending", "confirmed"]);
+        if (deptId) q = q.eq("department_id", deptId);
+        const { data } = await q;
+        return { key: m.key, rows: data ?? [] };
+      })
+    ),
+    Promise.all(
+      months.map(async (m) => {
+        let q = supabase.from("contractor_availability_requirements").select("date, role, count_needed").gte("date", m.start).lte("date", m.end);
+        if (deptId) q = q.eq("department_id", deptId);
+        const { data } = await q;
+        return { key: m.key, rows: data ?? [] };
+      })
+    ),
+  ]);
+
+  for (const { key, rows } of assignResults) {
+    assignmentsByMonth[key] = rows.map((a) => ({
       date: (a as { date: string }).date,
       role: (a as { role: string }).role ?? "",
       name: nameMap.get((a as { user_id: string }).user_id) ?? "Unknown",
     }));
-
-    let reqQuery = supabase
-      .from("contractor_availability_requirements")
-      .select("date, role, count_needed")
-      .gte("date", m.start)
-      .lte("date", m.end);
-    if (deptId) {
-      reqQuery = reqQuery.eq("department_id", deptId);
-    }
-    const { data: reqRows } = await reqQuery;
-    requirementsByMonth[m.key] = (reqRows ?? []).map((r) => ({
+  }
+  for (const { key, rows } of reqResults) {
+    requirementsByMonth[key] = rows.map((r) => ({
       date: (r as { date: string }).date,
       role: (r as { role: string }).role,
       count_needed: (r as { count_needed: number }).count_needed,
@@ -159,7 +160,11 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const { context, defaultDeptId } = await fetchContext(supabase, departmentId);
+
+    // For create-request, we only need defaultDeptId (faster). For Q&A we need full context.
+    const { data: depts } = await supabase.from("departments").select("id, name").order("sort_order").order("name");
+    const departments = (depts ?? []) as { id: string; name: string }[];
+    const defaultDeptId = departments[0]?.id ?? null;
     const deptId = departmentId && /^[0-9a-f-]{36}$/i.test(departmentId) ? departmentId : defaultDeptId;
 
     // Try create-request flow when message looks like "I need 4 outputs every day in March"
@@ -227,6 +232,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "OPENAI_API_KEY not configured." }, { status: 503 });
     }
 
+    const { context } = await fetchContext(supabase, departmentId);
     const client = new OpenAI({ apiKey });
     const systemMsg = {
       role: "system" as const,
