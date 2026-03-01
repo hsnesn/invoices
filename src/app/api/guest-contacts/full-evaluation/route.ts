@@ -168,7 +168,7 @@ Keep under 500 words. Use bullet points.`;
       if (res.ok) {
         const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; citations?: string[]; search_results?: { url?: string }[] };
         riskAnalysis = data.choices?.[0]?.message?.content ?? "";
-        sources = data.citations?.length ? data.citations : (data.search_results ?? []).map((s) => s.url).filter(Boolean);
+        sources = data.citations?.length ? data.citations : (data.search_results ?? []).map((s) => s.url).filter((u): u is string => Boolean(u));
       } else {
         riskAnalysis = "Risk analysis unavailable (Perplexity API error).";
       }
