@@ -755,19 +755,14 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   }
 
   const sortCode = parsed.sort_code ? normalizeSortCode(parsed.sort_code) : null;
-  const net = parsed.net_amount ?? 0;
-  const vat = parsed.vat_amount ?? 0;
-  const gross = parsed.gross_amount ?? 0;
-  const amountsOk = gross > 0 && (net === 0 && vat === 0 ? true : amountsConsistent(net, vat, gross));
-  const invoiceNumberEmpty = !parsed.invoice_number?.trim();
-  const needsReview = Boolean(extractionError) || !amountsOk || invoiceNumberEmpty;
 
   const { data: oldExtracted } = await supabase
     .from("invoice_extracted_fields")
-    .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, invoice_date")
+    .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, invoice_date, net_amount, vat_amount, extracted_currency, raw_json")
     .eq("invoice_id", invoiceId)
     .single();
 
+  const oldRaw = (oldExtracted as { raw_json?: Record<string, unknown> } | null)?.raw_json ?? {};
   const toStr = (v: unknown): string => (v != null && v !== "" ? String(v).trim() : "");
   const extFields: [string, string, (p: typeof parsed) => string | null, (o: typeof oldExtracted) => string][] = [
     ["Account Name", "beneficiary_name", (p) => p.beneficiary_name ?? null, (o) => toStr(o?.beneficiary_name)],
@@ -784,24 +779,47 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     if (newVal && oldVal !== newVal) extractionChanges[label] = { from: oldVal || "—", to: newVal };
   }
 
+  // Preserve existing values when extraction returns null (avoids overwriting good data with nulls)
+  const beneficiary_name = parsed.beneficiary_name ?? oldExtracted?.beneficiary_name ?? null;
+  const account_number = parsed.account_number ?? oldExtracted?.account_number ?? null;
+  const sort_code_final = sortCode ?? parsed.sort_code ?? oldExtracted?.sort_code ?? null;
+  const invoice_number = parsed.invoice_number ?? oldExtracted?.invoice_number ?? null;
+  const invoice_date = parsed.invoice_date ?? (oldExtracted?.invoice_date ? String(oldExtracted.invoice_date).slice(0, 10) : null);
+  const net_amount = parsed.net_amount ?? (oldExtracted as { net_amount?: number | null })?.net_amount ?? null;
+  const vat_amount = parsed.vat_amount ?? (oldExtracted as { vat_amount?: number | null })?.vat_amount ?? null;
+  const gross_amount = parsed.gross_amount ?? (oldExtracted?.gross_amount != null ? Number(oldExtracted.gross_amount) : null);
+  const extracted_currency = parsed.currency ?? (oldExtracted as { extracted_currency?: string | null })?.extracted_currency ?? null;
+
+  const net = net_amount ?? 0;
+  const vat = vat_amount ?? 0;
+  const gross = gross_amount ?? 0;
+  const amountsOk = gross > 0 && (net === 0 && vat === 0 ? true : amountsConsistent(net, vat, gross));
+  const invoiceNumberEmpty = !invoice_number?.trim();
+  const needsReview = Boolean(extractionError) || !amountsOk || invoiceNumberEmpty;
+
+  const raw_json = {
+    ...oldRaw,
+    ...(parsed as unknown as Record<string, unknown>),
+    company_name: parsed.company_name ?? oldRaw.company_name ?? null,
+    due_date: parsed.due_date ?? oldRaw.due_date ?? null,
+    extraction_error: extractionError,
+  };
+
   const { error: upsertError } = await supabase.from("invoice_extracted_fields").upsert(
     {
       invoice_id: invoiceId,
-      beneficiary_name: parsed.beneficiary_name ?? null,
-      account_number: parsed.account_number ?? null,
-      sort_code: sortCode ?? parsed.sort_code ?? null,
-      invoice_number: parsed.invoice_number ?? null,
-      invoice_date: parsed.invoice_date ?? null,
-      net_amount: parsed.net_amount ?? null,
-      vat_amount: parsed.vat_amount ?? null,
-      gross_amount: parsed.gross_amount ?? null,
-      extracted_currency: parsed.currency ?? null,
+      beneficiary_name,
+      account_number,
+      sort_code: sort_code_final,
+      invoice_number,
+      invoice_date,
+      net_amount,
+      vat_amount,
+      gross_amount,
+      extracted_currency,
       needs_review: needsReview,
       manager_confirmed: false,
-      raw_json: {
-        ...(parsed as unknown as Record<string, unknown>),
-        extraction_error: extractionError,
-      },
+      raw_json,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "invoice_id" }
