@@ -52,6 +52,11 @@ export type DisplayRow = {
   invNumber: string;
   sortCode: string;
   accountNumber: string;
+  currency: string;
+  iban: string;
+  swiftBic: string;
+  bankName: string;
+  bankAddress: string;
   lineManager: string;
   lineManagerId: string;
   paymentDate: string;

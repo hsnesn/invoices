@@ -17,6 +17,10 @@ export function GuestInvoiceStatusClient({ token }: { token: string }) {
   const [data, setData] = useState<StatusData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requestEmail, setRequestEmail] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/guest-invoice-submit/status/${token}`)
@@ -29,6 +33,27 @@ export function GuestInvoiceStatusClient({ token }: { token: string }) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  async function handleRequestLink(e: React.FormEvent) {
+    e.preventDefault();
+    if (!requestEmail.trim() || !requestEmail.includes("@")) return;
+    setRequesting(true);
+    setRequestError(null);
+    try {
+      const res = await fetch("/api/guest-invoice-submit/request-status-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: requestEmail.trim() }),
+      });
+      const d = await res.json();
+      if (res.ok) setRequestSent(true);
+      else setRequestError(d.error ?? "Failed to send link");
+    } catch {
+      setRequestError("Connection error. Please try again.");
+    } finally {
+      setRequesting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/60 text-center">
@@ -39,8 +64,43 @@ export function GuestInvoiceStatusClient({ token }: { token: string }) {
 
   if (error || !data) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-800 dark:bg-rose-950/30">
-        <p className="font-medium text-rose-800 dark:text-rose-200">{error ?? "Status not found"}</p>
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900/60">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-center dark:border-rose-800 dark:bg-rose-950/30">
+          <p className="font-medium text-rose-800 dark:text-rose-200">{error ?? "Status not found"}</p>
+        </div>
+        {requestSent ? (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center dark:border-emerald-800 dark:bg-emerald-950/30">
+            <p className="font-medium text-emerald-800 dark:text-emerald-200">
+              A new status link has been sent to your email. Please check your inbox.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+              Lost your link? Enter the email address you used when submitting your invoice to receive a new one.
+            </p>
+            <form onSubmit={handleRequestLink} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="email"
+                value={requestEmail}
+                onChange={(e) => setRequestEmail(e.target.value)}
+                placeholder="your@email.com"
+                required
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+              <button
+                type="submit"
+                disabled={requesting}
+                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50 dark:bg-sky-500 dark:hover:bg-sky-600"
+              >
+                {requesting ? "Sending…" : "Send new link"}
+              </button>
+            </form>
+            {requestError && (
+              <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{requestError}</p>
+            )}
+          </div>
+        )}
       </div>
     );
   }

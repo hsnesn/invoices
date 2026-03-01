@@ -321,13 +321,21 @@ export async function POST(request: NextRequest) {
 
     const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const statusToken = crypto.randomUUID();
-    await supabase.from("guest_invoice_status_tokens").insert({
+    const { error: statusTokenErr } = await supabase.from("guest_invoice_status_tokens").insert({
       invoice_id: invoiceId,
       token: statusToken,
       guest_email: g.email || null,
       guest_name: g.guest_name,
       program_name: progName,
     });
+
+    if (statusTokenErr) {
+      console.error("[Guest generate] Status token insert failed:", statusTokenErr);
+      return NextResponse.json(
+        { error: "Could not create status link. Please contact support. (Migration 00102 may need to be applied.)" },
+        { status: 500 }
+      );
+    }
 
     const enabled = await isEmailStageEnabled("submission");
     if (enabled && g.email) {

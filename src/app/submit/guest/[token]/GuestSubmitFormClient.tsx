@@ -464,7 +464,7 @@ export function GuestSubmitFormClient({ token, initialData }: { token: string; i
                 </label>
                 {hasExpenses && (
                   <div className="mt-2 space-y-2">
-                    <div className="flex gap-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                    <div className="flex gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                       <span className="flex-1">Expense reason (e.g. train ticket, parking)</span>
                       <span className="w-24">Amount</span>
                     </div>
@@ -480,7 +480,7 @@ export function GuestSubmitFormClient({ token, initialData }: { token: string; i
                           }}
                           placeholder="e.g. Train ticket"
                           aria-label="Expense reason"
-                          className={`${inputCls} flex-1`}
+                          className={`${inputCls} flex-1 min-w-[200px] text-base py-2.5`}
                         />
                         <input
                           type="number"

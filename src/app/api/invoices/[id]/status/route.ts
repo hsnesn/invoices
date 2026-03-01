@@ -10,6 +10,7 @@ import {
   sendPaidEmail,
   sendResubmittedEmail,
 } from "@/lib/email";
+import { sendGuestPaidEmail } from "@/lib/post-recording-emails";
 import { parseGuestNameFromServiceDesc, parseProducerFromServiceDesc } from "@/lib/guest-utils";
 import { buildGuestEmailDetails } from "@/lib/guest-email-details";
 import { triggerBookingFormWorkflow } from "@/lib/booking-form/approval-trigger";
@@ -529,10 +530,11 @@ export async function POST(
 
         if (await isEmailStageEnabled("paid")) {
           const invIsGuest = (inv as { invoice_type?: string }).invoice_type !== "freelancer";
-          const [sendSubmitter, sendAdmin, sendProducers] = await Promise.all([
+          const [sendSubmitter, sendAdmin, sendProducers, sendGuest] = await Promise.all([
             isRecipientEnabled("paid", "submitter"),
             isRecipientEnabled("paid", "admin"),
             isRecipientEnabled("paid", "producers"),
+            isRecipientEnabled("paid", "guest"),
           ]);
           let paidSubmitterEmail = "";
           let paidAdminEmails: string[] = [];
@@ -551,6 +553,59 @@ export async function POST(
                   const u = (await supabase.auth.admin.getUserById(id)).data?.user;
                   if (u?.email && (await userWantsUpdateEmails(id))) paidAdminEmails.push(u.email);
                 }
+              }
+            }
+            if (sendGuest) {
+              const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+              const paidDateVal = paid_date ?? new Date().toISOString().split("T")[0];
+              const invNo = extracted?.invoice_number ?? "—";
+              const progName = guestDetails?.programme ?? "";
+
+              const { data: statusTokenRow } = await supabase
+                .from("guest_invoice_status_tokens")
+                .select("token, guest_email, guest_name, program_name")
+                .eq("invoice_id", invoiceId)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              let guestEmail = (statusTokenRow as { guest_email?: string } | null)?.guest_email?.trim();
+              let token = (statusTokenRow as { token?: string })?.token;
+              let guestNameVal = (statusTokenRow as { guest_name?: string })?.guest_name ?? guestName ?? "Guest";
+              let progNameVal = (statusTokenRow as { program_name?: string })?.program_name ?? progName;
+
+              if (!guestEmail) {
+                const { data: extRaw } = await supabase
+                  .from("invoice_extracted_fields")
+                  .select("raw_json")
+                  .eq("invoice_id", invoiceId)
+                  .single();
+                const raw = (extRaw as { raw_json?: { guest_email?: string } } | null)?.raw_json;
+                guestEmail = (raw?.guest_email ?? "").trim();
+                if (guestEmail && !token) {
+                  token = crypto.randomUUID();
+                  await supabase.from("guest_invoice_status_tokens").insert({
+                    invoice_id: invoiceId,
+                    token,
+                    guest_email: guestEmail,
+                    guest_name: guestName ?? "Guest",
+                    program_name: progName || null,
+                  });
+                }
+                progNameVal = progName;
+                guestNameVal = guestName ?? "Guest";
+              }
+
+              if (guestEmail && guestEmail.includes("@") && !/trt|trtworld/i.test(guestEmail) && token) {
+                await sendGuestPaidEmail({
+                  to: guestEmail,
+                  guestName: guestNameVal,
+                  programName: progNameVal,
+                  invoiceNumber: invNo,
+                  paidDate: paidDateVal,
+                  paymentReference: payment_reference,
+                  statusLink: `${APP_URL}/submit/status/${token}`,
+                }).catch((err) => console.error("[Paid] Guest email failed:", err));
               }
             }
           } else {

@@ -34,9 +34,16 @@ export async function POST(request: NextRequest) {
     const recordingDate = (body.recording_date as string)?.trim();
     const recordingTopic = (body.recording_topic as string)?.trim();
     const paymentAmount = typeof body.payment_amount === "number" ? body.payment_amount : parseFloat(body.payment_amount) || 0;
-    const paymentCurrency = ((body.payment_currency as string)?.trim() || "GBP") as "GBP" | "EUR" | "USD";
+    const paymentCurrencyRaw = (body.payment_currency as string)?.trim() || "";
+    const paymentCurrency = (paymentCurrencyRaw || "GBP") as "GBP" | "EUR" | "USD";
     const generateInvoice = !!body.generate_invoice_for_guest;
 
+    if (paymentAmount > 0 && !paymentCurrencyRaw) {
+      return NextResponse.json({ error: "Currency is required when payment amount is specified" }, { status: 400 });
+    }
+    if (generateInvoice && !paymentCurrencyRaw) {
+      return NextResponse.json({ error: "Currency is required when generating invoice" }, { status: 400 });
+    }
     if (!guestName || guestName.length < 2) {
       return NextResponse.json({ error: "Guest name is required" }, { status: 400 });
     }
@@ -148,7 +155,7 @@ export async function POST(request: NextRequest) {
           recording_topic: recordingTopic,
           payment_received: true,
           payment_amount: Math.max(0, paymentAmount),
-          payment_currency: paymentCurrency,
+          payment_currency: paymentCurrencyRaw || null,
           accepted: true,
           invited_at: now,
         })
@@ -300,7 +307,7 @@ export async function POST(request: NextRequest) {
             recording_date: recordingDate,
             recording_topic: recordingTopic,
             payment_amount: Math.max(0, paymentAmount),
-            payment_currency: paymentCurrency,
+            payment_currency: paymentCurrencyRaw || null,
           }),
         })
         .eq("id", guestId);
@@ -328,7 +335,7 @@ export async function POST(request: NextRequest) {
             recording_date: recordingDate,
             recording_topic: recordingTopic,
             payment_amount: Math.max(0, paymentAmount),
-            payment_currency: paymentCurrency,
+            payment_currency: paymentCurrencyRaw || undefined,
           })
         : await getOrCreateGuestSubmitLink(supabase, guestId);
     } catch {

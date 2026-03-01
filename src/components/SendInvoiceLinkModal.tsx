@@ -10,6 +10,7 @@ export function SendInvoiceLinkModal({
   initialProgramName = "",
   initialTitle = "",
   initialPhone = "",
+  initialPaymentCurrency,
   programs: programNames,
   onClose,
   onSent,
@@ -19,6 +20,8 @@ export function SendInvoiceLinkModal({
   initialProgramName?: string;
   initialTitle?: string;
   initialPhone?: string;
+  /** Only pass when guest has a previously saved currency. New guests get empty. */
+  initialPaymentCurrency?: string;
   programs: string[];
   onClose: () => void;
   onSent: (message?: string) => void;
@@ -31,7 +34,7 @@ export function SendInvoiceLinkModal({
   const [recordingDate, setRecordingDate] = useState(new Date().toISOString().slice(0, 10));
   const [recordingTopic, setRecordingTopic] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentCurrency, setPaymentCurrency] = useState("GBP");
+  const [paymentCurrency, setPaymentCurrency] = useState(initialPaymentCurrency ?? "");
   const [generateInvoice, setGenerateInvoice] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
@@ -71,6 +74,11 @@ export function SendInvoiceLinkModal({
       toast.error("Title is required");
       return;
     }
+    const amount = parseFloat(paymentAmount) || 0;
+    if (amount > 0 && !paymentCurrency.trim()) {
+      toast.error("Currency is required when payment amount is specified");
+      return;
+    }
     if (generateInvoice) {
       if (!invoiceNumber.trim()) {
         toast.error("Invoice number is required when generating invoice");
@@ -95,8 +103,8 @@ export function SendInvoiceLinkModal({
           program_name: prog,
           recording_date: date,
           recording_topic: topic,
-          payment_amount: parseFloat(paymentAmount) || 0,
-          payment_currency: paymentCurrency,
+          payment_amount: amount,
+          payment_currency: paymentCurrency.trim() || undefined,
           generate_invoice_for_guest: generateInvoice,
           invoice_number: generateInvoice ? invoiceNumber.trim() : undefined,
           invoice_date: generateInvoice ? invoiceDate : undefined,
@@ -173,9 +181,10 @@ export function SendInvoiceLinkModal({
               <label className="mb-1 block text-sm font-medium">Payment amount</label>
               <input type="number" min={0} step={0.01} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className={inputCls} placeholder="0" />
             </div>
-            <div className="w-24">
+            <div className="w-28">
               <label className="mb-1 block text-sm font-medium">Currency</label>
               <select value={paymentCurrency} onChange={(e) => setPaymentCurrency(e.target.value)} className={inputCls}>
+                <option value="">Select currency</option>
                 <option value="GBP">GBP</option>
                 <option value="EUR">EUR</option>
                 <option value="USD">USD</option>

@@ -29,7 +29,7 @@ export type EmailStageRow = {
   enabled: boolean;
 };
 
-export type RecipientType = "submitter" | "dept_ep" | "admin" | "finance" | "operations" | "producers";
+export type RecipientType = "submitter" | "dept_ep" | "admin" | "finance" | "operations" | "producers" | "guest";
 
 /** Check if a recipient type is enabled for a stage. Default true if no row exists or table missing. */
 export async function isRecipientEnabled(stageKey: string, recipientType: RecipientType): Promise<boolean> {

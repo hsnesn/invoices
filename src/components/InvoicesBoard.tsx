@@ -82,6 +82,11 @@ type DisplayRow = {
   invNumber: string;
   sortCode: string;
   accountNumber: string;
+  currency: string;
+  iban: string;
+  swiftBic: string;
+  bankName: string;
+  bankAddress: string;
   lineManager: string;
   lineManagerId: string;
   paymentDate: string;
@@ -151,9 +156,14 @@ const ALL_COLUMNS = [
   { key: "file", label: "Invoice File" },
   { key: "accountName", label: "Account Name" },
   { key: "amount", label: "Amount" },
+  { key: "currency", label: "Currency" },
   { key: "invNumber", label: "INV Number" },
   { key: "sortCode", label: "Sort Code" },
   { key: "accountNumber", label: "Account Number" },
+  { key: "iban", label: "IBAN" },
+  { key: "swiftBic", label: "SWIFT/BIC" },
+  { key: "bankName", label: "Bank Name" },
+  { key: "bankAddress", label: "Bank Address" },
   { key: "lineManager", label: "Dept EP" },
   { key: "paymentDate", label: "Payment Date" },
   { key: "tags", label: "Tags" },
@@ -545,6 +555,8 @@ function InvoiceTable({
   onDownloadFile,
   onDownloadAllFiles,
   onDownloadAllFilesLoading,
+  onGenerateBankTransferForm,
+  onGenerateBankTransferFormLoading,
   onStartEdit,
   actionLoadingId,
   visibleColumns,
@@ -591,6 +603,8 @@ function InvoiceTable({
   onDownloadFile?: (id: string, storagePath: string, fileName: string) => void;
   onDownloadAllFiles?: (id: string) => Promise<void>;
   onDownloadAllFilesLoading?: boolean;
+  onGenerateBankTransferForm?: (id: string) => Promise<void>;
+  onGenerateBankTransferFormLoading?: boolean;
   onStartEdit: (row: DisplayRow) => void;
   actionLoadingId: string | null;
   visibleColumns: string[];
@@ -913,6 +927,11 @@ function InvoiceTable({
               {isCol("invNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.invNumber}>{r.invNumber}</td>}
               {isCol("sortCode") && <td className="px-4 py-3 text-sm text-gray-700">{r.sortCode}</td>}
               {isCol("accountNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountNumber}>{r.accountNumber}</td>}
+              {isCol("currency") && <td className="px-4 py-3 text-sm text-gray-700">{r.currency}</td>}
+              {isCol("iban") && <td className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.iban}>{r.iban}</td>}
+              {isCol("swiftBic") && <td className="max-w-[100px] truncate px-4 py-3 text-sm text-gray-700" title={r.swiftBic}>{r.swiftBic}</td>}
+              {isCol("bankName") && <td className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankName}>{r.bankName}</td>}
+              {isCol("bankAddress") && <td className="max-w-[160px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankAddress}>{r.bankAddress}</td>}
               {isCol("lineManager") && <td className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>}
               {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
               {isCol("tags") && (
@@ -1164,6 +1183,20 @@ function InvoiceTable({
                                 <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAddFile(expandedRowId, f); e.target.value = ""; }} />
                               </label>
                             )}
+                            {onGenerateBankTransferForm && expandedRowId && (() => {
+                              const r = rows.find((x) => x.id === expandedRowId);
+                              const isInternational = r && r.iban !== "—" && r.swiftBic !== "—";
+                              return isInternational ? (
+                                <button
+                                  onClick={() => void onGenerateBankTransferForm(expandedRowId)}
+                                  disabled={onGenerateBankTransferFormLoading ?? false}
+                                  className="mt-2 inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-800/50 disabled:opacity-50"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                  {onGenerateBankTransferFormLoading ? "Generating..." : "Bank transfer form"}
+                                </button>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                         {/* Notes - below Files */}
@@ -1525,6 +1558,24 @@ export function InvoicesBoard({
         ext?.account_number ??
         (typeof raw.account_number === "string" ? raw.account_number : null) ??
         "—";
+      const currency =
+        ext?.extracted_currency ??
+        (typeof raw.extracted_currency === "string" ? raw.extracted_currency : null) ??
+        (typeof raw.currency === "string" ? raw.currency : null) ??
+        (inv as { currency?: string }).currency ??
+        "—";
+      const bankType = (typeof raw.bank_type === "string" ? raw.bank_type : null) ?? null;
+      const isInternational = bankType === "international";
+      const iban =
+        (typeof raw.iban === "string" ? raw.iban : null) ??
+        (isInternational && accountNumber !== "—" ? accountNumber : null) ??
+        "—";
+      const swiftBic =
+        (typeof raw.swift_bic === "string" ? raw.swift_bic : null) ??
+        (isInternational && sortCode !== "—" ? sortCode : null) ??
+        "—";
+      const bankName = (typeof raw.bank_name === "string" ? raw.bank_name : null) ?? "—";
+      const bankAddress = (typeof raw.bank_address === "string" ? raw.bank_address : null) ?? "—";
       const lineManagerId = wf?.manager_user_id ?? "";
       const lineManager = wf?.manager_user_id
         ? profileMap.get(wf.manager_user_id) ?? wf.manager_user_id
@@ -1577,6 +1628,11 @@ export function InvoicesBoard({
         invNumber: normalizeInvoiceNumber(invNumber),
         sortCode,
         accountNumber,
+        currency,
+        iban,
+        swiftBic,
+        bankName,
+        bankAddress,
         lineManager,
         lineManagerId,
         paymentDate,
@@ -2200,6 +2256,34 @@ export function InvoicesBoard({
     }
   }, []);
 
+  const [bankFormLoading, setBankFormLoading] = useState(false);
+  const onGenerateBankTransferForm = useCallback(async (id: string) => {
+    setBankFormLoading(true);
+    try {
+      const res = await fetch(`/api/invoices/${id}/bank-transfer-form`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error((data as { error?: string })?.error ?? "Failed to generate form");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.headers.get("Content-Disposition")?.match(/filename="?([^"]+)"?/)?.[1] ?? `bank-transfer-form-${id}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Bank transfer form downloaded and added to invoice files");
+      window.location.reload();
+    } catch {
+      toast.error("Failed to generate bank transfer form");
+    } finally {
+      setBankFormLoading(false);
+    }
+  }, []);
+
   // Column visibility (order follows DEFAULT_VISIBLE_COLUMNS = ready_for_payment layout)
   const toggleColumn = useCallback((key: string) => {
     setVisibleColumns((prev) => {
@@ -2591,8 +2675,8 @@ export function InvoicesBoard({
   };
 
   const exportToCsv = useCallback((data: DisplayRow[]) => {
-    const headers = ["Guest Name", "Title", "Producer", "Payment Type", "Department", "Programme", "Topic", "TX Date 1", "TX Date 2", "TX Date 3", "Invoice Date", "Account Name", "Amount", "INV Number", "Sort Code", "Account Number", "Dept EP", "Payment Date", "Status", "Rejection Reason"];
-    const rows = data.map((r) => [r.guest, r.title, r.producer, r.paymentType, r.department, r.programme, r.topic, r.tx1, r.tx2, r.tx3, r.invoiceDate, r.accountName, r.amount, r.invNumber, r.sortCode, r.accountNumber, r.lineManager, r.paymentDate, r.status, r.rejectionReason || ""]);
+    const headers = ["Guest Name", "Title", "Producer", "Payment Type", "Department", "Programme", "Topic", "TX Date 1", "TX Date 2", "TX Date 3", "Invoice Date", "Account Name", "Amount", "Currency", "INV Number", "Sort Code", "Account Number", "IBAN", "SWIFT/BIC", "Bank Name", "Bank Address", "Dept EP", "Payment Date", "Status", "Rejection Reason"];
+    const rows = data.map((r) => [r.guest, r.title, r.producer, r.paymentType, r.department, r.programme, r.topic, r.tx1, r.tx2, r.tx3, r.invoiceDate, r.accountName, r.amount, r.currency, r.invNumber, r.sortCode, r.accountNumber, r.iban, r.swiftBic, r.bankName, r.bankAddress, r.lineManager, r.paymentDate, r.status, r.rejectionReason || ""]);
     const csv = [headers.map(csvEscape).join(","), ...rows.map((row) => row.map(csvEscape).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -2621,9 +2705,14 @@ export function InvoicesBoard({
       "Invoice Date": formatDate(r.invoiceDate),
       "Account Name": r.accountName,
       "Amount": r.amountNum != null ? formatCurrency(r.amountNum) : r.amount,
+      "Currency": r.currency,
       "INV Number": r.invNumber,
       "Sort Code": r.sortCode,
       "Account Number": r.accountNumber,
+      "IBAN": r.iban,
+      "SWIFT/BIC": r.swiftBic,
+      "Bank Name": r.bankName,
+      "Bank Address": r.bankAddress,
       "Dept EP": r.lineManager,
       "Payment Date": formatDate(r.paymentDate),
       "Status": r.status,
@@ -2948,9 +3037,14 @@ export function InvoicesBoard({
           { key: "invoiceDate", label: "Invoice Date" },
           { key: "accountName", label: "Account Name" },
           { key: "amount", label: "Amount" },
+          { key: "currency", label: "Currency" },
           { key: "invNumber", label: "INV Number" },
           { key: "sortCode", label: "Sort Code" },
           { key: "accountNumber", label: "Account Number" },
+          { key: "iban", label: "IBAN" },
+          { key: "swiftBic", label: "SWIFT/BIC" },
+          { key: "bankName", label: "Bank Name" },
+          { key: "bankAddress", label: "Bank Address" },
           { key: "lineManager", label: "Dept EP" },
           { key: "paymentType", label: "Payment Type" },
           { key: "status", label: "Status" },
@@ -3436,6 +3530,8 @@ export function InvoicesBoard({
               onDownloadFile={onDownloadFile}
               onDownloadAllFiles={onDownloadAllFiles}
               onDownloadAllFilesLoading={singleDownloading}
+              onGenerateBankTransferForm={onGenerateBankTransferForm}
+              onGenerateBankTransferFormLoading={bankFormLoading}
               onStartEdit={onStartEdit}
               actionLoadingId={actionLoadingId}
               visibleColumns={(currentRole === "admin" || currentRole === "manager" || currentRole === "operations" || currentRole === "submitter" || currentRole === "viewer") ? visibleColumns : visibleColumns.filter((c) => c !== "checkbox")}
@@ -3578,6 +3674,20 @@ export function InvoicesBoard({
                       <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAddFile(expandedRowId, f); e.target.value = ""; }} />
                     </label>
                   )}
+                  {onGenerateBankTransferForm && expandedRowId && (() => {
+                    const r = rows.find((x) => x.id === expandedRowId);
+                    const isInternational = r && r.iban !== "—" && r.swiftBic !== "—";
+                    return isInternational ? (
+                      <button
+                        onClick={() => void onGenerateBankTransferForm(expandedRowId)}
+                        disabled={bankFormLoading}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-800/50 disabled:opacity-50"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        {bankFormLoading ? "Generating..." : "Bank transfer form"}
+                      </button>
+                    ) : null;
+                  })()}
                 </div>
                 <div>
                   <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Notes</h4>

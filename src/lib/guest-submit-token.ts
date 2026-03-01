@@ -11,7 +11,7 @@ export type ProgramOverride = {
   recording_date: string;
   recording_topic: string;
   payment_amount: number;
-  payment_currency: string;
+  payment_currency?: string | null;
 };
 
 export async function getOrCreateGuestSubmitLink(
@@ -48,7 +48,9 @@ export async function getOrCreateGuestSubmitLink(
     insertPayload.recording_date = programOverride.recording_date;
     insertPayload.recording_topic = programOverride.recording_topic;
     insertPayload.payment_amount = programOverride.payment_amount;
-    insertPayload.payment_currency = programOverride.payment_currency;
+    if (programOverride.payment_currency != null && programOverride.payment_currency !== "") {
+      insertPayload.payment_currency = programOverride.payment_currency;
+    }
   }
 
   const { data: inserted, error } = await supabase

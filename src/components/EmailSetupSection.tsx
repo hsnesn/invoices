@@ -20,6 +20,7 @@ const RECIPIENT_LABELS: Record<string, string> = {
   finance: "Finance",
   operations: "Operations room",
   producers: "Producers (guest paid)",
+  guest: "Guest (payment recipient)",
 };
 
 const STAGE_RECIPIENTS: { stage: string; recipientTypes: string[] }[] = [
@@ -27,7 +28,7 @@ const STAGE_RECIPIENTS: { stage: string; recipientTypes: string[] }[] = [
   { stage: "manager_approved", recipientTypes: ["submitter", "admin", "operations"] },
   { stage: "manager_rejected", recipientTypes: ["submitter"] },
   { stage: "ready_for_payment", recipientTypes: ["submitter", "finance"] },
-  { stage: "paid", recipientTypes: ["submitter", "admin", "producers"] },
+  { stage: "paid", recipientTypes: ["submitter", "admin", "producers", "guest"] },
   { stage: "manager_assigned", recipientTypes: ["dept_ep"] },
   { stage: "resubmitted", recipientTypes: ["dept_ep"] },
   { stage: "admin_approved", recipientTypes: ["submitter", "finance"] },

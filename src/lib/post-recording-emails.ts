@@ -147,6 +147,59 @@ export async function sendGuestRequestedNewLinkEmail(params: {
   });
 }
 
+/** Notify guest when their invoice has been paid. */
+export async function sendGuestPaidEmail(params: {
+  to: string;
+  guestName: string;
+  programName: string;
+  invoiceNumber: string;
+  paidDate?: string;
+  paymentReference?: string;
+  statusLink: string;
+}) {
+  const paidDateStr = params.paidDate
+    ? new Date(params.paidDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+  const body = `
+<p>Dear ${params.guestName},</p>
+<p>We are pleased to confirm that payment for your invoice for <strong>${params.programName}</strong> has been completed.</p>
+<p><strong>Invoice reference:</strong> ${params.invoiceNumber}</p>
+${paidDateStr ? `<p><strong>Paid on:</strong> ${paidDateStr}</p>` : ""}
+${params.paymentReference ? `<p><strong>Payment reference:</strong> ${params.paymentReference}</p>` : ""}
+<p>You can view your invoice at any time: <a href="${params.statusLink}" style="color:#2563eb;font-weight:600">Check invoice status</a>.</p>
+<p>Thank you for your contribution.</p>
+<p>Best regards,<br/>${APP_NAME}</p>
+`;
+  return sendEmail({
+    to: params.to,
+    subject: `Payment completed – ${params.programName} – ${params.invoiceNumber}`,
+    html: wrap(body),
+  });
+}
+
+/** Send status link to guest when they request a new one (e.g. lost link). */
+export async function sendStatusLinkEmail(params: {
+  to: string;
+  guestName: string;
+  programName: string;
+  invoiceNumber: string;
+  statusLink: string;
+}) {
+  const body = `
+<p>Dear ${params.guestName},</p>
+<p>As requested, here is a new link to check the status of your invoice for <strong>${params.programName}</strong>.</p>
+<p><strong>Invoice reference:</strong> ${params.invoiceNumber}</p>
+<p><a href="${params.statusLink}" style="color:#2563eb;font-weight:600">Check invoice status</a></p>
+<p>${PAYMENT_TIMELINE}</p>
+<p>Best regards,<br/>${APP_NAME}</p>
+`;
+  return sendEmail({
+    to: params.to,
+    subject: `Invoice status link – ${params.programName} – ${params.invoiceNumber}`,
+    html: wrap(body),
+  });
+}
+
 /** Confirmation email to guest after they submit an invoice (upload or generate). */
 export async function sendGuestSubmissionConfirmation(params: {
   to: string;
