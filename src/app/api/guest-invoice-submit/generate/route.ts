@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
     const { data: tokenRow, error: tokenErr } = await supabase
       .from("guest_invoice_submit_tokens")
-      .select("id, producer_guest_id, expires_at, used_at")
+      .select("id, producer_guest_id, expires_at, used_at, program_name, recording_date, recording_topic, payment_amount, payment_currency, title")
       .eq("token", token)
       .single();
 
@@ -124,7 +124,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Link not found or expired" }, { status: 404 });
     }
 
-    const t = tokenRow as { id: string; producer_guest_id: string; expires_at: string; used_at: string | null };
+    const t = tokenRow as {
+      id: string;
+      producer_guest_id: string;
+      expires_at: string;
+      used_at: string | null;
+      program_name?: string | null;
+      recording_date?: string | null;
+      recording_topic?: string | null;
+      payment_amount?: number | null;
+      payment_currency?: string | null;
+      title?: string | null;
+    };
     if (t.used_at) {
       return NextResponse.json({ error: "This link has already been used" }, { status: 410 });
     }
@@ -154,16 +165,19 @@ export async function POST(request: NextRequest) {
       producer_user_id: string;
     };
 
-    const amount = Math.max(0, g.payment_amount ?? 0);
-    const currency = ((g.payment_currency as "GBP" | "EUR" | "USD") ?? "GBP");
-    const recordingDate = g.recording_date || new Date().toISOString().slice(0, 10);
-    const recordingTopic = g.recording_topic || "the programme";
+    // Prefer token override (producer's link data) over producer_guests when present
+    const programName = (t.program_name ?? g.program_name ?? "").trim() || g.program_name ?? "";
+    const recordingDate = (t.recording_date ?? g.recording_date ?? "").trim() || g.recording_date || new Date().toISOString().slice(0, 10);
+    const recordingTopic = (t.recording_topic ?? g.recording_topic ?? "").trim() || g.recording_topic || "the programme";
+    const guestTitle = (t.title ?? g.title ?? "").trim() || g.title ?? "";
+    const amount = Math.max(0, t.payment_amount ?? g.payment_amount ?? 0);
+    const currency = ((t.payment_currency ?? g.payment_currency) as "GBP" | "EUR" | "USD") ?? "GBP";
 
     let deptId: string | null = null;
     let progId: string | null = null;
-    if (g.program_name?.trim()) {
+    if (programName) {
       const { data: programs } = await supabase.from("programs").select("id, name, department_id");
-      const match = (programs ?? []).find((p) => (p.name ?? "").toLowerCase() === g.program_name!.toLowerCase());
+      const match = (programs ?? []).find((p) => (p.name ?? "").toLowerCase() === programName.toLowerCase());
       if (match) {
         progId = match.id;
         deptId = match.department_id;
@@ -187,7 +201,7 @@ export async function POST(request: NextRequest) {
     const producerEmail = producerEmailMap.get(submitterUserId)?.trim();
 
     const { data: prog } = await supabase.from("programs").select("name").eq("id", progId).single();
-    const progName = prog?.name ?? g.program_name ?? "";
+    const progName = prog?.name ?? programName ?? "";
     const { data: dept } = await supabase.from("departments").select("name").eq("id", deptId).single();
     const deptName = dept?.name ?? "";
 
@@ -246,7 +260,7 @@ export async function POST(request: NextRequest) {
 
     const serviceDesc = [
       `Guest Name: ${g.guest_name}`,
-      `Title: ${g.title ?? ""}`,
+      `Title: ${guestTitle}`,
       `Guest Email: ${g.email ?? ""}`,
       `Producer: ${producerName}`,
       `Topic: ${recordingTopic}`,
@@ -288,6 +302,8 @@ export async function POST(request: NextRequest) {
       source: "guest_generated",
       guest_name: g.guest_name,
       bank_type: bankType,
+      guest_address: guestAddress || null,
+      beneficiary_address: guestAddress || null,
     };
     if (bankType === "international") {
       rawJson.iban = iban;

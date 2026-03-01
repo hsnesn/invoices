@@ -352,6 +352,7 @@ export async function POST(request: NextRequest) {
             recording_topic: recordingTopic,
             payment_amount: Math.max(0, paymentAmount),
             payment_currency: paymentCurrencyRaw || undefined,
+            title: title || undefined,
           })
         : await getOrCreateGuestSubmitLink(supabase, guestId);
     } catch {

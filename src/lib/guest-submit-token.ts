@@ -12,6 +12,7 @@ export type ProgramOverride = {
   recording_topic: string;
   payment_amount: number;
   payment_currency?: string | null;
+  title?: string | null;
 };
 
 export async function getOrCreateGuestSubmitLink(
@@ -50,6 +51,9 @@ export async function getOrCreateGuestSubmitLink(
     insertPayload.payment_amount = programOverride.payment_amount;
     if (programOverride.payment_currency != null && programOverride.payment_currency !== "") {
       insertPayload.payment_currency = programOverride.payment_currency;
+    }
+    if (programOverride.title != null && programOverride.title !== "") {
+      insertPayload.title = programOverride.title;
     }
   }
 

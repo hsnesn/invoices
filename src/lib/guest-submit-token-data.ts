@@ -33,7 +33,7 @@ export async function getGuestSubmitTokenData(token: string): Promise<TokenResul
     const supabase = createAdminClient();
     const { data: tokenRow, error: tokenErr } = await supabase
       .from("guest_invoice_submit_tokens")
-      .select("id, producer_guest_id, expires_at, used_at, program_name, recording_date, recording_topic, payment_amount, payment_currency")
+      .select("id, producer_guest_id, expires_at, used_at, program_name, recording_date, recording_topic, payment_amount, payment_currency, title")
       .eq("token", token)
       .single();
 
@@ -94,12 +94,14 @@ export async function getGuestSubmitTokenData(token: string): Promise<TokenResul
       recording_topic?: string | null;
       payment_amount?: number | null;
       payment_currency?: string | null;
+      title?: string | null;
     };
     const programName = (t.program_name?.trim() || g.program_name?.trim()) ?? null;
     const recordingDate = t.recording_date ?? g.recording_date;
     const recordingTopic = t.recording_topic ?? g.recording_topic;
     const paymentAmount = t.payment_amount ?? g.payment_amount;
     const paymentCurrency = t.payment_currency ?? g.payment_currency;
+    const title = (t.title ?? g.title)?.trim() || g.title;
 
     let deptId: string | null = null;
     let progId: string | null = null;
@@ -117,7 +119,7 @@ export async function getGuestSubmitTokenData(token: string): Promise<TokenResul
       data: {
         guest_name: g.guest_name,
         email: g.email,
-        title: g.title,
+        title: title ?? g.title,
         program_name: programName,
         recording_date: recordingDate,
         recording_topic: recordingTopic,
