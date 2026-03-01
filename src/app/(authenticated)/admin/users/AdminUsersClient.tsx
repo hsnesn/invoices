@@ -211,7 +211,7 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
       setUsers((prev) =>
         prev.map((u) =>
           u.id === editingPermissions
-            ? { ...u, allowed_pages: payload.allowed_pages, ...(payload.role ? { role: payload.role } : {}) }
+            ? { ...u, allowed_pages: payload.allowed_pages, ...(payload.role ? { role: source.role } : {}) }
             : u
         )
       );
