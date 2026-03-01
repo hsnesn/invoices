@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { sendAvailabilityClearedEmail } from "@/lib/email";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -97,16 +98,20 @@ export async function POST(request: NextRequest) {
 
     let emailsSent = 0;
     if (affectedUserIds.size > 0 && (type === "availability" || type === "both")) {
-      for (const uid of Array.from(affectedUserIds)) {
-        try {
-          const { data: user } = await supabase.auth.admin.getUserById(uid);
-          const email = user?.user?.email;
-          if (email && email.includes("@")) {
-            const res = await sendAvailabilityClearedEmail({ to: email, monthLabel });
-            if (res.success) emailsSent++;
+      const enabled = await isEmailStageEnabled("availability_cleared");
+      const sendToContractor = await isRecipientEnabled("availability_cleared", "contractor");
+      if (enabled && sendToContractor) {
+        for (const uid of Array.from(affectedUserIds)) {
+          try {
+            const { data: user } = await supabase.auth.admin.getUserById(uid);
+            const email = user?.user?.email;
+            if (email && email.includes("@")) {
+              const res = await sendAvailabilityClearedEmail({ to: email, monthLabel });
+              if (res.success) emailsSent++;
+            }
+          } catch {
+            // skip failed emails
           }
-        } catch {
-          // skip failed emails
         }
       }
     }

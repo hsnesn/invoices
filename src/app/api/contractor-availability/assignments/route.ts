@@ -185,6 +185,10 @@ export async function POST(request: NextRequest) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const calendarUrl = `${appUrl}/api/contractor-availability/export/ical?month=${month}`;
       const company = await getCompanySettingsAsync();
+      const { isEmailStageEnabled, isRecipientEnabled } = await import("@/lib/email-settings");
+      const stageEnabled = await isEmailStageEnabled("assignment_confirmed");
+      const sendToContractor = await isRecipientEnabled("assignment_confirmed", "contractor");
+      const sendToOps = await isRecipientEnabled("assignment_confirmed", "operations");
       const { sendContractorAssignmentConfirmedEmail, sendContractorAssignmentConfirmedToLondonOps } = await import("@/lib/email");
 
       const byPersonForLondon: { name: string; email: string; datesWithRole: { date: string; role: string }[] }[] = [];
@@ -193,19 +197,21 @@ export async function POST(request: NextRequest) {
         const name = nameMap.get(uid) ?? "Unknown";
         if (email && datesWithRole.length > 0) {
           const sorted = [...datesWithRole].sort((a, b) => a.date.localeCompare(b.date));
-          await sendContractorAssignmentConfirmedEmail({
-            to: email,
-            personName: name,
-            monthLabel,
-            datesWithRole: sorted,
-            calendarUrl,
-            replyTo: company.email_operations,
-          });
+          if (stageEnabled && sendToContractor) {
+            await sendContractorAssignmentConfirmedEmail({
+              to: email,
+              personName: name,
+              monthLabel,
+              datesWithRole: sorted,
+              calendarUrl,
+              replyTo: company.email_operations,
+            });
+          }
           byPersonForLondon.push({ name, email, datesWithRole: sorted });
         }
       }
 
-      if (byPersonForLondon.length > 0) {
+      if (stageEnabled && sendToOps && byPersonForLondon.length > 0) {
         await sendContractorAssignmentConfirmedToLondonOps({ monthLabel, byPerson: byPersonForLondon, operationsEmail: company.email_operations });
       }
 

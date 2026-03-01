@@ -12,6 +12,7 @@ import {
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { createAuditEvent } from "@/lib/audit";
 import { canSendGuestInvoiceLinks, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 
 export async function POST(request: NextRequest) {
   try {
@@ -131,17 +132,21 @@ export async function POST(request: NextRequest) {
           } catch {
             submitLink = undefined;
           }
-          await sendPostRecordingPaidRequestInvoice({
-            to: guestEmail!,
-            guestName: (g as { guest_name: string }).guest_name,
-            programName: (g as { program_name?: string }).program_name?.trim() || programName,
-            amount: amountStr,
-            currency,
-            recordingDate,
-            recordingTopic,
-            producerName,
-            submitLink,
-          });
+          const linkSentEnabled = await isEmailStageEnabled("guest_link_sent");
+          const sendToGuest = await isRecipientEnabled("guest_link_sent", "guest");
+          if (linkSentEnabled && sendToGuest) {
+            await sendPostRecordingPaidRequestInvoice({
+              to: guestEmail!,
+              guestName: (g as { guest_name: string }).guest_name,
+              programName: (g as { program_name?: string }).program_name?.trim() || programName,
+              amount: amountStr,
+              currency,
+              recordingDate,
+              recordingTopic,
+              producerName,
+              submitLink,
+            });
+          }
           await recordGuestInvoiceLinkSend(supabase, g.producer_user_id);
         } else {
           await sendPostRecordingNoPayment({

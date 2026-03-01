@@ -13,6 +13,17 @@ export const EMAIL_STAGE_KEYS = [
   "manager_assigned",
   "resubmitted",
   "admin_approved",
+  "guest_link_sent",
+  "guest_invoice_submitted",
+  // Availability, booking, cancel, assign
+  "availability_submitted",
+  "availability_cleared",
+  "assignment_confirmed",
+  "assignment_reminder",
+  "booking_form_approved",
+  "office_request_approved",
+  "office_request_assigned",
+  "office_request_rejected",
 ] as const;
 
 export type EmailStageKey = (typeof EMAIL_STAGE_KEYS)[number];
@@ -29,7 +40,19 @@ export type EmailStageRow = {
   enabled: boolean;
 };
 
-export type RecipientType = "submitter" | "dept_ep" | "admin" | "finance" | "operations" | "producers" | "guest";
+export type RecipientType =
+  | "submitter"
+  | "dept_ep"
+  | "admin"
+  | "finance"
+  | "operations"
+  | "producers"
+  | "guest"
+  | "producer"
+  | "contractor"
+  | "line_manager"
+  | "assignee"
+  | "requester";
 
 /** Check if a recipient type is enabled for a stage. Default true if no row exists or table missing. */
 export async function isRecipientEnabled(stageKey: string, recipientType: RecipientType): Promise<boolean> {

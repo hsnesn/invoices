@@ -123,19 +123,24 @@ export async function POST(request: NextRequest) {
 
     const userEmail = (session.user as { email?: string }).email;
     if (userEmail && valid.length > 0) {
-      const [y, m] = minDate.split("-").map(Number);
-      const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
-      const company = await getCompanySettingsAsync();
-      const { sendContractorAvailabilitySubmittedEmail } = await import("@/lib/email");
-      await sendContractorAvailabilitySubmittedEmail({
-        to: company.email_operations,
-        replyTo: userEmail,
-        personName: profile.full_name ?? "Unknown",
-        personEmail: userEmail,
-        role: roleVal ?? "",
-        monthLabel,
-        dates: valid.sort(),
-      });
+      const { isEmailStageEnabled, isRecipientEnabled } = await import("@/lib/email-settings");
+      const enabled = await isEmailStageEnabled("availability_submitted");
+      const sendToOps = await isRecipientEnabled("availability_submitted", "operations");
+      if (enabled && sendToOps) {
+        const [y, m] = minDate.split("-").map(Number);
+        const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+        const company = await getCompanySettingsAsync();
+        const { sendContractorAvailabilitySubmittedEmail } = await import("@/lib/email");
+        await sendContractorAvailabilitySubmittedEmail({
+          to: company.email_operations,
+          replyTo: userEmail,
+          personName: profile.full_name ?? "Unknown",
+          personEmail: userEmail,
+          role: roleVal ?? "",
+          monthLabel,
+          dates: valid.sort(),
+        });
+      }
     }
 
     return NextResponse.json({ ok: true, count: valid.length });

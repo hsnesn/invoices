@@ -11,6 +11,7 @@ import {
 } from "@/lib/post-recording-emails";
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { checkGuestInvoiceLinkLimit, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 
 export async function POST(
   request: NextRequest,
@@ -79,14 +80,18 @@ export async function POST(
             const buf = await pdf.arrayBuffer();
             const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number").eq("invoice_id", invId).single();
             const invNo = (ext as { invoice_number?: string })?.invoice_number || "invoice";
-            await sendPostRecordingWithInvoice({
-              to: guestEmail,
-              guestName: (guest as { guest_name: string }).guest_name,
-              programName,
-              invoiceNumber: invNo,
-              pdfBuffer: buf,
-              producerName,
-            });
+            const submittedEnabled = await isEmailStageEnabled("guest_invoice_submitted");
+            const sendToGuest = await isRecipientEnabled("guest_invoice_submitted", "guest");
+            if (submittedEnabled && sendToGuest) {
+              await sendPostRecordingWithInvoice({
+                to: guestEmail,
+                guestName: (guest as { guest_name: string }).guest_name,
+                programName,
+                invoiceNumber: invNo,
+                pdfBuffer: buf,
+                producerName,
+              });
+            }
             return NextResponse.json({ success: true, message: "Thank-you email with invoice resent." });
           }
         }
@@ -97,17 +102,21 @@ export async function POST(
       } catch {
         submitLink = undefined;
       }
-      await sendPostRecordingPaidRequestInvoice({
-        to: guestEmail,
-        guestName: (guest as { guest_name: string }).guest_name,
-        programName,
-        amount: amountStr,
-        currency,
-        recordingDate,
-        recordingTopic,
-        producerName,
-        submitLink,
-      });
+      const linkSentEnabled = await isEmailStageEnabled("guest_link_sent");
+      const sendToGuest = await isRecipientEnabled("guest_link_sent", "guest");
+      if (linkSentEnabled && sendToGuest) {
+        await sendPostRecordingPaidRequestInvoice({
+          to: guestEmail,
+          guestName: (guest as { guest_name: string }).guest_name,
+          programName,
+          amount: amountStr,
+          currency,
+          recordingDate,
+          recordingTopic,
+          producerName,
+          submitLink,
+        });
+      }
       if (!invId) {
         await recordGuestInvoiceLinkSend(supabase, guest.producer_user_id);
       }

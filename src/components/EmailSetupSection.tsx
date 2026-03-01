@@ -11,6 +11,16 @@ const STAGE_LABELS: Record<string, string> = {
   manager_assigned: "Manager assigned",
   resubmitted: "Resubmitted",
   admin_approved: "Admin approved",
+  guest_link_sent: "Guest — Invoice submit link sent",
+  guest_invoice_submitted: "Guest — Invoice submitted/created",
+  availability_submitted: "My availability — submitted",
+  availability_cleared: "My availability — cancelled/cleared",
+  assignment_confirmed: "Assignment — confirmed",
+  assignment_reminder: "Assignment — reminder (day before)",
+  booking_form_approved: "Booking form — approved",
+  office_request_approved: "Office request — approved",
+  office_request_assigned: "Office request — assigned",
+  office_request_rejected: "Office request — rejected",
 };
 
 const RECIPIENT_LABELS: Record<string, string> = {
@@ -21,6 +31,11 @@ const RECIPIENT_LABELS: Record<string, string> = {
   operations: "Operations room",
   producers: "Producers (guest paid)",
   guest: "Guest (payment recipient)",
+  producer: "Producer (guest's producer)",
+  contractor: "Contractor",
+  line_manager: "Line manager",
+  assignee: "Assignee",
+  requester: "Requester",
 };
 
 const STAGE_RECIPIENTS: { stage: string; recipientTypes: string[] }[] = [
@@ -32,6 +47,16 @@ const STAGE_RECIPIENTS: { stage: string; recipientTypes: string[] }[] = [
   { stage: "manager_assigned", recipientTypes: ["dept_ep"] },
   { stage: "resubmitted", recipientTypes: ["dept_ep"] },
   { stage: "admin_approved", recipientTypes: ["submitter", "finance"] },
+  { stage: "guest_link_sent", recipientTypes: ["guest"] },
+  { stage: "guest_invoice_submitted", recipientTypes: ["guest", "producer"] },
+  { stage: "availability_submitted", recipientTypes: ["operations"] },
+  { stage: "availability_cleared", recipientTypes: ["contractor"] },
+  { stage: "assignment_confirmed", recipientTypes: ["contractor", "operations"] },
+  { stage: "assignment_reminder", recipientTypes: ["contractor"] },
+  { stage: "booking_form_approved", recipientTypes: ["line_manager", "operations"] },
+  { stage: "office_request_approved", recipientTypes: ["requester"] },
+  { stage: "office_request_assigned", recipientTypes: ["assignee"] },
+  { stage: "office_request_rejected", recipientTypes: ["requester"] },
 ];
 
 const TEMPLATE_LABELS: Record<string, string> = {
@@ -43,6 +68,16 @@ const TEMPLATE_LABELS: Record<string, string> = {
   manager_assigned: "Manager assigned",
   resubmitted: "Resubmitted",
   admin_approved: "Admin approved",
+  guest_link_sent: "Guest — Invoice submit link sent",
+  guest_invoice_submitted: "Guest — Invoice submitted/created",
+  availability_submitted: "My availability — submitted",
+  availability_cleared: "My availability — cancelled/cleared",
+  assignment_confirmed: "Assignment — confirmed",
+  assignment_reminder: "Assignment — reminder (day before)",
+  booking_form_approved: "Booking form — approved",
+  office_request_approved: "Office request — approved",
+  office_request_assigned: "Office request — assigned",
+  office_request_rejected: "Office request — rejected",
 };
 
 const PLACEHOLDERS = [

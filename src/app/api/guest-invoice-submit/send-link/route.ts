@@ -11,6 +11,7 @@ import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/guest-invoice-pdf";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { checkGuestInvoiceLinkLimit, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -328,14 +329,18 @@ export async function POST(request: NextRequest) {
         })
         .eq("id", guestId);
 
-      await sendPostRecordingWithInvoice({
-        to: email,
-        guestName,
-        programName,
-        invoiceNumber: invNo,
-        pdfBuffer,
-        producerName,
-      });
+      const submittedEnabled = await isEmailStageEnabled("guest_invoice_submitted");
+      const sendToGuest = await isRecipientEnabled("guest_invoice_submitted", "guest");
+      if (submittedEnabled && sendToGuest) {
+        await sendPostRecordingWithInvoice({
+          to: email,
+          guestName,
+          programName,
+          invoiceNumber: invNo,
+          pdfBuffer,
+          producerName,
+        });
+      }
 
       return NextResponse.json({
         success: true,
@@ -359,17 +364,21 @@ export async function POST(request: NextRequest) {
       submitLink = undefined;
     }
 
-    await sendPostRecordingPaidRequestInvoice({
-      to: email,
-      guestName,
-      programName,
-      amount: amountStr,
-      currency: paymentCurrency,
-      recordingDate,
-      recordingTopic,
-      producerName,
-      submitLink,
-    });
+    const linkSentEnabled = await isEmailStageEnabled("guest_link_sent");
+    const sendToGuest = await isRecipientEnabled("guest_link_sent", "guest");
+    if (linkSentEnabled && sendToGuest) {
+      await sendPostRecordingPaidRequestInvoice({
+        to: email,
+        guestName,
+        programName,
+        amount: amountStr,
+        currency: paymentCurrency,
+        recordingDate,
+        recordingTopic,
+        producerName,
+        submitLink,
+      });
+    }
 
     if (!generateInvoice) {
       await recordGuestInvoiceLinkSend(supabase, session.user.id);

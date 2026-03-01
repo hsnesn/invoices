@@ -12,9 +12,32 @@ const TEMPLATE_KEYS = [
   "manager_assigned",
   "resubmitted",
   "admin_approved",
+  "guest_link_sent",
+  "guest_invoice_submitted",
+  "availability_submitted",
+  "availability_cleared",
+  "assignment_confirmed",
+  "assignment_reminder",
+  "booking_form_approved",
+  "office_request_approved",
+  "office_request_assigned",
+  "office_request_rejected",
 ] as const;
 
-const RECIPIENT_TYPES = ["submitter", "dept_ep", "admin", "finance", "operations", "producers"] as const;
+const RECIPIENT_TYPES = [
+  "submitter",
+  "dept_ep",
+  "admin",
+  "finance",
+  "operations",
+  "producers",
+  "guest",
+  "producer",
+  "contractor",
+  "line_manager",
+  "assignee",
+  "requester",
+] as const;
 
 export async function GET() {
   try {

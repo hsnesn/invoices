@@ -221,23 +221,25 @@ export async function POST(request: NextRequest) {
     }
 
     if (g.email?.includes("@")) {
-      const producerEmailMap = await batchGetUserEmails([g.producer_user_id]);
-      const producerEmail = producerEmailMap.get(g.producer_user_id)?.trim();
-      const { data: producerProfile } = await supabase.from("profiles").select("full_name").eq("id", g.producer_user_id).single();
-      const producerName = producerProfile?.full_name?.trim() || "The Producer";
-      const progName = g.program_name?.trim() || "the programme";
-      const statusLink = `${APP_URL}/submit/status/${statusToken}`;
-      try {
-        await sendGuestSubmissionConfirmation({
-          to: g.email,
-          guestName: g.guest_name,
-          programName: progName,
-          invoiceNumber: seedInvNumber || invoiceId.slice(0, 8),
-          statusLink,
-          producerName,
-        });
-      } catch (emErr) {
-        console.error("[Guest upload] Confirmation email failed:", emErr);
+      const submittedEnabled = await isEmailStageEnabled("guest_invoice_submitted");
+      const sendToGuest = await isRecipientEnabled("guest_invoice_submitted", "guest");
+      if (submittedEnabled && sendToGuest) {
+        const { data: producerProfile } = await supabase.from("profiles").select("full_name").eq("id", g.producer_user_id).single();
+        const producerName = producerProfile?.full_name?.trim() || "The Producer";
+        const progName = g.program_name?.trim() || "the programme";
+        const statusLink = `${APP_URL}/submit/status/${statusToken}`;
+        try {
+          await sendGuestSubmissionConfirmation({
+            to: g.email,
+            guestName: g.guest_name,
+            programName: progName,
+            invoiceNumber: seedInvNumber || invoiceId.slice(0, 8),
+            statusLink,
+            producerName,
+          });
+        } catch (emErr) {
+          console.error("[Guest upload] Confirmation email failed:", emErr);
+        }
       }
     }
 

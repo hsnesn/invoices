@@ -391,7 +391,10 @@ export async function POST(request: NextRequest) {
 
     const pdfBuf = uploadBuf;
     const statusLink = `${APP_URL}/submit/status/${statusToken}`;
-    if (g.email) {
+    const submittedEnabled = await isEmailStageEnabled("guest_invoice_submitted");
+    const sendToGuest = await isRecipientEnabled("guest_invoice_submitted", "guest");
+    const sendToProducer = await isRecipientEnabled("guest_invoice_submitted", "producer");
+    if (submittedEnabled && sendToGuest && g.email) {
       await sendPostRecordingWithInvoice({
         to: g.email,
         guestName: g.guest_name,
@@ -402,7 +405,7 @@ export async function POST(request: NextRequest) {
         statusLink,
       }).catch((err) => console.error("[Guest invoice] Send to guest failed:", err));
     }
-    if (producerEmail) {
+    if (submittedEnabled && sendToProducer && producerEmail) {
       sendInvoiceToProducer({
         to: producerEmail,
         producerName,

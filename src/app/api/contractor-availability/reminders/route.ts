@@ -48,20 +48,25 @@ export async function GET(request: Request) {
 
     const dateLabel = tomorrow.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
     const company = await getCompanySettingsAsync();
-    const { sendContractorReminderEmail } = await import("@/lib/email");
+    const { isEmailStageEnabled, isRecipientEnabled } = await import("@/lib/email-settings");
+    const stageEnabled = await isEmailStageEnabled("assignment_reminder");
+    const sendToContractor = await isRecipientEnabled("assignment_reminder", "contractor");
 
     let sent = 0;
-    for (const uid of userIds) {
-      const email = emailMap.get(uid);
-      if (email) {
-        await sendContractorReminderEmail({
-          to: email,
-          personName: nameMap.get(uid) ?? "",
-          dateLabel,
-          role: byUser.get(uid) ?? "—",
-          replyTo: company.email_operations,
-        });
-        sent++;
+    if (stageEnabled && sendToContractor) {
+      const { sendContractorReminderEmail } = await import("@/lib/email");
+      for (const uid of userIds) {
+        const email = emailMap.get(uid);
+        if (email) {
+          await sendContractorReminderEmail({
+            to: email,
+            personName: nameMap.get(uid) ?? "",
+            dateLabel,
+            role: byUser.get(uid) ?? "—",
+            replyTo: company.email_operations,
+          });
+          sent++;
+        }
       }
     }
 

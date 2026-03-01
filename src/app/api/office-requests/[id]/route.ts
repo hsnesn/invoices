@@ -10,6 +10,7 @@ import {
   sendOfficeRequestRejectedEmail,
   sendOfficeRequestAssignedEmail,
 } from "@/lib/email";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -122,8 +123,10 @@ export async function PATCH(
 
       if (updateErr) throw updateErr;
 
+      const rejectEnabled = await isEmailStageEnabled("office_request_rejected");
+      const sendToRequester = await isRecipientEnabled("office_request_rejected", "requester");
       const requesterEmail = await getEmailForUserId(supabase, reqRow.requester_user_id);
-      if (requesterEmail) {
+      if (requesterEmail && rejectEnabled && sendToRequester) {
         await sendOfficeRequestRejectedEmail({
           to: requesterEmail,
           title: reqRow.title,

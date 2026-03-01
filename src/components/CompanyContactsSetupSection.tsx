@@ -44,19 +44,20 @@ export function CompanyContactsSetupSection() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const save = async () => {
+  const save = async (keys?: (keyof CompanySettings)[]) => {
     setSaving(true);
     setMessage(null);
+    const payload = keys ? Object.fromEntries(keys.filter((k) => k in edit).map((k) => [k, edit[k]])) : edit;
     try {
       const res = await fetch("/api/admin/company-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(edit),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok) {
-        setSettings(data);
-        setEdit(data);
+        setSettings((prev) => (prev ? { ...prev, ...data } : data));
+        setEdit((prev) => ({ ...prev, ...data }));
         setMessage({ type: "success", text: "Settings saved." });
       } else {
         setMessage({ type: "error", text: data?.error ?? "Failed to save." });
@@ -67,6 +68,22 @@ export function CompanyContactsSetupSection() {
       setSaving(false);
     }
   };
+
+  const companyKeys: (keyof CompanySettings)[] = ["company_name", "company_address", "signature_name", "studio_address", "app_name"];
+  const contactKeys: (keyof CompanySettings)[] = ["email_operations", "email_finance", "email_bank_transfer"];
+  const invitationKeys: (keyof CompanySettings)[] = ["invitation_subject_prefix", "invitation_body_intro", "invitation_broadcast_channel", "invitation_studio_intro"];
+  const bankKeys: (keyof CompanySettings)[] = ["bank_account_gbp", "bank_account_eur", "bank_account_usd"];
+
+  const SaveBtn = ({ onClick }: { onClick: () => void }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={saving}
+      className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+    >
+      {saving ? "Saving..." : "Save"}
+    </button>
+  );
 
   if (loading) {
     return (
@@ -109,6 +126,7 @@ export function CompanyContactsSetupSection() {
             </div>
           ))}
         </div>
+        <SaveBtn onClick={() => void save(companyKeys)} />
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
@@ -130,6 +148,7 @@ export function CompanyContactsSetupSection() {
             </div>
           ))}
         </div>
+        <SaveBtn onClick={() => void save(contactKeys)} />
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
@@ -154,6 +173,7 @@ export function CompanyContactsSetupSection() {
             </div>
           ))}
         </div>
+        <SaveBtn onClick={() => void save(invitationKeys)} />
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
@@ -176,17 +196,7 @@ export function CompanyContactsSetupSection() {
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
+        <SaveBtn onClick={() => void save(bankKeys)} />
       </div>
     </div>
   );

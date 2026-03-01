@@ -1,4 +1,5 @@
 import { sendEmailWithAttachment } from "@/lib/email";
+import { isEmailStageEnabled, isRecipientEnabled } from "@/lib/email-settings";
 import type { BookingFormData, ApprovalContext } from "./types";
 import { sanitizeFilenamePart } from "./pdf-generator";
 import { getLogoUrl } from "@/lib/get-logo-url";
@@ -92,6 +93,11 @@ export async function sendBookingFormEmailB(
   pdfBuffer: ArrayBuffer,
   idempotencyKey: string
 ): Promise<{ success: boolean; messageId?: string; error?: unknown }> {
+  const enabled = await isEmailStageEnabled("booking_form_approved");
+  const sendToOps = await isRecipientEnabled("booking_form_approved", "operations");
+  if (!enabled || !sendToOps) {
+    return { success: true, messageId: undefined };
+  }
   const opsEmail = await getOperationsEmail();
   const subject = `${data.name} – ${data.month}`;
   const approvalDateTime = ctx.approvedAt.toLocaleString("en-GB", {
