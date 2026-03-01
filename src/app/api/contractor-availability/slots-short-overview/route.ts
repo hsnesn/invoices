@@ -66,9 +66,13 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     const now = new Date();
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    const weekMonday = new Date(now.getFullYear(), now.getMonth(), diff);
+    const startDateObj = weekMonday < monthStart ? weekMonday : monthStart;
+    const startDate = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth() + 1).padStart(2, "0")}-${String(startDateObj.getDate()).padStart(2, "0")}`;
     const endMonth = new Date(now.getFullYear(), now.getMonth() + monthsAhead, 0);
-    const startDate = `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, "0")}-01`;
     const endDate = `${endMonth.getFullYear()}-${String(endMonth.getMonth() + 1).padStart(2, "0")}-${String(endMonth.getDate()).padStart(2, "0")}`;
 
     // Batch fetch: departments, programs, requirements, recurring, assignments
@@ -100,8 +104,9 @@ export async function GET(request: NextRequest) {
 
     type Row = { month: string; monthLabel: string; department_id: string; department: string; program_id: string | null; program: string; role: string; slots_short: number };
     const rows: Row[] = [];
+    const loopStartMonth = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), 1);
 
-    for (let m = new Date(startMonth); m <= endMonth; m.setMonth(m.getMonth() + 1)) {
+    for (let m = new Date(loopStartMonth); m <= endMonth; m.setMonth(m.getMonth() + 1)) {
       const y = m.getFullYear();
       const mo = m.getMonth() + 1;
       const monthKey = `${y}-${String(mo).padStart(2, "0")}`;
