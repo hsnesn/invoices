@@ -68,6 +68,41 @@ type Appearance = {
   invoice_id: string;
 };
 
+/** Renders text with **bold** and *italic* markdown, with clear visual emphasis. */
+function FormattedResearchText({ text, className = "" }: { text: string; className?: string }) {
+  const parts: React.ReactNode[] = [];
+  let key = 0;
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push(<span key={key++}>{text.slice(lastIndex, m.index)}</span>);
+    }
+    const raw = m[1];
+    if (raw.startsWith("**") && raw.endsWith("**")) {
+      parts.push(
+        <strong key={key++} className="font-bold text-amber-900 dark:text-amber-100">
+          {raw.slice(2, -2)}
+        </strong>
+      );
+    } else if (raw.startsWith("*") && raw.endsWith("*")) {
+      parts.push(
+        <em key={key++} className="italic text-gray-700 dark:text-gray-300">
+          {raw.slice(1, -1)}
+        </em>
+      );
+    } else {
+      parts.push(<span key={key++}>{raw}</span>);
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(<span key={key++}>{text.slice(lastIndex)}</span>);
+  }
+  return <p className={`whitespace-pre-wrap text-base leading-relaxed ${className}`}>{parts}</p>;
+}
+
 const COLUMN_IDS = ["guest_name", "last_appearance", "last_invited", "usage", "department", "programme", "title", "organization", "topic", "phone", "email", "invoice", "ai_found", "ai_assessment", "actions"] as const;
 const COLUMN_LABELS: Record<string, string> = {
   guest_name: "Guest Name",
@@ -695,6 +730,78 @@ export function GuestContactsClient({
       toast.error(toUserFriendlyError(e));
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const exportRiskAnalysisPdf = async () => {
+    if (!selectedGuest || !riskAnalysis) return;
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { ensurePdfFont } = await import("@/lib/pdf-font");
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      await ensurePdfFont(doc);
+      doc.setFontSize(16);
+      doc.text(`Risk Analysis Report — ${selectedGuest}`, 14, 20);
+      doc.setFontSize(9);
+      doc.text(`Generated: ${new Date().toLocaleString("en-GB")}`, 14, 28);
+      const lines = doc.splitTextToSize(riskAnalysis, 180);
+      doc.setFontSize(10);
+      doc.text(lines, 14, 38);
+      let y = 38 + lines.length * 5 + 8;
+      if (riskAnalysisSources.length > 0) {
+        doc.setFontSize(10);
+        doc.text("Sources:", 14, y);
+        y += 6;
+        doc.setFontSize(9);
+        riskAnalysisSources.slice(0, 10).forEach((url) => {
+          const urlLines = doc.splitTextToSize(url, 180);
+          doc.text(urlLines, 14, y);
+          y += urlLines.length * 5 + 2;
+        });
+      }
+      doc.save(`risk-analysis-${selectedGuest.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.pdf`);
+      toast.success("Report downloaded");
+    } catch (e) {
+      toast.error(toUserFriendlyError(e));
+    }
+  };
+
+  const exportChatReportPdf = async () => {
+    if (chatHistory.length === 0) return;
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { ensurePdfFont } = await import("@/lib/pdf-font");
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      await ensurePdfFont(doc);
+      doc.setFontSize(16);
+      doc.text("Guest Research Chat Report", 14, 20);
+      doc.setFontSize(9);
+      doc.text(`Generated: ${new Date().toLocaleString("en-GB")} | ${chatHistory.length} search(es)`, 14, 28);
+      let y = 38;
+      for (let i = 0; i < chatHistory.length; i++) {
+        const h = chatHistory[i];
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFontSize(10);
+        doc.text(`${i + 1}. ${h.guestName ? `Guest: ${h.guestName}` : "All guests"} — ${h.query}`, 14, y);
+        y += 7;
+        const lines = doc.splitTextToSize(h.summary, 180);
+        doc.setFontSize(9);
+        doc.text(lines, 14, y);
+        y += lines.length * 5 + 4;
+        if (h.sources.length > 0) {
+          doc.setFontSize(8);
+          h.sources.slice(0, 3).forEach((url) => {
+            doc.text(url.length > 60 ? url.slice(0, 57) + "..." : url, 14, y);
+            y += 4;
+          });
+          y += 4;
+        }
+        y += 4;
+      }
+      doc.save(`guest-research-report-${new Date().toISOString().split("T")[0]}.pdf`);
+      toast.success("Report downloaded");
+    } catch (e) {
+      toast.error(toUserFriendlyError(e));
     }
   };
 
@@ -1832,12 +1939,23 @@ export function GuestContactsClient({
                 <p className="text-sm text-red-600 dark:text-red-400">{riskAnalysisError}</p>
               ) : riskAnalysis ? (
                 <>
-                  <div className="mb-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
-                    <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{riskAnalysis}</p>
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div className="flex-1 overflow-hidden rounded-xl border-l-4 border-amber-500 bg-gradient-to-br from-amber-50 to-white p-4 dark:border-amber-600 dark:from-amber-950/40 dark:to-gray-900">
+                      <div className="text-gray-800 dark:text-gray-200">
+                        <FormattedResearchText text={riskAnalysis} />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={exportRiskAnalysisPdf}
+                      className="shrink-0 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                    >
+                      Export PDF
+                    </button>
                   </div>
                   {riskAnalysisSources.length > 0 && (
-                    <div>
-                      <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">Sources</p>
+                    <div className="mt-2 rounded-lg border border-amber-200/60 bg-white/60 px-3 py-2 dark:border-amber-800/60 dark:bg-gray-800/40">
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Sources</p>
                       <ul className="space-y-1">
                         {riskAnalysisSources.map((url, i) => (
                           <li key={i}>
@@ -1845,7 +1963,7 @@ export function GuestContactsClient({
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-sky-600 hover:underline dark:text-sky-400"
+                              className="text-sm text-sky-600 hover:underline dark:text-sky-400"
                             >
                               {url}
                             </a>
@@ -1886,14 +2004,25 @@ export function GuestContactsClient({
               <h2 id="chat-title" className="text-lg font-semibold text-gray-900 dark:text-white">
                 Research chat
               </h2>
-              <button
-                type="button"
-                onClick={() => setChatOpen(false)}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-                aria-label="Close"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                {chatHistory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={exportChatReportPdf}
+                    className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                  >
+                    Export report
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setChatOpen(false)}
+                  className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatHistory.length === 0 ? (
@@ -1902,21 +2031,37 @@ export function GuestContactsClient({
                 </p>
               ) : (
                 chatHistory.map((h, i) => (
-                  <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900">
-                    <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
-                      {h.guestName ? `Guest: ${h.guestName}` : "All guests"} · {h.query}
-                    </p>
-                    <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{h.summary}</p>
+                  <div
+                    key={i}
+                    className="overflow-hidden rounded-xl border-l-4 border-amber-500 bg-gradient-to-br from-amber-50 to-white p-4 shadow-sm dark:border-amber-600 dark:from-amber-950/40 dark:to-gray-900"
+                  >
+                    <div className="mb-3 rounded-lg bg-amber-100/80 px-3 py-2 dark:bg-amber-900/40">
+                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                        {h.guestName ? `Guest: ${h.guestName}` : "All guests"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">{h.query}</p>
+                    </div>
+                    <div className="text-gray-800 dark:text-gray-200">
+                      <FormattedResearchText text={h.summary} />
+                    </div>
                     {h.sources.length > 0 && (
-                      <ul className="mt-2 space-y-1">
-                        {h.sources.slice(0, 5).map((url, j) => (
-                          <li key={j}>
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 hover:underline dark:text-sky-400">
-                              {url}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="mt-3 rounded-lg border border-amber-200/60 bg-white/60 px-3 py-2 dark:border-amber-800/60 dark:bg-gray-800/40">
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Sources</p>
+                        <ul className="space-y-1">
+                          {h.sources.slice(0, 5).map((url, j) => (
+                            <li key={j}>
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-sky-600 hover:underline dark:text-sky-400"
+                              >
+                                {url}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                   </div>
                 ))
