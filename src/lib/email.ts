@@ -762,7 +762,7 @@ export async function sendOtherInvoicePaidToLondonFinance(params: {
     <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">${paidSummary} Please find the invoice attached for your records.</p>
     <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">Invoice</td><td style="padding:8px 12px;color:#1e293b">${params.invoiceNumber ? `#${params.invoiceNumber}` : invLabel}</td></tr>
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">Invoice</td><td style="padding:8px 12px;color:#1e293b">${invNum ?? params.invoiceId.slice(0, 8)}</td></tr>
         <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Beneficiary</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.beneficiaryName ?? "—")}</td></tr>
         <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Amount</td><td style="padding:8px 12px;color:#1e293b">${amountStr}</td></tr>
         <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Paid date</td><td style="padding:8px 12px;color:#1e293b">${params.paidDate ?? "—"}</td></tr>
