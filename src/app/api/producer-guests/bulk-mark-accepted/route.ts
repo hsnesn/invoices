@@ -9,6 +9,7 @@ import {
   sendPostRecordingPaidRequestInvoice,
   sendPostRecordingNoPayment,
 } from "@/lib/post-recording-emails";
+import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { createAuditEvent } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
           const amount = body.payment_amount ?? 0;
           const currency = body.payment_currency ?? "GBP";
           const amountStr = `${currency === "GBP" ? "£" : currency === "EUR" ? "€" : "$"}${amount.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+          const submitLink = await getOrCreateGuestSubmitLink(supabase, g.id);
           await sendPostRecordingPaidRequestInvoice({
             to: guestEmail!,
             guestName: (g as { guest_name: string }).guest_name,
@@ -115,6 +117,7 @@ export async function POST(request: NextRequest) {
             recordingDate,
             recordingTopic,
             producerName,
+            submitLink,
           });
         } else {
           await sendPostRecordingNoPayment({

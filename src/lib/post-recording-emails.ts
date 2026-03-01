@@ -22,12 +22,17 @@ export async function sendPostRecordingPaidRequestInvoice(params: {
   recordingDate: string;
   recordingTopic: string;
   producerName: string;
+  submitLink?: string;
 }) {
+  const submitSection = params.submitLink
+    ? `<p><strong>Submit your invoice online:</strong> <a href="${params.submitLink}" style="color:#2563eb;font-weight:600">Click here to upload your invoice</a>. This link is valid for 30 days.</p>
+<p>Alternatively, you can reply to this email with your invoice attached. Your invoice must include:</p>`
+    : `<p>To process your payment as quickly as possible, please send us your invoice at your earliest convenience. Your invoice must include:</p>`;
   const body = `
 <p>Dear ${params.guestName},</p>
 <p>Thank you for participating in <strong>${params.programName}</strong>. We truly appreciate your valuable contribution and insights on ${params.recordingTopic}.</p>
 <p>As agreed, you will receive ${params.amount} ${params.currency} for your appearance.</p>
-<p>To process your payment as quickly as possible, please send us your invoice at your earliest convenience. Your invoice must include:</p>
+${submitSection}
 <ul>
   <li>Invoice date</li>
   <li>Invoice number</li>
@@ -36,7 +41,7 @@ export async function sendPostRecordingPaidRequestInvoice(params: {
   <li>Bank account details (account name, account number, sort code)</li>
   <li>PayPal address (if you prefer PayPal payment)</li>
 </ul>
-<p>Please reply to this email with your invoice attached. We look forward to receiving it.</p>
+<p>We look forward to receiving it.</p>
 <p>Best regards,<br/>${params.producerName}</p>
 `;
   return sendEmail({

@@ -9,6 +9,7 @@ import {
   sendPostRecordingWithInvoice,
   sendPostRecordingNoPayment,
 } from "@/lib/post-recording-emails";
+import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 
 export async function POST(
   request: NextRequest,
@@ -80,6 +81,7 @@ export async function POST(
           }
         }
       }
+      const submitLink = await getOrCreateGuestSubmitLink(supabase, guest.id);
       await sendPostRecordingPaidRequestInvoice({
         to: guestEmail,
         guestName: (guest as { guest_name: string }).guest_name,
@@ -89,6 +91,7 @@ export async function POST(
         recordingDate,
         recordingTopic,
         producerName,
+        submitLink,
       });
     } else {
       await sendPostRecordingNoPayment({

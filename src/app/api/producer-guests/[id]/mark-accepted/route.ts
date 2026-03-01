@@ -11,6 +11,7 @@ import {
   sendPostRecordingWithInvoice,
   sendPostRecordingNoPayment,
 } from "@/lib/post-recording-emails";
+import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/guest-invoice-pdf";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { createAuditEvent } from "@/lib/audit";
@@ -288,6 +289,7 @@ export async function POST(
           });
         }
       } else {
+        const submitLink = await getOrCreateGuestSubmitLink(supabase, id);
         await sendPostRecordingPaidRequestInvoice({
           to: guestEmail,
           guestName: (guest as { guest_name: string }).guest_name,
@@ -297,6 +299,7 @@ export async function POST(
           recordingDate,
           recordingTopic,
           producerName,
+          submitLink,
         });
       }
     } else {
