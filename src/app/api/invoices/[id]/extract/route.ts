@@ -62,6 +62,7 @@ export async function POST(
       success: true,
       needs_review: result.needs_review,
       warning: result.warning,
+      extracted: (result as { extracted?: Record<string, string | number | null> }).extracted,
     });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

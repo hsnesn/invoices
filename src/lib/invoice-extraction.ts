@@ -527,7 +527,12 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
       }
       await supabase.from("invoice_extracted_fields").upsert(updatePayload, { onConflict: "invoice_id" });
       await createAuditEvent({ invoice_id: invoiceId, actor_user_id: actorUserId, event_type: "invoice_extracted", payload: { partial_fields: targetFields } });
-      return { needs_review: false, warning: undefined };
+      const extracted: Record<string, string | number | null> = {};
+      for (const k of targetFields) {
+        const v = partialParsed[k];
+        if (v != null) extracted[k] = v;
+      }
+      return { needs_review: false, warning: undefined, extracted };
     }
   }
 

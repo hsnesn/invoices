@@ -146,7 +146,7 @@ function EditOtherInvoiceModal({
   onClose: () => void;
   saving: boolean;
   onReExtract?: (invoiceId: string) => Promise<void>;
-  onReExtractField?: (invoiceId: string, field: string) => Promise<void>;
+  onReExtractField?: (invoiceId: string, field: string, onSuccess?: (value: string | number | null) => void) => Promise<void>;
   timelineEvents?: TimelineEvent[];
   extractingField?: string | null;
 }) {
@@ -162,6 +162,30 @@ function EditOtherInvoiceModal({
   const [purpose, setPurpose] = useState(row.purpose === "—" ? "" : row.purpose);
   const [reExtracting, setReExtracting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const aiBtn = (field: string, title: string) =>
+    onReExtractField ? (
+      <button
+        type="button"
+        onClick={() => onReExtractField(row.id, field, (v) => {
+          if (field === "beneficiary_name") setBeneficiary(v != null ? String(v) : "");
+          else if (field === "company_name") setCompanyName(v != null ? String(v) : "");
+          else if (field === "sort_code") { setSortCode(v != null ? String(v) : ""); setValidationErrors((p) => ({ ...p, sortCode: "" })); }
+          else if (field === "account_number") { setAccountNumber(v != null ? String(v) : ""); setValidationErrors((p) => ({ ...p, accountNumber: "" })); }
+          else if (field === "invoice_number") setInvNumber(v != null ? String(v) : "");
+          else if (field === "gross_amount") setAmount(v != null ? String(v) : "");
+          else if (field === "currency") setCurrency(v != null ? String(v) : "GBP");
+          else if (field === "invoice_date") setInvDate(v != null ? String(v).slice(0, 10) : "");
+          else if (field === "due_date") setDueDate(v != null ? String(v).slice(0, 10) : "");
+          else if (field === "service_description") setPurpose(v != null ? String(v) : "");
+        })}
+        disabled={reExtracting || saving || extractingField === field}
+        className="shrink-0 self-center rounded border border-amber-300 bg-amber-50 px-1.5 py-1 text-[10px] font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-200 disabled:opacity-50"
+        title={title}
+      >
+        {extractingField === field ? "…" : "AI"}
+      </button>
+    ) : null;
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -207,63 +231,80 @@ function EditOtherInvoiceModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Beneficiary</label>
-              <input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <div className="mt-1 flex gap-1">
+                <input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                {aiBtn("beneficiary_name", "Re-extract beneficiary from file")}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Company Name</label>
-              <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <div className="mt-1 flex gap-1">
+                <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                {aiBtn("company_name", "Re-extract company name from file")}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Sort Code</label>
-              <input value={sortCode} onChange={(e) => { setSortCode(e.target.value); setValidationErrors((prev) => ({ ...prev, sortCode: "" })); }} placeholder="00-00-00" className={`mt-1 w-full rounded-lg px-3 py-2 text-sm font-mono dark:bg-gray-800 dark:text-white ${validationErrors.sortCode ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+              <div className="mt-1 flex gap-1">
+                <input value={sortCode} onChange={(e) => { setSortCode(e.target.value); setValidationErrors((prev) => ({ ...prev, sortCode: "" })); }} placeholder="00-00-00" className={`flex-1 min-w-0 rounded-lg px-3 py-2 text-sm font-mono dark:bg-gray-800 dark:text-white ${validationErrors.sortCode ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+                {aiBtn("sort_code", "Re-extract sort code from file")}
+              </div>
               {validationErrors.sortCode && <p className="mt-0.5 text-xs text-red-600">{validationErrors.sortCode}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Account Number</label>
-              <input value={accountNumber} onChange={(e) => { setAccountNumber(e.target.value); setValidationErrors((prev) => ({ ...prev, accountNumber: "" })); }} className={`mt-1 w-full rounded-lg px-3 py-2 text-sm font-mono dark:bg-gray-800 dark:text-white ${validationErrors.accountNumber ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+              <div className="mt-1 flex gap-1">
+                <input value={accountNumber} onChange={(e) => { setAccountNumber(e.target.value); setValidationErrors((prev) => ({ ...prev, accountNumber: "" })); }} className={`flex-1 min-w-0 rounded-lg px-3 py-2 text-sm font-mono dark:bg-gray-800 dark:text-white ${validationErrors.accountNumber ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+                {aiBtn("account_number", "Re-extract account number from file")}
+              </div>
               {validationErrors.accountNumber && <p className="mt-0.5 text-xs text-red-600">{validationErrors.accountNumber}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Invoice Number</label>
-              <input value={invNumber} onChange={(e) => setInvNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <div className="mt-1 flex gap-1">
+                <input value={invNumber} onChange={(e) => setInvNumber(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                {aiBtn("invoice_number", "Re-extract invoice number from file")}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Amount</label>
-              <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <div className="mt-1 flex gap-1">
+                <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                {aiBtn("gross_amount", "Re-extract amount from file")}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Currency</label>
-              <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-                <option value="GBP">GBP (£)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="USD">USD ($)</option>
-                <option value="TRY">TRY</option>
-              </select>
+              <div className="mt-1 flex gap-1">
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                  <option value="GBP">GBP (£)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="TRY">TRY</option>
+                </select>
+                {aiBtn("currency", "Re-extract currency from file")}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Invoice Date</label>
-              <input type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <div className="mt-1 flex gap-1">
+                <input type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                {aiBtn("invoice_date", "Re-extract invoice date from file")}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Due Date</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <div className="mt-1 flex gap-1">
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                {aiBtn("due_date", "Re-extract due date from file")}
+              </div>
             </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Purpose</label>
             <div className="flex gap-1 mt-1">
               <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} rows={2} className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-              {onReExtractField && (
-                <button
-                  type="button"
-                  onClick={() => onReExtractField(row.id, "service_description")}
-                  disabled={reExtracting || saving || extractingField === "service_description"}
-                  className="shrink-0 self-start rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-200 disabled:opacity-50"
-                  title="Re-extract purpose from file"
-                >
-                  {extractingField === "service_description" ? "…" : "AI"}
-                </button>
-              )}
+              {aiBtn("service_description", "Re-extract purpose from file")}
             </div>
           </div>
           {timelineEvents.length > 0 && (
@@ -1576,7 +1617,7 @@ export function OtherInvoicesBoard({
             }
           } : undefined}
           extractingField={reExtractingField}
-          onReExtractField={canEdit ? async (invoiceId, field) => {
+          onReExtractField={canEdit ? async (invoiceId, field, onSuccess) => {
             setReExtractingField(field);
             try {
               const res = await fetch(`/api/invoices/${invoiceId}/extract`, {
@@ -1584,11 +1625,18 @@ export function OtherInvoicesBoard({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ fields: [field] }),
               });
-              const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+              const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; extracted?: Record<string, string | number | null> };
               if (res.ok && data.success) {
-                toast.success(`Re-extracted ${field === "service_description" ? "purpose" : field}`);
-                refresh();
-                setEditModalRow(null);
+                const extracted = data.extracted ?? {};
+                const value = extracted[field] ?? null;
+                if (onSuccess) {
+                  onSuccess(value);
+                  toast.success(value != null ? `Re-extracted ${field === "service_description" ? "purpose" : field.replace(/_/g, " ")}` : "No value found in document");
+                } else {
+                  toast.success(`Re-extracted ${field === "service_description" ? "purpose" : field.replace(/_/g, " ")}`);
+                  refresh();
+                  setEditModalRow(null);
+                }
               } else {
                 toast.error(data.error ?? "Re-extraction failed");
               }
