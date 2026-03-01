@@ -488,11 +488,13 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   if (targetFields?.length && openai) {
     const { data: existing } = await supabase.from("invoice_extracted_fields").select("*").eq("invoice_id", invoiceId).single();
     const partialParsed: Record<string, string | number | null> = {};
+    const rp = regexParsed as Record<string, unknown>;
     for (const key of targetFields) {
       if (!FIELD_PROMPTS_MAP[key]) continue;
+      let found = false;
       const prompt = FIELD_PROMPTS_MAP[key] + CERTAIN_SUFFIX;
       try {
-        const extractionModel = process.env.EXTRACTION_MODEL || "gpt-4o";
+        const extractionModel = invType === "other" ? OTHER_INVOICE_MODEL : (process.env.EXTRACTION_MODEL || "gpt-4o");
         const completion = await openai.chat.completions.create({
           model: extractionModel,
           messages: [{ role: "user", content: `${prompt}\n\nDOCUMENT:\n${text}` }],
@@ -502,12 +504,21 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
         if (raw) {
           const obj = JSON.parse(raw) as { value?: string | number | null; certain?: boolean };
           const v = obj?.value;
-          if (v != null && v !== "" && obj?.certain !== false) {
+          // Use value when present; relax "certain" check for per-field (user can correct)
+          if (v != null && v !== "") {
             if (key === "gross_amount") partialParsed[key] = typeof v === "number" ? v : parseNumberLike(String(v));
             else partialParsed[key] = typeof v === "string" ? v.trim() : v;
+            found = true;
           }
         }
       } catch { /* */ }
+      // Fallback to regex when AI returns nothing
+      if (!found && rp[key] != null && String(rp[key]).trim() !== "") {
+        const rv = rp[key];
+        if (key === "gross_amount") partialParsed[key] = typeof rv === "number" ? rv : parseNumberLike(String(rv));
+        else if (key === "invoice_date" || key === "due_date") partialParsed[key] = String(rv).trim();
+        else partialParsed[key] = typeof rv === "string" ? rv.trim() : rv;
+      }
     }
     if (Object.keys(partialParsed).length > 0) {
       const existingRaw = (existing as { raw_json?: Record<string, unknown> } | null)?.raw_json ?? {};
