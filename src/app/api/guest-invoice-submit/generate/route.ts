@@ -282,13 +282,30 @@ export async function POST(request: NextRequest) {
       manager_user_id: managerUserId,
       pending_manager_since: invoiceDate,
     });
+    const storedAccountNumber = bankType === "international" ? iban : accountNumber;
+    const storedSortCode = bankType === "international" ? swiftBic : sortCode;
+    const rawJson: Record<string, unknown> = {
+      source: "guest_generated",
+      guest_name: g.guest_name,
+      bank_type: bankType,
+    };
+    if (bankType === "international") {
+      rawJson.iban = iban;
+      rawJson.swift_bic = swiftBic;
+      rawJson.bank_name = bankName || null;
+      rawJson.bank_address = bankAddress || null;
+    }
     await supabase.from("invoice_extracted_fields").insert({
       invoice_id: invoiceId,
       invoice_number: invNo,
+      beneficiary_name: accountName,
+      account_number: storedAccountNumber,
+      sort_code: storedSortCode,
+      gross_amount: totalAmount,
       extracted_currency: currency,
       needs_review: true,
       manager_confirmed: false,
-      raw_json: { source: "guest_generated", guest_name: g.guest_name },
+      raw_json: rawJson,
     });
 
     const { error: usedErr } = await supabase

@@ -44,7 +44,7 @@ export default async function InvoicePage({
   const isOperations = profile.role === "operations";
   const isFinance =
     profile.role === "finance" &&
-    ["ready_for_payment", "paid", "archived"].includes(wfCheck?.status ?? "");
+    ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(wfCheck?.status ?? "");
   const isProducer = (() => {
     const desc = (invoice as { service_description?: string | null }).service_description;
     if (!desc || !profile.full_name) return false;

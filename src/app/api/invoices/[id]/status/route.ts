@@ -88,7 +88,9 @@ export async function POST(
     const isAssigned = wf.manager_user_id === userId;
     const isAdmin = profile.role === "admin";
     const isOperations = profile.role === "operations";
-    const isFinance = profile.role === "finance" && ["ready_for_payment", "paid", "archived"].includes(wf.status);
+    const isFinance =
+      profile.role === "finance" &&
+      ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(wf.status);
 
     const { data: orMember } = await supabase
       .from("operations_room_members")
@@ -515,7 +517,10 @@ export async function POST(
         }
       } else if (to_status === "paid") {
         const adminCanForce = profile.role === "admin";
-        if (!adminCanForce && fromStatus !== "ready_for_payment") {
+        const financeCanMarkFromApproved =
+          profile.role === "finance" &&
+          ["approved_by_manager", "pending_admin", "ready_for_payment"].includes(fromStatus);
+        if (!adminCanForce && !financeCanMarkFromApproved) {
           return NextResponse.json(
             { error: "Invalid transition" },
             { status: 400 }

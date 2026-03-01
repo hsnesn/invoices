@@ -37,7 +37,7 @@ function canUserSeeInvoice(
 
   if (role === "finance") {
     const status = wf?.status ?? "submitted";
-    return ["ready_for_payment", "paid", "archived"].includes(status);
+    return ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(status);
   }
 
   return false;

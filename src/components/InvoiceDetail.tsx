@@ -556,12 +556,23 @@ export function InvoiceDetail({
                   />
                   <button
                     onClick={() =>
+                      transitionStatus("paid", {
+                        paid_date: paidDate,
+                      })
+                    }
+                    disabled={loading}
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    Mark paid
+                  </button>
+                  <button
+                    onClick={() =>
                       transitionStatus("ready_for_payment", {
                         admin_comment: adminComment || undefined,
                       })
                     }
                     disabled={loading}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+                    className="rounded-lg bg-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-500 disabled:opacity-50"
                   >
                     Mark ready for payment
                   </button>
@@ -614,11 +625,11 @@ export function InvoiceDetail({
 
       {/* Finance: mark paid / archive */}
       {profile.role === "finance" &&
-        ["ready_for_payment", "paid", "archived"].includes(status) ? (
+        ["approved_by_manager", "pending_admin", "ready_for_payment", "paid", "archived"].includes(status) ? (
           <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-6">
             <h2 className="mb-4 font-medium text-slate-200">Finance actions</h2>
             <div className="flex flex-wrap items-center gap-4">
-              {status === "ready_for_payment" && (
+              {(status === "approved_by_manager" || status === "pending_admin" || status === "ready_for_payment") && (
                 <button
                   onClick={() =>
                     transitionStatus("paid", {

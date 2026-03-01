@@ -830,15 +830,27 @@ function InvoiceTable({
                       </button>
                     )}
                   </div>
-                ) : (r.status === "approved_by_manager" || r.status === "pending_admin") && currentRole === "admin" ? (
-                  <button
-                    onClick={() => void onRejectInvoice(r.id)}
-                    disabled={actionLoadingId === r.id}
-                    title="Reject (reason required)"
-                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm ${rejectInlineShakeId === r.id ? "animate-shake-reject" : ""}`}
-                  >
-                    {actionLoadingId === r.id ? "…" : "✗"}
-                  </button>
+                ) : (r.status === "approved_by_manager" || r.status === "pending_admin") && (currentRole === "admin" || currentRole === "finance") ? (
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      onClick={() => void onMarkPaid(r.id)}
+                      disabled={actionLoadingId === r.id}
+                      title="Mark as paid"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 hover:bg-emerald-500 hover:text-white disabled:opacity-50 transition-all duration-200 shadow-sm dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-500"
+                    >
+                      {actionLoadingId === r.id ? "…" : "£"}
+                    </button>
+                    {currentRole === "admin" && (
+                      <button
+                        onClick={() => void onRejectInvoice(r.id)}
+                        disabled={actionLoadingId === r.id}
+                        title="Reject (reason required)"
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm ${rejectInlineShakeId === r.id ? "animate-shake-reject" : ""}`}
+                      >
+                        {actionLoadingId === r.id ? "…" : "✗"}
+                      </button>
+                    )}
+                  </div>
                 ) : r.status === "paid" || r.status === "archived" ? (
                   <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm" title="Paid">✓</span>
                 ) : r.status === "ready_for_payment" ? (
@@ -2022,7 +2034,10 @@ export function InvoicesBoard({
           onRejectInvoice(expandedRowId);
         }
       }
-      if ((e.key === "p" || e.key === "P") && row.status === "ready_for_payment" && (currentRole === "admin" || currentRole === "finance")) {
+      const canMarkPaid =
+        (currentRole === "admin" || currentRole === "finance") &&
+        ["approved_by_manager", "pending_admin", "ready_for_payment"].includes(row.status);
+      if ((e.key === "p" || e.key === "P") && canMarkPaid) {
         e.preventDefault();
         void onMarkPaid(expandedRowId);
       }
