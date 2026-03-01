@@ -21,12 +21,30 @@ export async function GET(
     const supabase = createAdminClient();
     const { data: statusRow, error: statusErr } = await supabase
       .from("guest_invoice_status_tokens")
-      .select("invoice_id, guest_name, program_name")
+      .select("invoice_id, guest_name, program_name, created_at")
       .eq("token", token)
       .single();
 
     if (statusErr || !statusRow) {
       return NextResponse.json({ error: "Status link not found" }, { status: 404 });
+    }
+
+    const createdAt = (statusRow as { created_at?: string }).created_at;
+    const EXPIRY_DAYS = 7;
+    if (createdAt) {
+      const created = new Date(createdAt).getTime();
+      const expiry = created + EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+      if (Date.now() > expiry) {
+        const isDownload = request.nextUrl.searchParams.get("download") === "1";
+        const statusPageUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin}/submit/status/${token}?expired=1`;
+        if (isDownload) {
+          return NextResponse.redirect(statusPageUrl);
+        }
+        return NextResponse.json(
+          { error: "This link has expired. Status and download links are valid for 7 days." },
+          { status: 410 }
+        );
+      }
     }
 
     const invoiceId = (statusRow as { invoice_id: string }).invoice_id;
@@ -58,13 +76,15 @@ export async function GET(
     const invoiceNumber = (ext as { invoice_number?: string | null })?.invoice_number ?? "—";
 
     const statusLabel =
-      status === "paid" || status === "archived"
+      paidDate != null
         ? "Paid"
-        : status === "approved_by_manager" || status === "ready_for_payment"
-          ? "Approved"
-          : status === "rejected"
-            ? "Rejected"
-            : "Processing";
+        : status === "paid" || status === "archived"
+          ? "Paid"
+          : status === "approved_by_manager" || status === "ready_for_payment"
+            ? "Approved"
+            : status === "rejected"
+              ? "Rejected"
+              : "Processing";
 
     const downloadParam = request.nextUrl.searchParams.get("download");
     if (downloadParam === "1" && inv.storage_path) {

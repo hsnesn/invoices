@@ -87,6 +87,7 @@ type DisplayRow = {
   swiftBic: string;
   bankName: string;
   bankAddress: string;
+  intTransfer: string;
   lineManager: string;
   lineManagerId: string;
   paymentDate: string;
@@ -164,6 +165,7 @@ const ALL_COLUMNS = [
   { key: "swiftBic", label: "SWIFT/BIC" },
   { key: "bankName", label: "Bank Name" },
   { key: "bankAddress", label: "Bank Address" },
+  { key: "intTransfer", label: "Int Transfer" },
   { key: "lineManager", label: "Dept EP" },
   { key: "paymentDate", label: "Payment Date" },
   { key: "tags", label: "Tags" },
@@ -259,6 +261,13 @@ function EditGuestInvoiceModal({
   const [invNumber, setInvNumber] = useState(row.invNumber === "—" ? "" : row.invNumber);
   const [sortCode, setSortCode] = useState(row.sortCode === "—" ? "" : row.sortCode);
   const [accountNumber, setAccountNumber] = useState(row.accountNumber === "—" ? "" : row.accountNumber);
+  const [currency, setCurrency] = useState(row.currency === "—" ? "GBP" : row.currency);
+  const bankTypeDefault: "uk" | "international" = (row.iban !== "—" && row.swiftBic !== "—") ? "international" : "uk";
+  const [bankType, setBankType] = useState<"uk" | "international">(bankTypeDefault);
+  const [iban, setIban] = useState(row.iban === "—" ? "" : row.iban);
+  const [swiftBic, setSwiftBic] = useState(row.swiftBic === "—" ? "" : row.swiftBic);
+  const [bankName, setBankName] = useState(row.bankName === "—" ? "" : row.bankName);
+  const [bankAddress, setBankAddress] = useState(row.bankAddress === "—" ? "" : row.bankAddress);
   const [lineManagerId, setLineManagerId] = useState(row.lineManagerId);
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
 
@@ -279,6 +288,12 @@ function EditGuestInvoiceModal({
     invNumber,
     sortCode,
     accountNumber,
+    currency,
+    bankType,
+    iban,
+    swiftBic,
+    bankName,
+    bankAddress,
     lineManagerId,
   };
 
@@ -388,14 +403,56 @@ function EditGuestInvoiceModal({
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Code</label>
-              <input type="text" value={sortCode} onChange={(e) => setSortCode(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Currency</label>
+              <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="GBP">GBP (£)</option>
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+              </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Number</label>
-              <input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bank Type</label>
+              <select value={bankType} onChange={(e) => setBankType(e.target.value as "uk" | "international")} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <option value="uk">UK (Sort Code / Account Number)</option>
+                <option value="international">International (IBAN / SWIFT)</option>
+              </select>
             </div>
           </div>
+          {bankType === "uk" ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Code</label>
+                <input type="text" value={sortCode} onChange={(e) => setSortCode(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Number</label>
+                <input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">IBAN</label>
+                  <input type="text" value={iban} onChange={(e) => setIban(e.target.value.toUpperCase())} placeholder="e.g. GB82WEST12345698765432" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">SWIFT / BIC</label>
+                  <input type="text" value={swiftBic} onChange={(e) => setSwiftBic(e.target.value.toUpperCase())} placeholder="e.g. DEUTGB2L" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bank Name</label>
+                  <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bank Address</label>
+                  <input type="text" value={bankAddress} onChange={(e) => setBankAddress(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                </div>
+              </div>
+            </>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Invoice File</label>
             <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -440,6 +497,12 @@ type EditDraft = {
   invNumber: string;
   sortCode: string;
   accountNumber: string;
+  currency: string;
+  bankType: "uk" | "international";
+  iban: string;
+  swiftBic: string;
+  bankName: string;
+  bankAddress: string;
   lineManagerId: string;
 };
 
@@ -924,14 +987,47 @@ function InvoiceTable({
                   </span>
                 </td>
               )}
+              {isCol("currency") && <td className="px-4 py-3 text-sm text-gray-700">{r.currency}</td>}
               {isCol("invNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.invNumber}>{r.invNumber}</td>}
               {isCol("sortCode") && <td className="px-4 py-3 text-sm text-gray-700">{r.sortCode}</td>}
               {isCol("accountNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountNumber}>{r.accountNumber}</td>}
-              {isCol("currency") && <td className="px-4 py-3 text-sm text-gray-700">{r.currency}</td>}
               {isCol("iban") && <td className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.iban}>{r.iban}</td>}
               {isCol("swiftBic") && <td className="max-w-[100px] truncate px-4 py-3 text-sm text-gray-700" title={r.swiftBic}>{r.swiftBic}</td>}
               {isCol("bankName") && <td className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankName}>{r.bankName}</td>}
               {isCol("bankAddress") && <td className="max-w-[160px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankAddress}>{r.bankAddress}</td>}
+              {isCol("intTransfer") && (
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  {(() => {
+                    const bankFormFile = r.files.find((f) => f.file_name.includes("-TRTW-") && f.file_name.toLowerCase().endsWith(".docx"));
+                    const isInternational = r.iban !== "—" && r.swiftBic !== "—";
+                    if (bankFormFile) {
+                      return (
+                        <button
+                          onClick={() => onDownloadFile?.(r.id, bankFormFile.storage_path, bankFormFile.file_name)}
+                          className="inline-flex items-center gap-1 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                          title={`Download ${bankFormFile.file_name}`}
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                          Word
+                        </button>
+                      );
+                    }
+                    if (isInternational && onGenerateBankTransferForm) {
+                      return (
+                        <button
+                          onClick={() => void onGenerateBankTransferForm(r.id)}
+                          disabled={onGenerateBankTransferFormLoading ?? false}
+                          className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-800/50 disabled:opacity-50"
+                          title="Generate bank transfer form (Word)"
+                        >
+                          {onGenerateBankTransferFormLoading ? "…" : "Generate"}
+                        </button>
+                      );
+                    }
+                    return <span className="text-gray-400">—</span>;
+                  })()}
+                </td>
+              )}
               {isCol("lineManager") && <td className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>}
               {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
               {isCol("tags") && (
@@ -1633,6 +1729,12 @@ export function InvoicesBoard({
         swiftBic,
         bankName,
         bankAddress,
+        intTransfer: (() => {
+          const bankFormFile = files.find((f) => f.file_name.includes("-TRTW-") && f.file_name.toLowerCase().endsWith(".docx"));
+          if (bankFormFile) return bankFormFile.file_name;
+          if (iban !== "—" && swiftBic !== "—") return "Generate";
+          return "—";
+        })(),
         lineManager,
         lineManagerId,
         paymentDate,
@@ -2675,8 +2777,12 @@ export function InvoicesBoard({
   };
 
   const exportToCsv = useCallback((data: DisplayRow[]) => {
-    const headers = ["Guest Name", "Title", "Producer", "Payment Type", "Department", "Programme", "Topic", "TX Date 1", "TX Date 2", "TX Date 3", "Invoice Date", "Account Name", "Amount", "Currency", "INV Number", "Sort Code", "Account Number", "IBAN", "SWIFT/BIC", "Bank Name", "Bank Address", "Dept EP", "Payment Date", "Status", "Rejection Reason"];
-    const rows = data.map((r) => [r.guest, r.title, r.producer, r.paymentType, r.department, r.programme, r.topic, r.tx1, r.tx2, r.tx3, r.invoiceDate, r.accountName, r.amount, r.currency, r.invNumber, r.sortCode, r.accountNumber, r.iban, r.swiftBic, r.bankName, r.bankAddress, r.lineManager, r.paymentDate, r.status, r.rejectionReason || ""]);
+    const headers = ["Guest Name", "Title", "Producer", "Payment Type", "Department", "Programme", "Topic", "TX Date 1", "TX Date 2", "TX Date 3", "Invoice Date", "Account Name", "Amount", "Currency", "INV Number", "Sort Code", "Account Number", "IBAN", "SWIFT/BIC", "Bank Name", "Bank Address", "Int Transfer", "Dept EP", "Payment Date", "Status", "Rejection Reason"];
+    const rows = data.map((r) => {
+      const bankFormFile = r.files.find((f) => f.file_name.includes("-TRTW-") && f.file_name.toLowerCase().endsWith(".docx"));
+      const intTransfer = bankFormFile ? bankFormFile.file_name : (r.iban !== "—" && r.swiftBic !== "—" ? "Generate" : "—");
+      return [r.guest, r.title, r.producer, r.paymentType, r.department, r.programme, r.topic, r.tx1, r.tx2, r.tx3, r.invoiceDate, r.accountName, r.amount, r.currency, r.invNumber, r.sortCode, r.accountNumber, r.iban, r.swiftBic, r.bankName, r.bankAddress, intTransfer, r.lineManager, r.paymentDate, r.status, r.rejectionReason || ""];
+    });
     const csv = [headers.map(csvEscape).join(","), ...rows.map((row) => row.map(csvEscape).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -2713,6 +2819,10 @@ export function InvoicesBoard({
       "SWIFT/BIC": r.swiftBic,
       "Bank Name": r.bankName,
       "Bank Address": r.bankAddress,
+      "Int Transfer": (() => {
+        const bankFormFile = r.files.find((f) => f.file_name.includes("-TRTW-") && f.file_name.toLowerCase().endsWith(".docx"));
+        return bankFormFile ? bankFormFile.file_name : (r.iban !== "—" && r.swiftBic !== "—" ? "Generate" : "—");
+      })(),
       "Dept EP": r.lineManager,
       "Payment Date": formatDate(r.paymentDate),
       "Status": r.status,
@@ -2725,29 +2835,42 @@ export function InvoicesBoard({
   }, [exportLocale]);
 
   const saveDraft = useCallback(async (invoiceId: string, draft: EditDraft) => {
+    const isInternational = draft.bankType === "international" && draft.iban.trim() && draft.swiftBic.trim();
+    const payload: Record<string, unknown> = {
+      guest_name: draft.guest,
+      title: draft.title,
+      producer: draft.producer,
+      payment_type: draft.paymentType.replace(/\s+/g, "_"),
+      department_id: draft.departmentId || null,
+      program_id: draft.programmeId || null,
+      topic: draft.topic,
+      invoice_date: draft.invoiceDate,
+      tx_date_1: draft.tx1,
+      tx_date_2: draft.tx2,
+      tx_date_3: draft.tx3,
+      beneficiary_name: draft.accountName,
+      gross_amount: draft.amount,
+      invoice_number: draft.invNumber,
+      extracted_currency: draft.currency || "GBP",
+      manager_user_id: draft.lineManagerId || null,
+    };
+    if (isInternational) {
+      payload.account_number = draft.iban.trim();
+      payload.sort_code = draft.swiftBic.trim();
+      payload.bank_type = "international";
+      payload.iban = draft.iban.trim();
+      payload.swift_bic = draft.swiftBic.trim();
+      payload.bank_name = draft.bankName.trim() || null;
+      payload.bank_address = draft.bankAddress.trim() || null;
+    } else {
+      payload.account_number = draft.accountNumber;
+      payload.sort_code = draft.sortCode;
+      payload.bank_type = "uk";
+    }
     const res = await fetch(`/api/invoices/${invoiceId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        guest_name: draft.guest,
-        title: draft.title,
-        producer: draft.producer,
-        payment_type: draft.paymentType.replace(/\s+/g, "_"),
-        department_id: draft.departmentId || null,
-        program_id: draft.programmeId || null,
-        topic: draft.topic,
-        invoice_date: draft.invoiceDate,
-        tx_date_1: draft.tx1,
-        tx_date_2: draft.tx2,
-        tx_date_3: draft.tx3,
-        beneficiary_name: draft.accountName,
-        gross_amount: draft.amount,
-        invoice_number: draft.invNumber,
-        sort_code: draft.sortCode,
-        account_number: draft.accountNumber,
-        extracted_currency: "GBP",
-        manager_user_id: draft.lineManagerId || null,
-      }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -3045,6 +3168,7 @@ export function InvoicesBoard({
           { key: "swiftBic", label: "SWIFT/BIC" },
           { key: "bankName", label: "Bank Name" },
           { key: "bankAddress", label: "Bank Address" },
+          { key: "intTransfer", label: "Int Transfer" },
           { key: "lineManager", label: "Dept EP" },
           { key: "paymentType", label: "Payment Type" },
           { key: "status", label: "Status" },

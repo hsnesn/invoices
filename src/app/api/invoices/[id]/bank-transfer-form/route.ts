@@ -103,6 +103,9 @@ export async function GET(
       .from(BUCKET)
       .upload(storagePath, docxBuffer, { contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", upsert: false });
 
+    if (uploadError) {
+      console.error("[bank-transfer-form] Storage upload failed:", uploadError.message);
+    }
     if (!uploadError) {
       const { data: existingFiles } = await supabase
         .from("invoice_files")
@@ -121,7 +124,7 @@ export async function GET(
 
     // Send form to London Finance by email
     try {
-      const { success } = await sendEmailWithAttachment({
+      const result = await sendEmailWithAttachment({
         to: LONDON_FINANCE_EMAIL,
         subject: `Bank transfer form — ${formFileName}`,
         html: `
@@ -134,8 +137,8 @@ export async function GET(
         `,
         attachments: [{ filename: formFileName, content: docxBuffer }],
       });
-      if (!success) {
-        console.warn("[bank-transfer-form] Failed to email London Finance");
+      if (!result.success) {
+        console.warn("[bank-transfer-form] Failed to email London Finance:", result.error ?? "Unknown error");
       }
     } catch (e) {
       console.warn("[bank-transfer-form] Email to London Finance failed:", e);

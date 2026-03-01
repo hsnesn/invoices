@@ -27,23 +27,21 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // 1. Find existing status token for this email (case-insensitive)
+    // 1. Find invoice by guest_email (existing token or raw_json)
+    let invoiceId: string;
+    let guestName: string;
+    let programName: string;
+
     const { data: existingToken } = await supabase
       .from("guest_invoice_status_tokens")
-      .select("token, invoice_id, guest_name, program_name")
+      .select("invoice_id, guest_name, program_name")
       .ilike("guest_email", email)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    let token: string;
-    let guestName: string;
-    let programName: string;
-    let invoiceId: string;
-
     if (existingToken) {
-      const row = existingToken as { token: string; invoice_id: string; guest_name?: string; program_name?: string };
-      token = row.token;
+      const row = existingToken as { invoice_id: string; guest_name?: string; program_name?: string };
       invoiceId = row.invoice_id;
       guestName = row.guest_name?.trim() || "Guest";
       programName = row.program_name?.trim() || "";
@@ -88,31 +86,29 @@ export async function POST(request: NextRequest) {
         id: (inv as { id: string }).id,
         guest_name: guestMatch?.[1]?.trim() || "Guest",
         program_name: progMatch?.[1]?.trim() || "",
-        invoice_number: (matchingExt as { invoice_number?: string }).invoice_number ?? "—",
       };
 
-      // 3. Create new status token
-      const newToken = crypto.randomUUID();
-      const { error: insertErr } = await supabase.from("guest_invoice_status_tokens").insert({
-        invoice_id: match.id,
-        token: newToken,
-        guest_email: email,
-        guest_name: match.guest_name,
-        program_name: match.program_name || null,
-      });
-
-      if (insertErr) {
-        console.error("[Request status link] Insert failed:", insertErr);
-        return NextResponse.json({ error: "Could not create status link. Please try again." }, { status: 500 });
-      }
-
-      token = newToken;
+      invoiceId = match.id;
       guestName = match.guest_name;
       programName = match.program_name;
-      invoiceId = match.id;
     }
 
-    const statusLink = `${APP_URL}/submit/status/${token}`;
+    // Always create a new token so the user gets a fresh 7-day link (even when existing token is found)
+    const newToken = crypto.randomUUID();
+    const { error: insertErr } = await supabase.from("guest_invoice_status_tokens").insert({
+      invoice_id: invoiceId,
+      token: newToken,
+      guest_email: email,
+      guest_name: guestName,
+      program_name: programName || null,
+    });
+
+    if (insertErr) {
+      console.error("[Request status link] Insert failed:", insertErr);
+      return NextResponse.json({ error: "Could not create status link. Please try again." }, { status: 500 });
+    }
+
+    const statusLink = `${APP_URL}/submit/status/${newToken}`;
 
     const { data: ext } = await supabase
       .from("invoice_extracted_fields")

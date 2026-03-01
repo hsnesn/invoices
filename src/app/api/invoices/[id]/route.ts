@@ -152,7 +152,7 @@ export async function PATCH(
 
     const { data: oldExtracted } = await supabase
       .from("invoice_extracted_fields")
-      .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount")
+      .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, raw_json")
       .eq("invoice_id", invoiceId)
       .single();
 
@@ -176,7 +176,12 @@ export async function PATCH(
       body.sort_code !== undefined ||
       body.invoice_number !== undefined ||
       body.gross_amount !== undefined ||
-      body.extracted_currency !== undefined;
+      body.extracted_currency !== undefined ||
+      body.bank_type !== undefined ||
+      body.iban !== undefined ||
+      body.swift_bic !== undefined ||
+      body.bank_name !== undefined ||
+      body.bank_address !== undefined;
 
     if (hasInvoiceFields) {
       const guest_name = asString(body.guest_name);
@@ -256,11 +261,33 @@ export async function PATCH(
 
       const { data: currentExtracted } = await supabase
         .from("invoice_extracted_fields")
-        .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, extracted_currency")
+        .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, extracted_currency, raw_json")
         .eq("invoice_id", invoiceId)
         .single();
 
       const cur = (currentExtracted ?? {}) as Record<string, unknown>;
+      const existingRaw = (cur.raw_json ?? {}) as Record<string, unknown>;
+
+      const bankType = asString(body.bank_type);
+      const ibanVal = asString(body.iban);
+      const swiftVal = asString(body.swift_bic);
+      const bankNameVal = asString(body.bank_name);
+      const bankAddrVal = asString(body.bank_address);
+
+      const rawJson: Record<string, unknown> = { ...existingRaw };
+      if (bankType) {
+        rawJson.bank_type = bankType;
+        if (bankType === "uk") {
+          rawJson.iban = null;
+          rawJson.swift_bic = null;
+          rawJson.bank_name = null;
+          rawJson.bank_address = null;
+        }
+      }
+      if (ibanVal) rawJson.iban = ibanVal;
+      if (swiftVal) rawJson.swift_bic = swiftVal;
+      if (bankNameVal !== undefined) rawJson.bank_name = bankNameVal || null;
+      if (bankAddrVal !== undefined) rawJson.bank_address = bankAddrVal || null;
 
       const { error: extractedUpdateError } = await supabase
         .from("invoice_extracted_fields")
@@ -280,6 +307,7 @@ export async function PATCH(
                     : null)
                 : cur.gross_amount,
             extracted_currency: asString(body.extracted_currency) ?? cur.extracted_currency ?? null,
+            raw_json: Object.keys(rawJson).length > 0 ? rawJson : existingRaw,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "invoice_id" }
@@ -290,6 +318,11 @@ export async function PATCH(
           { error: "Extracted field update failed: " + extractedUpdateError.message },
           { status: 500 }
         );
+      }
+
+      const newCurrency = asString(body.extracted_currency) ?? (cur.extracted_currency as string) ?? null;
+      if (newCurrency) {
+        await supabase.from("invoices").update({ currency: newCurrency }).eq("id", invoiceId);
       }
     }
 

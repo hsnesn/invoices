@@ -24,8 +24,12 @@ export function GuestInvoiceStatusClient({ token }: { token: string }) {
 
   useEffect(() => {
     fetch(`/api/guest-invoice-submit/status/${token}`)
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) {
+          setError(d.error ?? "Status link not found");
+          return;
+        }
         if (d.error) setError(d.error);
         else setData(d);
       })

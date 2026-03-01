@@ -57,6 +57,8 @@ export type DisplayRow = {
   swiftBic: string;
   bankName: string;
   bankAddress: string;
+  /** Int Transfer: bank form file name if exists, "Generate" if international, else "—" */
+  intTransfer: string;
   lineManager: string;
   lineManagerId: string;
   paymentDate: string;
@@ -123,5 +125,11 @@ export type EditDraft = {
   invNumber: string;
   sortCode: string;
   accountNumber: string;
+  currency: string;
+  bankType: "uk" | "international";
+  iban: string;
+  swiftBic: string;
+  bankName: string;
+  bankAddress: string;
   lineManagerId: string;
 };

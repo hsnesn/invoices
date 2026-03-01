@@ -29,6 +29,7 @@ type DisplayRow = {
   swiftBic: string;
   bankName: string;
   bankAddress: string;
+  intTransfer: string;
   lineManager: string;
   lineManagerId: string;
   paymentDate: string;
