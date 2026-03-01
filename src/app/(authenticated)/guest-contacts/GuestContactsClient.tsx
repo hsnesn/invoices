@@ -188,6 +188,13 @@ export function GuestContactsClient({
   const [chatHistory, setChatHistory] = useState<{ query: string; summary: string; sources: string[]; guestName?: string | null }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const [fullEvalGuest, setFullEvalGuest] = useState<string | null>(null);
+  const [fullEvalLoading, setFullEvalLoading] = useState(false);
+  const [fullEvalData, setFullEvalData] = useState<{ appearances: { topic: string; date: string; programme: string; department: string; amount: string; invoice_id: string }[]; risk_analysis: string; sources: string[] } | null>(null);
+  const [fullEvalError, setFullEvalError] = useState<string | null>(null);
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [bulkEmailModal, setBulkEmailModal] = useState(false);
@@ -745,6 +752,43 @@ export function GuestContactsClient({
     }
   };
 
+  const runFullEvaluation = async (guestName: string) => {
+    const contact = filteredContacts.find((c) => c.guest_name === guestName);
+    const title = contact?.title ?? "";
+    setFullEvalGuest(guestName);
+    setFullEvalLoading(true);
+    setFullEvalData(null);
+    setFullEvalError(null);
+    try {
+      const res = await fetch("/api/guest-contacts/full-evaluation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guest_name: guestName, title }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFullEvalData({
+          appearances: data.appearances ?? [],
+          risk_analysis: data.risk_analysis ?? "",
+          sources: data.sources ?? [],
+        });
+      } else {
+        setFullEvalError(data.error ?? "Evaluation failed.");
+      }
+    } catch (e) {
+      setFullEvalError(toUserFriendlyError(e));
+    } finally {
+      setFullEvalLoading(false);
+    }
+  };
+
+  const closeFullEval = () => {
+    setFullEvalGuest(null);
+    setFullEvalData(null);
+    setFullEvalError(null);
+  };
+
   const exportRiskAnalysisPdf = async () => {
     if (!selectedGuest || !riskAnalysis) return;
     try {
@@ -1000,357 +1044,251 @@ export function GuestContactsClient({
     }
   };
 
+  const btn = "rounded-lg px-3 py-2 text-sm font-medium transition-colors";
+  const btnPrimary = `${btn} bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-600`;
+  const btnSecondary = `${btn} border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700`;
+  const btnGhost = `${btn} text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800`;
+
   return (
     <div>
       {bulkUploading && <UploadOverlay message="Processing..." />}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Guest Contacts</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Guest names with phone and email from invoices (where available).
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">Guest Contacts</h1>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+            Names, phone and email from invoices.
           </p>
         </div>
-        <Link
-          href="/dashboard"
-          className="text-sm text-sky-600 hover:text-sky-700 dark:text-sky-400"
-        >
+        <Link href="/dashboard" className="text-sm text-sky-600 hover:text-sky-700 dark:text-sky-400">
           ← Dashboard
         </Link>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          value={searchInput}
-          onChange={(e) => {
-            const v = e.target.value;
-            setSearchInput(v);
-            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-            searchTimeoutRef.current = setTimeout(() => updateUrl({ search: v, page: 1 }), 400);
-          }}
-          onKeyDown={(e) => { if (e.key === "Enter") { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); updateUrl({ search: searchInput, page: 1 }); } }}
-          placeholder="Search by name, title, phone or email..."
-          className="w-full max-w-md rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          aria-label="Search contacts"
-        />
-        <select
-          value={filterBy}
-          onChange={(e) => updateUrl({ filterBy: e.target.value, page: 1 })}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          aria-label="Filter contacts"
-        >
-          <option value="all">All contacts</option>
-          <option value="has_phone">Has phone</option>
-          <option value="has_email">Has email</option>
-          <option value="has_ai">Has AI data</option>
-          <option value="missing_phone">Missing phone</option>
-          <option value="missing_email">Missing email</option>
-        </select>
-        <select
-          value={inviteFilter}
-          onChange={(e) => updateUrl({ inviteFilter: e.target.value, page: 1 })}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          aria-label="Filter by invite status"
-        >
-          <option value="all">All invite status</option>
-          <option value="accepted">Accepted</option>
-          <option value="rejected">Rejected</option>
-          <option value="no_response">No response</option>
-          <option value="no_match">No match</option>
-        </select>
-        <select
-          value={dateFilter}
-          onChange={(e) => updateUrl({ dateFilter: e.target.value, page: 1 })}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          aria-label="Filter by invoice date"
-        >
-          <option value="all">All dates</option>
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="90">Last 90 days</option>
-          <option value="year">This year</option>
-        </select>
-        <select
-          value={sortBy}
-          onChange={(e) => updateUrl({ sortBy: e.target.value })}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          aria-label="Sort by"
-        >
-          <option value="name">Sort by name</option>
-          <option value="date">Sort by date (newest)</option>
-          <option value="usage">Sort by usage (most used)</option>
-        </select>
-        {departments.length > 0 && (
-          <select
-            value={deptFilter}
-            onChange={(e) => updateUrl({ deptFilter: e.target.value, page: 1 })}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            aria-label="Filter by department"
-          >
-            <option value="all">All departments</option>
-            {departments.sort().map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        )}
-        {programs.length > 0 && (
-          <select
-            value={progFilter}
-            onChange={(e) => updateUrl({ progFilter: e.target.value, page: 1 })}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            aria-label="Filter by programme"
-          >
-            <option value="all">All programmes</option>
-            {programs.sort().map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-        )}
-        {(titles.length > 0 || hasEmptyTitle) && (
-          <select
-            value={titleFilter}
-            onChange={(e) => updateUrl({ titleFilter: e.target.value, page: 1 })}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            aria-label="Filter by title"
-          >
-            <option value="all">All titles</option>
-            {hasEmptyTitle && <option value="__empty__">(No title)</option>}
-            {titles.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        )}
-        {(topics.length > 0 || hasEmptyTopic) && (
-          <select
-            value={topicFilter}
-            onChange={(e) => updateUrl({ topicFilter: e.target.value, page: 1 })}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            aria-label="Filter by topic"
-          >
-            <option value="all">All topics</option>
-            {hasEmptyTopic && <option value="__empty__">(No topic)</option>}
-            {topics.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        )}
-        <button
-          type="button"
-          onClick={() => updateUrl({ favoriteFilter: favoriteFilter === true ? null : true, page: 1 })}
-          className={`rounded-lg px-3 py-2 text-sm font-medium ${favoriteFilter === true ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"}`}
-        >
-          ★ Favorites
-        </button>
-        <div className="flex items-center gap-1">
+      {/* Search + primary row */}
+      <div className="mb-4 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSearchInput(v);
+              if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = setTimeout(() => updateUrl({ search: v, page: 1 }), 400);
+            }}
+            onKeyDown={(e) => { if (e.key === "Enter") { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); updateUrl({ search: searchInput, page: 1 }); } }}
+            placeholder="Search by name, title, phone or email..."
+            className="min-w-[280px] flex-1 max-w-md rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-500"
+            aria-label="Search contacts"
+          />
           <button
             type="button"
-            onClick={() => setViewMode("table")}
-            className={`rounded-lg px-3 py-2 text-sm ${viewMode === "table" ? "bg-gray-200 dark:bg-gray-700" : "border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"}`}
-            aria-label="Table view"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={`${btnSecondary} flex items-center gap-2 ${(filterBy !== "all" || inviteFilter !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all") ? "ring-1 ring-sky-500/50" : ""}`}
           >
-            Table
+            Filters
+            {(filterBy !== "all" || inviteFilter !== "all" || dateFilter !== "all" || deptFilter !== "all" || progFilter !== "all" || titleFilter !== "all" || topicFilter !== "all") && (
+              <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">on</span>
+            )}
+            <span className={`text-xs ${filtersOpen ? "rotate-180" : ""} transition-transform`}>▾</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("card")}
-            className={`rounded-lg px-3 py-2 text-sm ${viewMode === "card" ? "bg-gray-200 dark:bg-gray-700" : "border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"}`}
-            aria-label="Card view"
-          >
-            Card
-          </button>
-        </div>
-        {canUseRiskResearch && (
-          <button
-            type="button"
-            onClick={() => setChatOpen(true)}
-            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
-          >
-            Research chat
-          </button>
-        )}
-        {isAdmin && (
-          <>
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={runExtraction}
-              disabled={extracting}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              onClick={() => setViewMode("table")}
+              className={`${btnGhost} ${viewMode === "table" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
+              aria-label="Table view"
             >
-              {extracting ? "Scanning invoices..." : "Scan all invoices for contact info"}
+              Table
             </button>
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg"
-                className="hidden"
-                aria-label="Select invoice files for bulk upload"
-              />
+            <button
+              type="button"
+              onClick={() => setViewMode("card")}
+              className={`${btnGhost} ${viewMode === "card" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
+              aria-label="Card view"
+            >
+              Card
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => updateUrl({ favoriteFilter: favoriteFilter === true ? null : true, page: 1 })}
+            className={`${btnGhost} ${favoriteFilter ? "text-amber-600 dark:text-amber-400" : ""}`}
+          >
+            ★ Favorites
+          </button>
+          {canUseRiskResearch && (
+            <button type="button" onClick={() => setChatOpen(true)} className={btnSecondary}>
+              Research chat
+            </button>
+          )}
+          <button type="button" onClick={() => setAddModal(true)} className={btnPrimary}>
+            Add contact
+          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={exportExcel}
+              disabled={filteredContacts.length === 0}
+              className={`${btnSecondary} disabled:opacity-50`}
+            >
+              Export
+            </button>
+          )}
+          <button type="button" onClick={() => setColumnsModal(true)} className={btnGhost}>
+            Columns
+          </button>
+          <ExportLocaleSelector />
+        </div>
+
+        {/* Collapsible filters */}
+        {filtersOpen && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+            <select value={filterBy} onChange={(e) => updateUrl({ filterBy: e.target.value, page: 1 })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+              <option value="all">All contacts</option>
+              <option value="has_phone">Has phone</option>
+              <option value="has_email">Has email</option>
+              <option value="has_ai">Has AI data</option>
+              <option value="missing_phone">Missing phone</option>
+              <option value="missing_email">Missing email</option>
+            </select>
+            <select value={inviteFilter} onChange={(e) => updateUrl({ inviteFilter: e.target.value, page: 1 })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+              <option value="all">Invite status</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="no_response">No response</option>
+              <option value="no_match">No match</option>
+            </select>
+            <select value={dateFilter} onChange={(e) => updateUrl({ dateFilter: e.target.value, page: 1 })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+              <option value="all">All dates</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="year">This year</option>
+            </select>
+            <select value={sortBy} onChange={(e) => updateUrl({ sortBy: e.target.value })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+              <option value="name">Sort by name</option>
+              <option value="date">Sort by date</option>
+              <option value="usage">Sort by usage</option>
+            </select>
+            {departments.length > 0 && (
+              <select value={deptFilter} onChange={(e) => updateUrl({ deptFilter: e.target.value, page: 1 })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                <option value="all">All departments</option>
+                {departments.sort().map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
+            {programs.length > 0 && (
+              <select value={progFilter} onChange={(e) => updateUrl({ progFilter: e.target.value, page: 1 })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                <option value="all">All programmes</option>
+                {programs.sort().map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            )}
+            {(titles.length > 0 || hasEmptyTitle) && (
+              <select value={titleFilter} onChange={(e) => updateUrl({ titleFilter: e.target.value, page: 1 })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                <option value="all">All titles</option>
+                {hasEmptyTitle && <option value="__empty__">(No title)</option>}
+                {titles.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+            {(topics.length > 0 || hasEmptyTopic) && (
+              <select value={topicFilter} onChange={(e) => updateUrl({ topicFilter: e.target.value, page: 1 })} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                <option value="all">All topics</option>
+                {hasEmptyTopic && <option value="__empty__">(No topic)</option>}
+                {topics.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+          </div>
+        )}
+
+        {/* Admin actions - dropdown */}
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                onClick={() => { setActionsMenuOpen(!actionsMenuOpen); setImportMenuOpen(false); }}
+                className={`${btnSecondary} flex items-center gap-1.5`}
               >
-                Select files (max 10)
+                AI & bulk
+                <span className={`text-xs ${actionsMenuOpen ? "rotate-180" : ""} transition-transform`}>▾</span>
               </button>
-            </>
-            <button
-              type="button"
-              onClick={runBulkUpload}
-              disabled={bulkUploading}
-              className="rounded-lg flex items-center justify-center gap-2 bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              {bulkUploading ? (
+              {actionsMenuOpen && (
                 <>
-                  <LogoLoader size="sm" variant="light" />
-                  <span>Processing...</span>
+                  <div className="fixed inset-0 z-40" onClick={() => setActionsMenuOpen(false)} aria-hidden="true" />
+                  <div className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <button type="button" onClick={() => { runExtraction(); setActionsMenuOpen(false); }} disabled={extracting} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      {extracting ? "Scanning..." : "Scan invoices for contact info"}
+                    </button>
+                    <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg" className="hidden" aria-label="Select invoice files" />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
+                      Select files (max 10)
+                    </button>
+                    <button type="button" onClick={() => { runBulkUpload(); setActionsMenuOpen(false); }} disabled={bulkUploading} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      {bulkUploading ? "Processing..." : "Upload and extract contacts"}
+                    </button>
+                    <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                    <button type="button" onClick={() => { runBulkAiSearch(); setActionsMenuOpen(false); }} disabled={bulkSearching || filteredContacts.length === 0} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      {bulkSearching ? "Searching..." : `Bulk AI search (${selectedGuests.size || "all"})`}
+                    </button>
+                    <button type="button" onClick={() => { setBulkEmailModal(true); setActionsMenuOpen(false); }} disabled={selectedGuests.size === 0} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      Bulk email ({selectedGuests.size})
+                    </button>
+                    <button type="button" onClick={() => { runCategorize(); setActionsMenuOpen(false); }} disabled={categorizing} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      {categorizing ? "Categorizing..." : "AI categorize all"}
+                    </button>
+                    <button type="button" onClick={() => { runFindDuplicates(); setActionsMenuOpen(false); }} disabled={duplicatesLoading} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      {duplicatesLoading ? "Searching..." : "Find duplicates"}
+                    </button>
+                  </div>
                 </>
-              ) : (
-                "Upload and extract contacts"
               )}
-            </button>
-            <button
-              type="button"
-              onClick={runBulkAiSearch}
-              disabled={bulkSearching || filteredContacts.length === 0}
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
-            >
-              {bulkSearching ? "Searching..." : `Bulk AI search (${selectedGuests.size || "all"} selected)`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddModal(true)}
-              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-            >
-              Add contact
-            </button>
-            <button
-              type="button"
-              onClick={() => setBulkEmailModal(true)}
-              disabled={selectedGuests.size === 0}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
-            >
-              Bulk email ({selectedGuests.size})
-            </button>
-            <button
-              type="button"
-              onClick={runCategorize}
-              disabled={categorizing}
-              className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200 dark:hover:bg-indigo-900/50 disabled:opacity-50"
-            >
-              {categorizing ? "Categorizing..." : "AI categorize all"}
-            </button>
-            <button
-              type="button"
-              onClick={runFindDuplicates}
-              disabled={duplicatesLoading}
-              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50"
-            >
-              {duplicatesLoading ? "Searching..." : "Find duplicates"}
-            </button>
-          </>
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setImportMenuOpen(!importMenuOpen); setActionsMenuOpen(false); }}
+                className={`${btnSecondary} flex items-center gap-1.5`}
+              >
+                Import
+                <span className={`text-xs ${importMenuOpen ? "rotate-180" : ""} transition-transform`}>▾</span>
+              </button>
+              {importMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setImportMenuOpen(false)} aria-hidden="true" />
+                  <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <button type="button" onClick={() => guestLogInputRef.current?.click()} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
+                      {guestLogFile ? guestLogFile.name : "Select Guest Log"}
+                    </button>
+                    <button type="button" onClick={() => { runGuestLogImport(); setImportMenuOpen(false); }} disabled={guestLogImporting || !guestLogFile} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      {guestLogImporting ? "Importing..." : "Import Guest Log"}
+                    </button>
+                    <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                    <button type="button" onClick={() => guestListInputRef.current?.click()} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
+                      {guestListFile ? guestListFile.name : "Select Guest List"}
+                    </button>
+                    <button type="button" onClick={() => { runGuestListImport(); setImportMenuOpen(false); }} disabled={guestListImporting || !guestListFile} title="Overwrites guest list" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-700">
+                      {guestListImporting ? "Importing..." : "Import & Overwrite"}
+                    </button>
+                    <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                    <button type="button" onClick={() => { setDeleteBackupModal(true); setImportMenuOpen(false); }} disabled={totalCount === 0} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20">
+                      Delete list
+                    </button>
+                    <button type="button" onClick={() => { setRestoreModal(true); fetchBackups(); setImportMenuOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
+                      Restore
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <input ref={guestLogInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => setGuestLogFile(e.target.files?.[0] ?? null)} aria-label="Select Guest Log" />
+            <input ref={guestListInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => setGuestListFile(e.target.files?.[0] ?? null)} aria-label="Select Guest List" />
+          </div>
         )}
-        <input
-          ref={guestLogInputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          className="hidden"
-          aria-label="Select Guest Log Excel file"
-          onChange={(e) => setGuestLogFile(e.target.files?.[0] ?? null)}
-        />
-        <button
-          type="button"
-          onClick={() => guestLogInputRef.current?.click()}
-          className="rounded-lg border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-800 hover:bg-teal-100 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-200 dark:hover:bg-teal-900/50"
-        >
-          {guestLogFile ? guestLogFile.name : "Select Guest Log"}
-        </button>
-        <button
-          type="button"
-          onClick={runGuestLogImport}
-          disabled={guestLogImporting || !guestLogFile}
-          className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
-        >
-          {guestLogImporting ? "Importing..." : "Import Guest Log"}
-        </button>
-        <input
-          ref={guestListInputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          className="hidden"
-          aria-label="Select Guest List Excel (overwrite)"
-          onChange={(e) => setGuestListFile(e.target.files?.[0] ?? null)}
-        />
-        <button
-          type="button"
-          onClick={() => guestListInputRef.current?.click()}
-          className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-800 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/30 dark:text-rose-200 dark:hover:bg-rose-900/50"
-        >
-          {guestListFile ? guestListFile.name : "Select Guest List"}
-        </button>
-        <button
-          type="button"
-          onClick={runGuestListImport}
-          disabled={guestListImporting || !guestListFile}
-          title="Overwrites guest list with Excel. Preserves AI assessment, invoice links."
-          className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
-        >
-          {guestListImporting ? "Importing..." : "Import & Overwrite"}
-        </button>
-        {isAdmin && (
-          <>
-            <button
-              type="button"
-              onClick={() => setDeleteBackupModal(true)}
-              disabled={totalCount === 0}
-              title="Delete list and create backup for restore"
-              className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200 dark:hover:bg-red-900/50 disabled:opacity-50"
-            >
-              Delete list
-            </button>
-            <button
-              type="button"
-              onClick={() => { setRestoreModal(true); fetchBackups(); }}
-              title="Restore from a previous backup"
-              className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200 dark:hover:bg-violet-900/50"
-            >
-              Restore
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          onClick={() => setColumnsModal(true)}
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          Columns
-        </button>
-        <ExportLocaleSelector />
-        {canExport && (
-          <button
-            type="button"
-            onClick={exportExcel}
-            disabled={filteredContacts.length === 0}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
-          >
-            Export Excel
-          </button>
-        )}
-        {extractMessage && (
-          <span className="text-sm text-gray-600 dark:text-gray-400">{extractMessage}</span>
-        )}
-        {bulkMessage && (
-          <span className="text-sm text-gray-600 dark:text-gray-400">{bulkMessage}</span>
-        )}
-        {categorizeMessage && (
-          <span className="text-sm text-gray-600 dark:text-gray-400">{categorizeMessage}</span>
-        )}
-        {guestLogMessage && (
-          <span className="text-sm text-gray-600 dark:text-gray-400">{guestLogMessage}</span>
-        )}
-        {guestListMessage && (
-          <span className="text-sm text-gray-600 dark:text-gray-400">{guestListMessage}</span>
+
+        {(extractMessage || bulkMessage || categorizeMessage || guestLogMessage || guestListMessage) && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {extractMessage || bulkMessage || categorizeMessage || guestLogMessage || guestListMessage}
+          </p>
         )}
       </div>
 
@@ -1573,6 +1511,17 @@ export function GuestContactsClient({
                   {visibleColumns.has("guest_name") && (
                     <td className="max-w-[180px] px-3 py-2 align-top text-sm font-medium text-gray-900 dark:text-white">
                       <span className="flex items-center gap-2">
+                        {canUseRiskResearch && (
+                          <button
+                            type="button"
+                            onClick={() => runFullEvaluation(c.guest_name)}
+                            className="shrink-0 rounded p-1 text-sky-500 hover:bg-sky-100 hover:text-sky-600 dark:hover:bg-sky-900/30 dark:hover:text-sky-400"
+                            title="Full evaluation (TRT programs + risk analysis)"
+                            aria-label="Full evaluation"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => toggleFavorite(c)}
@@ -1803,6 +1752,17 @@ export function GuestContactsClient({
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
+                    {canUseRiskResearch && (
+                      <button
+                        type="button"
+                        onClick={() => runFullEvaluation(c.guest_name)}
+                        className="shrink-0 rounded p-1 text-sky-500 hover:bg-sky-100 hover:text-sky-600 dark:hover:bg-sky-900/30 dark:hover:text-sky-400"
+                        title="Full evaluation (TRT programs + risk analysis)"
+                        aria-label="Full evaluation"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      </button>
+                    )}
                     <button type="button" onClick={() => toggleFavorite(c)} className="shrink-0 text-amber-500 hover:text-amber-600">
                       {c.is_favorite ? "★" : "☆"}
                     </button>
@@ -2132,6 +2092,94 @@ export function GuestContactsClient({
                   {chatLoading ? "Searching..." : "Search"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {fullEvalGuest && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="full-eval-title"
+          onClick={closeFullEval}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+              <h2 id="full-eval-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+                Full evaluation — {fullEvalGuest}
+              </h2>
+              <button
+                type="button"
+                onClick={closeFullEval}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {fullEvalLoading ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">Loading TRT programs and risk analysis...</p>
+              ) : fullEvalError ? (
+                <p className="text-sm text-red-600 dark:text-red-400">{fullEvalError}</p>
+              ) : fullEvalData ? (
+                <>
+                  {fullEvalData.appearances.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">TRT programs</h3>
+                      <ul className="space-y-2">
+                        {fullEvalData.appearances.map((a, i) => (
+                          <li
+                            key={i}
+                            className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 text-sm dark:border-gray-600 dark:bg-gray-900"
+                          >
+                            <span className="font-medium text-gray-900 dark:text-white">{a.date}</span>
+                            <span className="text-gray-600 dark:text-gray-300">{a.topic}</span>
+                            <span className="text-gray-500 dark:text-gray-400">({a.programme})</span>
+                            <span className="text-gray-500 dark:text-gray-400">{a.amount}</span>
+                            <a
+                              href={`/api/invoices/${a.invoice_id}/pdf?redirect=1`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-auto text-sky-600 hover:underline dark:text-sky-400"
+                            >
+                              View invoice
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {fullEvalData.appearances.length === 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No TRT program data in invoices.</p>
+                  )}
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Risk analysis</h3>
+                    <div className="overflow-hidden rounded-xl border-l-4 border-amber-500 bg-gradient-to-br from-amber-50 to-white p-4 dark:border-amber-600 dark:from-amber-950/40 dark:to-gray-900">
+                      <FormattedResearchText text={fullEvalData.risk_analysis} />
+                    </div>
+                    {fullEvalData.sources.length > 0 && (
+                      <div className="mt-2 rounded-lg border border-amber-200/60 bg-white/60 px-3 py-2 dark:border-amber-800/60 dark:bg-gray-800/40">
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Sources</p>
+                        <ul className="space-y-1">
+                          {fullEvalData.sources.slice(0, 5).map((url, i) => (
+                            <li key={i}>
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-sky-600 hover:underline dark:text-sky-400">
+                                {url}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
