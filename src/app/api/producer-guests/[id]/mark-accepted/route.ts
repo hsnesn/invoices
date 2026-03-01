@@ -289,7 +289,12 @@ export async function POST(
           });
         }
       } else {
-        const submitLink = await getOrCreateGuestSubmitLink(supabase, id);
+        let submitLink: string | undefined;
+        try {
+          submitLink = await getOrCreateGuestSubmitLink(supabase, id);
+        } catch {
+          submitLink = undefined;
+        }
         await sendPostRecordingPaidRequestInvoice({
           to: guestEmail,
           guestName: (guest as { guest_name: string }).guest_name,

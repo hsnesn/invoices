@@ -25,7 +25,7 @@ export async function sendPostRecordingPaidRequestInvoice(params: {
   submitLink?: string;
 }) {
   const submitSection = params.submitLink
-    ? `<p><strong>Submit your invoice online:</strong> <a href="${params.submitLink}" style="color:#2563eb;font-weight:600">Click here to upload your invoice</a>. This link is valid for 30 days.</p>
+    ? `<p><strong>Submit your invoice online:</strong> <a href="${params.submitLink}" style="color:#2563eb;font-weight:600">Click here to upload your invoice</a>. This link is valid for 7 days.</p>
 <p>Alternatively, you can reply to this email with your invoice attached. Your invoice must include:</p>`
     : `<p>To process your payment as quickly as possible, please send us your invoice at your earliest convenience. Your invoice must include:</p>`;
   const body = `

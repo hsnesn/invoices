@@ -11,7 +11,7 @@ export async function getOrCreateGuestSubmitLink(
   producerGuestId: string
 ): Promise<string> {
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 30);
+  expiresAt.setDate(expiresAt.getDate() + 7);
 
   const { data: existing } = await supabase
     .from("guest_invoice_submit_tokens")

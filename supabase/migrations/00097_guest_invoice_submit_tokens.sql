@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS guest_invoice_submit_tokens (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   producer_guest_id uuid NOT NULL REFERENCES producer_guests(id) ON DELETE CASCADE,
   token uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
-  expires_at timestamptz NOT NULL DEFAULT (now() + interval '30 days'),
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '7 days'),
   created_at timestamptz NOT NULL DEFAULT now(),
   used_at timestamptz
 );

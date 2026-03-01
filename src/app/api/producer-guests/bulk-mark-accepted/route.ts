@@ -107,7 +107,12 @@ export async function POST(request: NextRequest) {
           const amount = body.payment_amount ?? 0;
           const currency = body.payment_currency ?? "GBP";
           const amountStr = `${currency === "GBP" ? "£" : currency === "EUR" ? "€" : "$"}${amount.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-          const submitLink = await getOrCreateGuestSubmitLink(supabase, g.id);
+          let submitLink: string | undefined;
+          try {
+            submitLink = await getOrCreateGuestSubmitLink(supabase, g.id);
+          } catch {
+            submitLink = undefined;
+          }
           await sendPostRecordingPaidRequestInvoice({
             to: guestEmail!,
             guestName: (g as { guest_name: string }).guest_name,

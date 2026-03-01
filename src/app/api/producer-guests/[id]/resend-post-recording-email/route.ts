@@ -81,7 +81,12 @@ export async function POST(
           }
         }
       }
-      const submitLink = await getOrCreateGuestSubmitLink(supabase, guest.id);
+      let submitLink: string | undefined;
+      try {
+        submitLink = await getOrCreateGuestSubmitLink(supabase, guest.id);
+      } catch {
+        submitLink = undefined;
+      }
       await sendPostRecordingPaidRequestInvoice({
         to: guestEmail,
         guestName: (guest as { guest_name: string }).guest_name,
