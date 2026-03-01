@@ -73,7 +73,12 @@ export function RequestChatPanel() {
         }),
       });
 
-      const data = await res.json();
+      let data: { content?: string; links?: { label: string; url: string }[]; error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = { error: res.status === 503 ? "Service unavailable. Check OPENAI_API_KEY." : `Request failed (${res.status}).` };
+      }
 
       if (res.ok) {
         setMessages((prev) => [
@@ -90,10 +95,11 @@ export function RequestChatPanel() {
           { role: "assistant", content: `Error: ${data.error ?? "Request failed."}` },
         ]);
       }
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Connection error. Please try again.";
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Connection error. Please try again." },
+        { role: "assistant", content: `Error: ${msg}` },
       ]);
     } finally {
       setLoading(false);
@@ -105,7 +111,7 @@ export function RequestChatPanel() {
       <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">Schedule chat</h2>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          Ask about who worked when, who&apos;s scheduled, requirements. I can open relevant pages.
+          Ask questions or create requirements (e.g. &quot;I need 4 outputs every day in March&quot;). Select department in Requirements tab first for create.
         </p>
       </div>
 
@@ -113,13 +119,13 @@ export function RequestChatPanel() {
         {messages.length === 0 && (
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-4 dark:border-gray-600 dark:bg-gray-800/30">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Ask questions like:
+              Ask questions or create requirements:
             </p>
             <ul className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-500">
+              <li>• I need 4 outputs every day in March</li>
               <li>• Who is scheduled for next week?</li>
               <li>• Who worked on March 15?</li>
               <li>• What are the requirements for April?</li>
-              <li>• Open the March schedule</li>
             </ul>
           </div>
         )}

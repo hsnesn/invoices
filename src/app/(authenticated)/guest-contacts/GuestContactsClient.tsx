@@ -219,6 +219,10 @@ export function GuestContactsClient({
   const [backups, setBackups] = useState<{ id: string; backed_up_at: string; contact_count: number }[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [invoicePreviewId, setInvoicePreviewId] = useState<string | null>(null);
+  const [invoicePreviewUrl, setInvoicePreviewUrl] = useState<string | null>(null);
+  const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
+  const [invoicePreviewError, setInvoicePreviewError] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set(COLUMN_IDS);
     try {
@@ -750,6 +754,45 @@ export function GuestContactsClient({
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const openInvoicePreview = async (invoiceId: string) => {
+    setInvoicePreviewId(invoiceId);
+    setInvoicePreviewUrl(null);
+    setInvoicePreviewError(null);
+    setInvoicePreviewLoading(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/pdf`, { credentials: "same-origin" });
+      const data = await res.json();
+      if (!res.ok) {
+        setInvoicePreviewError(data.error ?? "Failed to load invoice");
+        return;
+      }
+      if (!data.url) {
+        setInvoicePreviewError("Invoice file not found");
+        return;
+      }
+      const fileRes = await fetch(data.url);
+      if (!fileRes.ok) {
+        setInvoicePreviewError("Failed to fetch PDF");
+        return;
+      }
+      const blob = await fileRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setInvoicePreviewUrl(blobUrl);
+    } catch {
+      setInvoicePreviewError("Failed to load invoice");
+    } finally {
+      setInvoicePreviewLoading(false);
+    }
+  };
+
+  const closeInvoicePreview = () => {
+    if (invoicePreviewUrl) URL.revokeObjectURL(invoicePreviewUrl);
+    setInvoicePreviewId(null);
+    setInvoicePreviewUrl(null);
+    setInvoicePreviewError(null);
+    setInvoicePreviewLoading(false);
   };
 
   const runFullEvaluation = async (guestName: string) => {
@@ -1615,14 +1658,13 @@ export function GuestContactsClient({
                   {visibleColumns.has("invoice") && (
                     <td className="px-3 py-2 align-top text-sm">
                       {c.invoice_id ? (
-                        <a
-                          href={`/api/invoices/${c.invoice_id}/pdf?redirect=1`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => openInvoicePreview(c.invoice_id!)}
                           className="text-sky-600 hover:underline dark:text-sky-400"
                         >
                           View invoice
-                        </a>
+                        </button>
                       ) : (
                         <span className="text-gray-400 dark:text-gray-500">Bulk upload</span>
                       )}
@@ -1815,7 +1857,7 @@ export function GuestContactsClient({
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
                 {c.invoice_id && (
-                  <a href={`/api/invoices/${c.invoice_id}/pdf?redirect=1`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 dark:text-sky-400">View invoice</a>
+                  <button type="button" onClick={() => openInvoicePreview(c.invoice_id!)} className="text-xs text-sky-600 dark:text-sky-400 hover:underline">View invoice</button>
                 )}
                 <button type="button" onClick={() => openGuestAssessment(c.guest_name)} className="text-xs text-sky-600 dark:text-sky-400">
                   AI Assessment
@@ -1885,14 +1927,13 @@ export function GuestContactsClient({
                           <span className="text-gray-600 dark:text-gray-300">{a.topic}</span>
                           <span className="text-gray-500 dark:text-gray-400">({a.programme})</span>
                           <span className="text-gray-500 dark:text-gray-400">{a.amount}</span>
-                          <a
-                            href={`/api/invoices/${a.invoice_id}/pdf?redirect=1`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openInvoicePreview(a.invoice_id)}
                             className="ml-auto text-sky-600 hover:underline dark:text-sky-400"
                           >
                             View invoice
-                          </a>
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -2142,14 +2183,13 @@ export function GuestContactsClient({
                             <span className="text-gray-600 dark:text-gray-300">{a.topic}</span>
                             <span className="text-gray-500 dark:text-gray-400">({a.programme})</span>
                             <span className="text-gray-500 dark:text-gray-400">{a.amount}</span>
-                            <a
-                              href={`/api/invoices/${a.invoice_id}/pdf?redirect=1`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => openInvoicePreview(a.invoice_id)}
                               className="ml-auto text-sky-600 hover:underline dark:text-sky-400"
                             >
                               View invoice
-                            </a>
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -2180,6 +2220,54 @@ export function GuestContactsClient({
                   </div>
                 </>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(invoicePreviewId || invoicePreviewLoading) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invoice-preview-title"
+          onClick={closeInvoicePreview}
+        >
+          <div
+            className="relative flex h-[90vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
+              <h2 id="invoice-preview-title" className="text-sm font-semibold text-gray-800 dark:text-white">
+                Invoice preview
+              </h2>
+              <button
+                type="button"
+                onClick={closeInvoicePreview}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden flex items-center justify-center min-h-[400px]">
+              {invoicePreviewLoading && !invoicePreviewUrl && (
+                <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
+                  <svg className="h-12 w-12 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="opacity-75" />
+                  </svg>
+                  <span className="text-sm">Loading invoice...</span>
+                </div>
+              )}
+              {invoicePreviewError && !invoicePreviewLoading && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-950/30">
+                  <p className="text-sm text-rose-700 dark:text-rose-300">{invoicePreviewError}</p>
+                </div>
+              )}
+              {invoicePreviewUrl && !invoicePreviewLoading && (
+                <iframe src={invoicePreviewUrl} className="h-full w-full border-0" title="Invoice preview" />
+              )}
             </div>
           </div>
         </div>

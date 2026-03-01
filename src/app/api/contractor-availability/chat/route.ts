@@ -1,18 +1,31 @@
 /**
  * Chat for contractor/freelancer scheduling.
  * Answers questions about who worked when, who's scheduled, requirements, etc.
- * Can suggest links to relevant pages.
+ * Can create requirements from natural language (e.g. "I need 4 outputs every day in March").
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import OpenAI from "openai";
+import { parseFreelancerRequest } from "@/lib/parse-freelancer-request";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
+
 function canAccess(role: string) {
   return ["admin", "operations", "manager"].includes(role);
+}
+
+/** Check if message looks like a create-request (e.g. "I need 4 outputs every day in March") */
+function looksLikeCreateRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasNeed = /\b(need|want|require|request)\b/.test(lower);
+  const hasCount = /\b\d+\b/.test(text);
+  const hasTime = /\b(every|each|weekday|week day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|day|month|march|april|may|june|july|august|september|october|november|december|january|february)\b/i.test(text);
+  const hasRole = /\b(output|producer|director|camera|role)\b/i.test(text);
+  return hasNeed && (hasCount || hasRole) && hasTime;
 }
 
 async function fetchContext(supabase: ReturnType<typeof createAdminClient>, departmentId?: string | null) {
@@ -145,13 +158,74 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "At least one user message is required." }, { status: 400 });
     }
 
+    const supabase = createAdminClient();
+    const { context, defaultDeptId } = await fetchContext(supabase, departmentId);
+    const deptId = departmentId && /^[0-9a-f-]{36}$/i.test(departmentId) ? departmentId : defaultDeptId;
+
+    // Try create-request flow when message looks like "I need 4 outputs every day in March"
+    if (looksLikeCreateRequest(lastContent) && deptId) {
+      try {
+        const { data: rolesData } = await supabase.from("contractor_availability_roles").select("value").order("sort_order");
+        const availableRoles = (rolesData ?? []).map((r) => (r as { value: string }).value);
+        const parsed = await parseFreelancerRequest(lastContent, availableRoles);
+
+        if (parsed) {
+          const roleMatch = availableRoles.find((r) => r.toLowerCase() === parsed.role.toLowerCase());
+          if (roleMatch) parsed.role = roleMatch;
+
+          const [y, m] = parsed.month.split("-").map(Number);
+          const start = new Date(y, m - 1, 1);
+          const end = new Date(y, m, 0);
+          const toInsert: { date: string; role: string; count_needed: number }[] = [];
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            if (!parsed.days_of_week.includes(d.getDay())) continue;
+            toInsert.push({
+              date: d.toISOString().slice(0, 10),
+              role: parsed.role,
+              count_needed: parsed.count_per_day,
+            });
+          }
+
+          if (toInsert.length > 0) {
+            const rows = toInsert.map((x) => ({
+              date: x.date,
+              role: x.role,
+              count_needed: x.count_needed,
+              department_id: deptId,
+              program_id: null,
+              updated_at: new Date().toISOString(),
+            }));
+            const { error } = await supabase.from("contractor_availability_requirements").upsert(rows, {
+              onConflict: "date,role,department_id,program_id",
+            });
+            if (error) throw error;
+
+            const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+            const requesterName = (profile as { full_name?: string }).full_name ?? "A user";
+            const { sendFreelancerRequestToLondonOps } = await import("@/lib/email");
+            await sendFreelancerRequestToLondonOps({
+              to: LONDON_OPS_EMAIL,
+              monthLabel,
+              requesterName,
+              requirements: toInsert,
+            });
+
+            return NextResponse.json({
+              content: `Done. Created ${toInsert.length} requirements for ${monthLabel} (${parsed.role}: ${parsed.count_per_day} per day). London Operations has been notified.`,
+              links: [{ label: `Open ${monthLabel} schedule`, url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/request?month=${parsed.month}&dept=${deptId}` }],
+            });
+          }
+        }
+      } catch (createErr) {
+        // Fall through to Q&A if create fails
+        console.warn("[chat] create-request failed:", createErr);
+      }
+    }
+
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: "OPENAI_API_KEY not configured." }, { status: 503 });
     }
-
-    const supabase = createAdminClient();
-    const { context } = await fetchContext(supabase, departmentId);
 
     const client = new OpenAI({ apiKey });
     const systemMsg = {
