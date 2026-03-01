@@ -8,6 +8,7 @@ import { requireAuth } from "@/lib/auth";
 import { parseFreelancerRequest } from "@/lib/parse-freelancer-request";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
 
@@ -107,13 +108,14 @@ export async function POST(request: NextRequest) {
     const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
     const requesterName = (profile as { full_name?: string }).full_name ?? "A user";
 
+    // Send email in background so response returns quickly (avoids timeout)
     const { sendFreelancerRequestToLondonOps } = await import("@/lib/email");
-    await sendFreelancerRequestToLondonOps({
+    sendFreelancerRequestToLondonOps({
       to: LONDON_OPS_EMAIL,
       monthLabel,
       requesterName,
       requirements: toInsert.map((x) => ({ date: x.date, role: x.role, count_needed: x.count_needed })),
-    });
+    }).catch((err) => console.error("[bulk-request] Email failed:", err));
 
     return NextResponse.json({
       ok: true,

@@ -1,6 +1,7 @@
 /**
  * Parse natural language freelancer request into structured data.
  * Shared by bulk-request API and chat.
+ * Uses fast regex fallback for common patterns to avoid slow OpenAI calls.
  */
 import OpenAI from "openai";
 
@@ -11,10 +12,66 @@ export type ParsedFreelancerRequest = {
   days_of_week: number[];
 };
 
+const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+/** Fast fallback for common patterns like "5 output every weekday" - no AI call. */
+function trySimpleParse(text: string, availableRoles: string[]): ParsedFreelancerRequest | null {
+  const t = text.toLowerCase().trim();
+  // Only use simple parse when recurrence is clear (avoids false positives)
+  if (!/\b(every|weekday|week\s*day|mon-?fri|monday-?friday|weekend|everyday|each\s+day)\b/i.test(t)) {
+    return null;
+  }
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  // Match month: "in March", "for March"
+  let monthNum = currentMonth;
+  for (let i = 0; i < MONTH_NAMES.length; i++) {
+    if (t.includes(MONTH_NAMES[i])) {
+      monthNum = i + 1;
+      break;
+    }
+  }
+
+  // Match count: "5 output", "I need 5 outputs", "4 output every"
+  const countMatch = t.match(/(?:need|want|require|i\s+)?(\d+)\s*(?:outputs?|output)/i) ?? t.match(/(\d+)\s*(?:outputs?|output)/i);
+  if (!countMatch) return null;
+  const count = Math.max(1, Math.min(20, parseInt(countMatch[1], 10)));
+
+  // Match days: weekday = Mon–Fri, weekend = Sat–Sun, every day = all
+  let days_of_week = [1, 2, 3, 4, 5];
+  if (/\b(weekend|saturday|sunday)\b/i.test(t) && !/\bweekday\b/i.test(t)) {
+    days_of_week = [0, 6];
+  } else if (/\b(every\s+day|everyday|all\s+days)\b/i.test(t)) {
+    days_of_week = [0, 1, 2, 3, 4, 5, 6];
+  }
+
+  // Match role: prefer "Output" for output/outputs
+  let role = "Output";
+  if (/\b(output|outputs)\b/i.test(t)) {
+    role = availableRoles.find((r) => r.toLowerCase() === "output") ?? availableRoles[0] ?? "Output";
+  } else {
+    for (const r of availableRoles) {
+      if (new RegExp(`\\b${r.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(t)) {
+        role = r;
+        break;
+      }
+    }
+  }
+
+  const month = `${currentYear}-${String(monthNum).padStart(2, "0")}`;
+  return { month, role, count_per_day: count, days_of_week };
+}
+
 export async function parseFreelancerRequest(
   text: string,
   availableRoles: string[]
 ): Promise<ParsedFreelancerRequest | null> {
+  // Fast path: try simple regex for common patterns (no AI, no network)
+  const simple = trySimpleParse(text, availableRoles);
+  if (simple) return simple;
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
@@ -24,6 +81,7 @@ export async function parseFreelancerRequest(
 
   const res = await client.chat.completions.create({
     model: "gpt-4o-mini",
+    timeout: 15000,
     messages: [
       {
         role: "system",

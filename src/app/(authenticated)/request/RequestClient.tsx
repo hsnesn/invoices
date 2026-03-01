@@ -445,6 +445,8 @@ export function RequestClient() {
                 }
                 setBulkRequestLoading(true);
                 setMessage(null);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
                 try {
                   const res = await fetch("/api/contractor-availability/requirements/bulk-request", {
                     method: "POST",
@@ -454,7 +456,9 @@ export function RequestClient() {
                       department_id: selectedDepartment,
                       program_id: selectedProgram && selectedProgram !== "__all__" ? selectedProgram : undefined,
                     }),
+                    signal: controller.signal,
                   });
+                  clearTimeout(timeoutId);
                   const data = await res.json();
                   if (res.ok) {
                     setMessage({ type: "success", text: data.message ?? `Created ${data.count} requirements. London Operations notified.` });
@@ -464,8 +468,15 @@ export function RequestClient() {
                   } else {
                     setMessage({ type: "error", text: data.error ?? "Request failed." });
                   }
-                } catch {
-                  setMessage({ type: "error", text: "Connection error." });
+                } catch (e) {
+                  clearTimeout(timeoutId);
+                  const isAbort = (e as Error).name === "AbortError";
+                  setMessage({
+                    type: "error",
+                    text: isAbort
+                      ? "Request timed out. Try again or use Recurring rules below."
+                      : "Connection error. Check your network or try again.",
+                  });
                 } finally {
                   setBulkRequestLoading(false);
                 }
