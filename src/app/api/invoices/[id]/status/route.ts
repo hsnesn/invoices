@@ -9,6 +9,7 @@ import {
   sendReadyForPaymentEmail,
   sendPaidEmail,
   sendResubmittedEmail,
+  sendOtherInvoicePaidToLondonFinance,
 } from "@/lib/email";
 import { sendGuestPaidEmail } from "@/lib/post-recording-emails";
 import { parseGuestNameFromServiceDesc, parseProducerFromServiceDesc } from "@/lib/guest-utils";
@@ -124,7 +125,7 @@ export async function POST(
 
     const { data: extracted } = await supabase
       .from("invoice_extracted_fields")
-      .select("manager_confirmed, invoice_number, beneficiary_name, account_number, sort_code, gross_amount")
+      .select("manager_confirmed, invoice_number, beneficiary_name, account_number, sort_code, gross_amount, extracted_currency")
       .eq("invoice_id", invoiceId)
       .single();
 
@@ -804,6 +805,51 @@ export async function POST(
         .from("invoice_extracted_fields")
         .update({ manager_confirmed })
         .eq("invoice_id", invoiceId);
+    }
+
+    // Other invoice paid → email London Finance with invoice attachment
+    if (to_status === "paid" && (inv as { invoice_type?: string }).invoice_type === "other") {
+      try {
+        const { data: invRow } = await supabase.from("invoices").select("storage_path").eq("id", invoiceId).single();
+        let storagePath: string | null = (invRow as { storage_path?: string | null } | null)?.storage_path ?? null;
+        if (!storagePath) {
+          const { data: files } = await supabase
+            .from("invoice_files")
+            .select("storage_path, file_name")
+            .eq("invoice_id", invoiceId)
+            .order("sort_order", { ascending: true })
+            .limit(1);
+          if (files?.[0]) {
+            storagePath = (files[0] as { storage_path: string }).storage_path;
+          }
+        }
+        if (storagePath) {
+          const { data: fileData, error: dlErr } = await supabase.storage.from("invoices").download(storagePath);
+          if (!dlErr && fileData) {
+            const company = await (await import("@/lib/company-settings")).getCompanySettingsAsync();
+            const to = company.email_finance?.trim() || "london.finance@trtworld.com";
+            const filename = storagePath.split("/").pop() ?? `invoice-${invoiceId}.pdf`;
+            const paidDateVal = paid_date ?? new Date().toISOString().split("T")[0];
+            const amt = extracted?.gross_amount;
+            const cur = (extracted?.extracted_currency ?? "GBP") as string;
+            const amountStr = amt != null ? `${cur === "USD" ? "$" : cur === "EUR" ? "€" : "£"}${Number(amt).toLocaleString("en-GB", { minimumFractionDigits: 2 })}` : null;
+            const sendResult = await sendOtherInvoicePaidToLondonFinance({
+              to,
+              invoiceId,
+              invoiceNumber: extracted?.invoice_number ?? undefined,
+              beneficiaryName: extracted?.beneficiary_name ?? undefined,
+              amount: amountStr ?? undefined,
+              currency: cur,
+              paidDate: paidDateVal,
+              paymentReference: payment_reference ?? undefined,
+              attachment: { filename, content: Buffer.from(await fileData.arrayBuffer()) },
+            });
+            if (!sendResult.success) console.error("[OtherInvoicePaid] Email to London Finance failed:", sendResult.error);
+          }
+        }
+      } catch (otherEmailErr) {
+        console.error("[OtherInvoicePaid] Failed to send email to London Finance:", otherEmailErr);
+      }
     }
 
     try {

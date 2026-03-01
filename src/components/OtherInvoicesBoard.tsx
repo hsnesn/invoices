@@ -64,6 +64,8 @@ type ApiRow = {
   invoice_files?: { storage_path: string; file_name: string }[] | null;
 };
 
+type OtherGroupKey = "ready_for_payment" | "paid";
+
 type DisplayRow = {
   id: string;
   submitterId: string | null;
@@ -81,7 +83,7 @@ type DisplayRow = {
   dueDate: string;
   purpose: string;
   status: string;
-  group: string;
+  group: OtherGroupKey;
   createdAt: string;
   paidDate: string;
 };
@@ -106,6 +108,113 @@ const ALL_COLUMNS = [
 const DEFAULT_VISIBLE = ["status", "amount", "currency", "beneficiary", "sortCode", "accountNumber", "invNumber", "submittedBy", "files", "companyName", "invDate", "dueDate", "purpose", "actions"];
 const COL_STORAGE_KEY = "other_visible_columns";
 
+function EditOtherInvoiceModal({
+  row,
+  onSave,
+  onClose,
+  saving,
+}: {
+  row: DisplayRow;
+  onSave: (draft: Record<string, string | number | null>) => Promise<void>;
+  onClose: () => void;
+  saving: boolean;
+}) {
+  const [beneficiary, setBeneficiary] = useState(row.beneficiary === "—" ? "" : row.beneficiary);
+  const [sortCode, setSortCode] = useState(row.sortCode === "—" ? "" : row.sortCode);
+  const [accountNumber, setAccountNumber] = useState(row.accountNumber === "—" ? "" : row.accountNumber);
+  const [invNumber, setInvNumber] = useState(row.invNumber === "—" ? "" : row.invNumber);
+  const [amount, setAmount] = useState(row.amountNum > 0 ? String(row.amountNum) : "");
+  const [currency, setCurrency] = useState(row.currency === "—" ? "GBP" : row.currency);
+  const [companyName, setCompanyName] = useState(row.companyName === "—" ? "" : row.companyName);
+  const [invDate, setInvDate] = useState(row.invDate === "—" ? "" : row.invDate);
+  const [dueDate, setDueDate] = useState(row.dueDate === "—" ? "" : row.dueDate);
+  const [purpose, setPurpose] = useState(row.purpose === "—" ? "" : row.purpose);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave({
+      beneficiary_name: beneficiary.trim() || null,
+      sort_code: sortCode.trim() || null,
+      account_number: accountNumber.trim() || null,
+      invoice_number: invNumber.trim() || null,
+      gross_amount: amount ? Number(amount.replace(/,/g, "")) : null,
+      extracted_currency: currency || "GBP",
+      company_name: companyName.trim() || null,
+      invoice_date: invDate.trim() || null,
+      due_date: dueDate.trim() || null,
+      service_description: purpose.trim() || null,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-white">Edit Other Invoice</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4 p-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Beneficiary</label>
+              <input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Company Name</label>
+              <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Sort Code</label>
+              <input value={sortCode} onChange={(e) => setSortCode(e.target.value)} placeholder="00-00-00" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Account Number</label>
+              <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Invoice Number</label>
+              <input value={invNumber} onChange={(e) => setInvNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Amount</label>
+              <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Currency</label>
+              <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                <option value="GBP">GBP (£)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="USD">USD ($)</option>
+                <option value="TRY">TRY</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Invoice Date</label>
+              <input type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Due Date</label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Purpose</label>
+            <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+          </div>
+          <div className="flex justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
+            <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function loadStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -115,8 +224,12 @@ function loadStorage<T>(key: string, fallback: T): T {
   return fallback;
 }
 
-function statusToGroup(status: string): string {
-  if (status === "ready_for_payment") return "ready_for_payment";
+const OTHER_GROUPS: { key: OtherGroupKey; label: string; color: string; headerBg: string; textColor: string }[] = [
+  { key: "ready_for_payment", label: "Ready for Payment", color: "border-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", textColor: "text-amber-700 dark:text-amber-400" },
+  { key: "paid", label: "Paid Invoices", color: "border-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", textColor: "text-emerald-700 dark:text-emerald-400" },
+];
+
+function statusToGroup(status: string): OtherGroupKey {
   if (status === "paid" || status === "archived") return "paid";
   return "ready_for_payment";
 }
@@ -193,8 +306,19 @@ export function OtherInvoicesBoard({
   const [previewName, setPreviewName] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(initialExpandedId ?? null);
+  const [editModalRow, setEditModalRow] = useState<DisplayRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [timelineData, setTimelineData] = useState<{ id: string; event_type: string; created_at: string; actor_name?: string; from_status?: string; to_status?: string; payload?: unknown }[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<OtherGroupKey>>(new Set());
+
+  const toggleGroup = useCallback((key: OtherGroupKey) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   const hasFilter = !!(search || statusFilter || submittedByFilter || dateFrom || dateTo);
   const clearFilters = () => {
@@ -208,7 +332,11 @@ export function OtherInvoicesBoard({
   const filteredRows = useMemo(
     () =>
       rows.filter((r) => {
-        if (statusFilter && r.group !== statusFilter) return false;
+        if (statusFilter) {
+          if (statusFilter === "archived") {
+            if (r.status !== "archived") return false;
+          } else if (r.group !== statusFilter) return false;
+        }
         if (submittedByFilter && r.submittedBy !== submittedByFilter) return false;
         if (dateFrom && r.createdAt < dateFrom) return false;
         if (dateTo && r.createdAt > dateTo + "T23:59:59") return false;
@@ -228,6 +356,34 @@ export function OtherInvoicesBoard({
         return true;
       }),
     [rows, search, statusFilter, submittedByFilter, dateFrom, dateTo]
+  );
+
+  const groupedRows = useMemo(() => {
+    const map = new Map<OtherGroupKey, DisplayRow[]>();
+    for (const g of OTHER_GROUPS) map.set(g.key, []);
+    for (const r of filteredRows) {
+      const list = map.get(r.group);
+      if (list) list.push(r);
+    }
+    return map;
+  }, [filteredRows]);
+
+  const groupSums = useMemo(() => {
+    const sums: Record<OtherGroupKey, number> = { ready_for_payment: 0, paid: 0 };
+    for (const r of filteredRows) {
+      sums[r.group] += r.amountNum;
+    }
+    return sums;
+  }, [filteredRows]);
+
+  const displayGroups = useMemo(
+    () =>
+      OTHER_GROUPS.filter((g) => groupedRows.get(g.key)!.length > 0).map((g) => ({
+        ...g,
+        rows: groupedRows.get(g.key)!,
+        amount: groupSums[g.key],
+      })),
+    [groupedRows, groupSums]
   );
 
   const uniqueSubmittedBy = useMemo(
@@ -600,6 +756,46 @@ export function OtherInvoicesBoard({
     });
   }, []);
 
+  const canEdit = canUpload;
+  const onStartEdit = useCallback((row: DisplayRow) => setEditModalRow(row), []);
+  const onSaveEdit = useCallback(
+    async (draft: Record<string, string | number | null>) => {
+      if (!editModalRow) return;
+      setActionLoadingId(editModalRow.id);
+      try {
+        const body: Record<string, unknown> = {};
+        if (draft.beneficiary_name != null) body.beneficiary_name = draft.beneficiary_name;
+        if (draft.sort_code != null) body.sort_code = draft.sort_code;
+        if (draft.account_number != null) body.account_number = draft.account_number;
+        if (draft.invoice_number != null) body.invoice_number = draft.invoice_number;
+        if (draft.gross_amount != null) body.gross_amount = draft.gross_amount;
+        if (draft.extracted_currency != null) body.extracted_currency = draft.extracted_currency;
+        if (draft.company_name != null) body.company_name = draft.company_name;
+        if (draft.invoice_date != null) body.invoice_date = draft.invoice_date;
+        if (draft.due_date != null) body.due_date = draft.due_date;
+        if (draft.service_description != null) body.service_description = draft.service_description;
+        const res = await fetch(`/api/invoices/${editModalRow.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          toast.success("Invoice updated");
+          setEditModalRow(null);
+          refresh();
+        } else {
+          const d = (await res.json().catch(() => ({}))) as { error?: string };
+          toast.error(getApiErrorMessage(d));
+        }
+      } catch {
+        toast.error("Failed to save");
+      } finally {
+        setActionLoadingId(null);
+      }
+    },
+    [editModalRow, refresh]
+  );
+
   const readyIds = rows.filter((r) => r.status === "ready_for_payment").map((r) => r.id);
   const selectedReady = Array.from(selectedIds).filter((id) => readyIds.includes(id));
 
@@ -804,34 +1000,66 @@ export function OtherInvoicesBoard({
       )}
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800">
+      <div className="space-y-4">
         {rows.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">No invoices. Upload files to get started.</div>
+          <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-gray-500 dark:border-slate-600 dark:bg-slate-800">No invoices. Upload files to get started.</div>
+        ) : displayGroups.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-gray-500 dark:border-slate-600 dark:bg-slate-800">No invoices match the current filters.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800/50">
-                <tr>
-                  <th className="px-3 py-2 text-left">
-                    <input
-                      type="checkbox"
-                      checked={filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))}
-                      onChange={(e) => onToggleAll(filteredRows.map((r) => r.id), e.target.checked)}
-                    />
-                  </th>
-                  {COLUMNS.map((c) => (
-                    <th key={c.key} className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                      {c.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filteredRows.map((r) => (
+          displayGroups.map((g) => {
+            const gRows = g.rows;
+            const collapsed = collapsedGroups.has(g.key);
+            return (
+              <div key={g.key} className={`overflow-hidden rounded-xl border-l-4 ${g.color} border border-slate-200 bg-white shadow-md dark:border-slate-600 dark:bg-slate-800`}>
+                <button
+                  onClick={() => toggleGroup(g.key)}
+                  className={`w-full flex items-center justify-between px-4 py-3 ${g.headerBg} transition-colors hover:opacity-90`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                    <h2 className={`text-sm font-bold ${g.textColor}`}>{g.label}</h2>
+                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:text-slate-300">{gRows.length}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                    {g.amount > 0 && (
+                      <span>
+                        Amount: <strong>{fmtAmount(g.amount, "GBP")}</strong>
+                      </span>
+                    )}
+                  </div>
+                </button>
+                {!collapsed && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">
+                            <input
+                              type="checkbox"
+                              checked={gRows.length > 0 && gRows.every((r) => selectedIds.has(r.id))}
+                              onChange={(e) => onToggleAll(gRows.map((r) => r.id), e.target.checked)}
+                            />
+                          </th>
+                          {COLUMNS.map((c) => (
+                            <th key={c.key} className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              {c.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        {gRows.map((r) => (
                   <React.Fragment key={r.id}>
                   <tr
                     className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors ${expandedRowId === r.id ? "bg-sky-50/50 dark:bg-sky-950/20" : ""}`}
                     onClick={() => toggleExpand(r.id)}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (canEdit) onStartEdit(r);
+                    }}
+                    title={canEdit ? "Double-click to edit" : undefined}
                   >
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => onToggleSelect(r.id)} />
@@ -842,10 +1070,10 @@ export function OtherInvoicesBoard({
                           <td key={col.key} className="px-3 py-2">
                             <span
                               className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                                r.status === "paid" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" : r.status === "ready_for_payment" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                                r.status === "paid" || r.status === "archived" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" : r.status === "ready_for_payment" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                               }`}
                             >
-                              {r.status === "paid" ? "Paid" : r.status === "ready_for_payment" ? "Pending" : r.status}
+                              {r.status === "paid" ? "Paid" : r.status === "ready_for_payment" ? "Pending" : r.status === "archived" ? "Archived" : r.status}
                             </span>
                           </td>
                         );
@@ -888,6 +1116,14 @@ export function OtherInvoicesBoard({
                       if (col.key === "actions") {
                         return (
                           <td key={col.key} className="px-3 py-2 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {canEdit && (
+                              <button
+                                onClick={() => onStartEdit(r)}
+                                className="rounded bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-900/40 dark:text-sky-300 dark:hover:bg-sky-800/50"
+                              >
+                                Edit
+                              </button>
+                            )}
                             {r.status === "ready_for_payment" && canMarkPaid && (
                               <button
                                 onClick={() => void onMarkPaid(r.id)}
@@ -907,7 +1143,7 @@ export function OtherInvoicesBoard({
                                 Delete
                               </button>
                             )}
-                            {r.status === "paid" && r.paidDate && <span className="text-xs text-gray-500">Paid {r.paidDate}</span>}
+                            {(r.status === "paid" || r.status === "archived") && r.paidDate && <span className="text-xs text-gray-500">Paid {r.paidDate}</span>}
                           </td>
                         );
                       }
@@ -977,12 +1213,26 @@ export function OtherInvoicesBoard({
                     </tr>
                   )}
                   </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
+
+      {/* Edit modal */}
+      {editModalRow && (
+        <EditOtherInvoiceModal
+          row={editModalRow}
+          onSave={onSaveEdit}
+          onClose={() => setEditModalRow(null)}
+          saving={actionLoadingId === editModalRow.id}
+        />
+      )}
 
       {/* File preview modal */}
       {(previewUrl || previewHtml || previewLoading) && (

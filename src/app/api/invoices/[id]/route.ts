@@ -146,6 +146,10 @@ export async function PATCH(
       if (!isAssigned && !isOwner && !inDept && !inProg) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
+    } else if ((existing as { invoice_type?: string }).invoice_type === "other") {
+      if (!["admin", "finance", "operations"].includes(profile.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     } else if (profile.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -181,7 +185,26 @@ export async function PATCH(
       body.iban !== undefined ||
       body.swift_bic !== undefined ||
       body.bank_name !== undefined ||
-      body.bank_address !== undefined;
+      body.bank_address !== undefined ||
+      body.company_name !== undefined ||
+      body.due_date !== undefined ||
+      body.invoice_date !== undefined ||
+      body.net_amount !== undefined ||
+      body.vat_amount !== undefined;
+
+    const hasOtherInvoiceFields =
+      (existing as { invoice_type?: string }).invoice_type === "other" &&
+      body.service_description !== undefined;
+
+    if (hasOtherInvoiceFields) {
+      const { error: invErr } = await supabase
+        .from("invoices")
+        .update({ service_description: asString(body.service_description) ?? null })
+        .eq("id", invoiceId);
+      if (invErr) {
+        return NextResponse.json({ error: "Invoice update failed: " + invErr.message }, { status: 500 });
+      }
+    }
 
     if (hasInvoiceFields) {
       const guest_name = asString(body.guest_name);
@@ -261,7 +284,7 @@ export async function PATCH(
 
       const { data: currentExtracted } = await supabase
         .from("invoice_extracted_fields")
-        .select("beneficiary_name, account_number, sort_code, invoice_number, gross_amount, extracted_currency, raw_json")
+        .select("beneficiary_name, account_number, sort_code, invoice_number, invoice_date, gross_amount, net_amount, vat_amount, extracted_currency, raw_json")
         .eq("invoice_id", invoiceId)
         .single();
 
@@ -288,6 +311,20 @@ export async function PATCH(
       if (swiftVal) rawJson.swift_bic = swiftVal;
       if (bankNameVal !== undefined) rawJson.bank_name = bankNameVal || null;
       if (bankAddrVal !== undefined) rawJson.bank_address = bankAddrVal || null;
+      if (body.company_name !== undefined) rawJson.company_name = asString(body.company_name) || null;
+      if (body.due_date !== undefined) rawJson.due_date = asString(body.due_date) || null;
+
+      const parseNum = (v: unknown): number | null => {
+        if (v == null) return null;
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+        if (typeof v === "string" && v.trim()) {
+          const n = Number(v.replace(/,/g, ""));
+          return Number.isFinite(n) ? n : null;
+        }
+        return null;
+      };
+      const netVal = body.net_amount !== undefined ? parseNum(body.net_amount) : (cur.net_amount as number | null);
+      const vatVal = body.vat_amount !== undefined ? parseNum(body.vat_amount) : (cur.vat_amount as number | null);
 
       const { error: extractedUpdateError } = await supabase
         .from("invoice_extracted_fields")
@@ -307,6 +344,9 @@ export async function PATCH(
                     : null)
                 : cur.gross_amount,
             extracted_currency: asString(body.extracted_currency) ?? cur.extracted_currency ?? null,
+            invoice_date: asString(body.invoice_date) ?? (cur.invoice_date as string) ?? null,
+            net_amount: netVal ?? cur.net_amount ?? null,
+            vat_amount: vatVal ?? cur.vat_amount ?? null,
             raw_json: Object.keys(rawJson).length > 0 ? rawJson : existingRaw,
             updated_at: new Date().toISOString(),
           },

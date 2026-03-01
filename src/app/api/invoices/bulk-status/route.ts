@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createAuditEvent } from "@/lib/audit";
+import { sendOtherInvoicePaidToLondonFinance } from "@/lib/email";
 import type { InvoiceStatus } from "@/lib/types";
 
 const MAX_BULK = 50;
@@ -206,6 +207,44 @@ export async function POST(request: NextRequest) {
               .eq("invoice_id", invoiceId);
             await createAuditEvent({ invoice_id: invoiceId, actor_user_id: userId, event_type: "status_change", from_status: fromStatus, to_status: "paid", payload: { bulk: true, payment_reference: payment_reference ?? undefined, paid_date: paidDate } });
             success++;
+
+            // Other invoice paid → email London Finance with invoice attachment
+            if ((inv as { invoice_type?: string }).invoice_type === "other") {
+              try {
+                const { data: invRow } = await supabase.from("invoices").select("storage_path").eq("id", invoiceId).single();
+                let storagePath: string | null = (invRow as { storage_path?: string | null } | null)?.storage_path ?? null;
+                if (!storagePath) {
+                  const { data: files } = await supabase.from("invoice_files").select("storage_path").eq("invoice_id", invoiceId).order("sort_order", { ascending: true }).limit(1);
+                  if (files?.[0]) storagePath = (files[0] as { storage_path: string }).storage_path;
+                }
+                if (storagePath) {
+                  const { data: fileData, error: dlErr } = await supabase.storage.from("invoices").download(storagePath);
+                  if (!dlErr && fileData) {
+                    const company = await (await import("@/lib/company-settings")).getCompanySettingsAsync();
+                    const to = company.email_finance?.trim() || "london.finance@trtworld.com";
+                    const filename = storagePath.split("/").pop() ?? `invoice-${invoiceId}.pdf`;
+                    const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number, beneficiary_name, gross_amount, extracted_currency").eq("invoice_id", invoiceId).single();
+                    const extracted = ext as { invoice_number?: string; beneficiary_name?: string; gross_amount?: number; extracted_currency?: string } | null;
+                    const cur = (extracted?.extracted_currency ?? "GBP") as string;
+                    const amt = extracted?.gross_amount;
+                    const amountStr = amt != null ? `${cur === "USD" ? "$" : cur === "EUR" ? "€" : "£"}${Number(amt).toLocaleString("en-GB", { minimumFractionDigits: 2 })}` : null;
+                    await sendOtherInvoicePaidToLondonFinance({
+                      to,
+                      invoiceId,
+                      invoiceNumber: extracted?.invoice_number ?? undefined,
+                      beneficiaryName: extracted?.beneficiary_name ?? undefined,
+                      amount: amountStr ?? undefined,
+                      currency: cur,
+                      paidDate,
+                      paymentReference: payment_reference ?? undefined,
+                      attachment: { filename, content: Buffer.from(await fileData.arrayBuffer()) },
+                    });
+                  }
+                }
+              } catch (e) {
+                console.error("[OtherInvoicePaid] Bulk: email failed for", invoiceId, e);
+              }
+            }
           } else {
             failed.push({ id: invoiceId, error: "Finance/Admin only; must be ready_for_payment" });
           }

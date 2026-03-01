@@ -145,9 +145,14 @@ function regexExtractFromText(text: string) {
     lineValue([
       /(?:invoice\s*(?:number|no|#)\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
       /(?:inv(?:oice)?\s*#?\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
+      /(?:statement\s*#?\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
+      /(?:statement\s*(?:number|no)\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
       /(?:invoice\s*ref(?:erence)?)\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
       /(?:reference|ref)\s*[:\-.]?\s*([A-Za-z0-9\-\/]{4,})/i,
       /(?:bill\s*to|invoice)\s*[:\-.]?\s*([A-Za-z0-9\-\/]{4,})/i,
+      /(?:order\s*(?:no|number)|po\s*#?)\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
+      /(?:document\s*(?:no|number))\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
+      /(?:^|\n)\s*number\s*[:\-.]?\s*([A-Za-z0-9\-\/]{3,})/im,
     ]) ?? null;
   const sortCodeRaw =
     lineValue([
@@ -161,9 +166,14 @@ function regexExtractFromText(text: string) {
       /(?:account\s*(?:number|no|#)?)\s*[:\-.]?\s*([0-9 ]{6,20})/i,
       /(?:account\s*no\s*[:\-]\s*)(\d{8})\b/i,
       /(?:bank\s+detail|account\s+no|account\s+holder)[\s\S]*?(\d{8})\b/i,
+      /(?:a\/c\s*(?:no|number)?\s*[:\-]?\s*)([0-9 ]{6,20})/i,
+      /(?:account\s*[:\-]\s*)(\d{8})\b/i,
+      /\bIBAN\s*[:\-]?\s*([A-Z]{2}[0-9]{2}[A-Z0-9\s]{4,30})\b/i,
     ])?.replace(/\s+/g, "") ?? null;
   const beneficiaryFromLabel = lineValue([
     /(?:beneficiary|payee|account\s*(?:name|holder)|name\s+on\s+account)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+    /(?:pay\s*(?:to|able\s*to)|payment\s*to)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+    /(?:remit\s*to|transfer\s*to)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
   ]);
   const companyFromLabel = lineValue([
     /(?:company\s+name|business\s+name|trading\s+as)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
@@ -176,6 +186,7 @@ function regexExtractFromText(text: string) {
     (full.includes("£") ? "GBP" : null);
   const grossPatterns = [
     /(?:grand\s*total|total\s*amount|amount\s*due|balance\s*due|invoice\s*total|total\s*payable|amount\s*payable|payment\s*due|final\s*(?:total|amount)|amount\s*to\s*pay|invoice\s*value|total\s*due)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
+    /(?:total\s*balance|balance\s*total)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:^|\s)(?:total|gross|sum)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:balance\s*due|amount\s*due)\s*[:\-]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
   ];
@@ -416,17 +427,17 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   const CERTAIN_SUFFIX = ` Return JSON: {"value": "..." or number, "certain": true/false}. Set "certain": true ONLY when you clearly see the value in the document and are confident. Set "certain": false or omit if unsure.`;
 
   const FIELD_PROMPTS: Record<string, string> = {
-    beneficiary_name: `Extract ONLY the beneficiary/account holder name from this invoice. Person or company who receives payment. Look for "Account holder name", "Payee name", "Beneficiary", "Name on account". NO address. NEVER use date, invoice number, or amount. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
-    company_name: `Extract ONLY the company/business NAME (e.g. "FluentWorld Ltd", "Byproductions"). Look for the company name in the header, domain, or "Bank Name" line. NEVER use: "Account Holder" name (that is a person), "Company Reg. No.", "London UK", or any city/country. Company name = business/legal entity, NOT a person's name.` + CERTAIN_SUFFIX,
-    account_number: `Extract ONLY the bank account number. Look for "Account No", "Account No :", "Account Number" - the 8-digit number where payment is sent (often near "Account Holder" or "Sort Code"). UK accounts: typically 8 digits. NEVER use phone numbers, Company Reg. No., or VAT No. Digits only.` + CERTAIN_SUFFIX,
-    sort_code: `Extract ONLY the UK sort code from the bank details. Look for "Sort Code", "Sort/Branch Code". Exactly 6 digits. NEVER use Company Reg. No. or other numbers.` + CERTAIN_SUFFIX,
-    invoice_number: `Extract ONLY the invoice number. Look for "Invoice No." or "Invoice Number" - often format like INV-123. NEVER use "Company Reg. No.", "Registration No.", "VAT No." - those are different. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
-    invoice_date: `Extract ONLY the invoice date. Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
-    due_date: `Extract ONLY the payment due date or "due by" date from this invoice. Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
-    gross_amount: `Extract ONLY the final total amount to pay. Look for "Grand Total", "Total", "Amount Due", "Total Payable". NOT subtotals. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
-    currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP.` + CERTAIN_SUFFIX,
-    guest_phone: `Extract ONLY the guest/contact phone number from this invoice. Look for "Phone", "Tel", "Mobile", "Contact" - the number where the invoice sender can be reached. UK format: +44 or 0xx. NEVER use bank account number, sort code, or VAT number.` + CERTAIN_SUFFIX,
-    guest_email: `Extract ONLY the guest/contact email address from this invoice. Look for "Email", "E-mail", "Contact" - the email where the invoice sender can be reached. Format: name@domain.com. NEVER use TRT World or internal emails.` + CERTAIN_SUFFIX,
+    beneficiary_name: `Extract ONLY the beneficiary/account holder name - the person or company who receives the payment. Look for: "Account holder name", "Payee name", "Beneficiary", "Name on account", "Payment to". This is the name that appears in the bank details section. EXCLUDE: addresses, cities, countries, invoice numbers, amounts. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
+    company_name: `Extract ONLY the company/business NAME that issued the invoice (e.g. "FluentWorld Ltd", "Byproductions"). Usually in the header or letterhead. EXCLUDE: "Account Holder" (that is the payee), "Company Reg. No.", "VAT Reg. No.", addresses, cities, countries. Company name = the business/legal entity issuing the invoice.` + CERTAIN_SUFFIX,
+    account_number: `Extract ONLY the bank account number where payment should be sent. UK: look for "Account No" or "Account Number" - typically 8 digits. International: look for "IBAN". This is in the PAYMENT/BANK DETAILS section. EXCLUDE: Company Registration No., VAT number, phone numbers, reference numbers. Only the account number digits/IBAN.` + CERTAIN_SUFFIX,
+    sort_code: `Extract ONLY the UK sort code - 6 digits, often formatted as XX-XX-XX. Look in the bank details section near "Sort Code" or "Sort/Branch Code". EXCLUDE: Company Reg. No., VAT No., other numeric codes.` + CERTAIN_SUFFIX,
+    invoice_number: `Extract ONLY the invoice number/reference. Look for "Invoice No.", "Invoice Number", "Statement #", "Statement Number", "Number", "Ref", "Reference" - format often like INV-123, #12345. EXCLUDE: Company Reg. No., VAT Reg. No., account numbers. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
+    invoice_date: `Extract ONLY the invoice date (when the invoice was issued). Return YYYY-MM-DD format. Look for "Invoice Date", "Date", "Issued".` + CERTAIN_SUFFIX,
+    due_date: `Extract ONLY the payment due date. Look for "Due Date", "Payment Due", "Payable By". Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
+    gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Total Balance", "Total Amount", "Amount Due", "Total Payable", "Balance Due". Use the LARGEST/final amount if multiple totals appear. NOT subtotals or line items. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
+    currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP. If € appears, return EUR.` + CERTAIN_SUFFIX,
+    guest_phone: `Extract ONLY the contact phone number - where the invoice sender can be reached. Look for "Phone", "Tel", "Mobile". UK: +44 or 0xx. EXCLUDE: bank account numbers, sort codes, VAT numbers, fax numbers.` + CERTAIN_SUFFIX,
+    guest_email: `Extract ONLY the contact email - where the invoice sender can be reached. Format: name@domain.com. EXCLUDE: TRT World or internal company emails.` + CERTAIN_SUFFIX,
   };
 
   const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "due_date", "currency", "sort_code", "guest_phone", "guest_email"];
