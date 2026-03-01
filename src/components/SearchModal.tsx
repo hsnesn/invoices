@@ -283,10 +283,14 @@ export function SearchModal() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">
-                        {inv.invoice_number}
+                        {inv.invoice_number && inv.invoice_number !== "—"
+                          ? inv.invoice_number
+                          : `Invoice ${inv.id.slice(0, 8)}`}
                       </p>
                       <p className="truncate text-xs text-gray-400 dark:text-slate-500">
-                        {inv.guest_name}
+                        {inv.guest_name && inv.guest_name !== "—"
+                          ? inv.guest_name
+                          : "No beneficiary"}
                       </p>
                     </div>
                   </button>

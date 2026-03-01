@@ -18,16 +18,11 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const pattern = `%${q}%`;
 
-    const [invoicesResult, peopleResult] = await Promise.all([
+    const [extractedResult, peopleResult] = await Promise.all([
       supabase
-        .from("invoices")
-        .select(
-          `id, invoice_extracted_fields(invoice_number, beneficiary_name)`
-        )
-        .or(
-          `invoice_number.ilike.${pattern},beneficiary_name.ilike.${pattern}`,
-          { referencedTable: "invoice_extracted_fields" }
-        )
+        .from("invoice_extracted_fields")
+        .select("invoice_id, invoice_number, beneficiary_name")
+        .or(`invoice_number.ilike.${pattern},beneficiary_name.ilike.${pattern}`)
         .limit(5),
 
       supabase
@@ -38,16 +33,11 @@ export async function GET(request: NextRequest) {
         .limit(5),
     ]);
 
-    const invoices = (invoicesResult.data ?? []).map((inv) => {
-      const ext = Array.isArray(inv.invoice_extracted_fields)
-        ? inv.invoice_extracted_fields[0]
-        : inv.invoice_extracted_fields;
-      return {
-        id: inv.id,
-        invoice_number: (ext?.invoice_number as string) ?? "—",
-        guest_name: (ext?.beneficiary_name as string) ?? "—",
-      };
-    });
+    const invoices = (extractedResult.data ?? []).map((ext) => ({
+      id: ext.invoice_id,
+      invoice_number: (ext.invoice_number as string)?.trim() || "—",
+      guest_name: (ext.beneficiary_name as string)?.trim() || "—",
+    }));
 
     const people = (peopleResult.data ?? []).map((p) => ({
       id: p.id,
