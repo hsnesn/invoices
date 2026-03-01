@@ -32,20 +32,42 @@ export async function GET(
       return NextResponse.json({ error: "Finance access required" }, { status: 403 });
     }
 
-    const { data: invoice } = await supabase
+    if (!invoiceId?.trim()) {
+      return NextResponse.json({ error: "Invoice ID is required" }, { status: 400 });
+    }
+
+    // Select base columns first (works without migration 00107); optional columns for idempotency
+    const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
-      .select("id, submitter_user_id, department_id, service_description, currency, bank_transfer_form_path, bank_transfer_currency")
-      .eq("id", invoiceId)
+      .select("id, submitter_user_id, department_id, service_description, currency")
+      .eq("id", invoiceId.trim())
       .single();
 
+    if (invoiceError) {
+      if (invoiceError.code === "PGRST116") {
+        return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+      }
+      console.error("[bank-transfer-form] Invoice fetch error:", invoiceError.message);
+      return NextResponse.json(
+        { error: invoiceError.message ?? "Failed to fetch invoice" },
+        { status: 500 }
+      );
+    }
     if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+
+    // Fetch bank transfer columns if they exist (migration 00107); ignore if schema not migrated
+    const { data: bankMeta } = await supabase
+      .from("invoices")
+      .select("bank_transfer_form_path, bank_transfer_currency")
+      .eq("id", invoiceId.trim())
+      .maybeSingle();
 
     if (profile.role === "finance" && invoice.department_id && profile.department_id !== invoice.department_id) {
       return NextResponse.json({ error: "Invoice does not belong to your department" }, { status: 403 });
     }
 
     // Idempotency: return existing file if present and not forcing
-    const existingPath = (invoice as { bank_transfer_form_path?: string | null }).bank_transfer_form_path;
+    const existingPath = (bankMeta as { bank_transfer_form_path?: string | null } | null)?.bank_transfer_form_path ?? null;
     if (existingPath && !force) {
       const { data: fileData, error: downloadError } = await supabase.storage
         .from(BUCKET)
@@ -55,12 +77,12 @@ export async function GET(
         const buf = Buffer.from(await fileData.arrayBuffer());
         const { data: inv } = await supabase
           .from("invoices")
-          .select("bank_transfer_form_status, bank_transfer_currency, currency")
+          .select("currency")
           .eq("id", invoiceId)
           .single();
         const invRow = inv as { bank_transfer_form_status?: string; bank_transfer_currency?: string; currency?: string } | null;
-        const formStatus = invRow?.bank_transfer_form_status ?? "READY";
-        const currencyFinal = invRow?.bank_transfer_currency ?? invRow?.currency ?? "";
+        const formStatus = (bankMeta as { bank_transfer_form_status?: string } | null)?.bank_transfer_form_status ?? "READY";
+        const currencyFinal = (bankMeta as { bank_transfer_currency?: string } | null)?.bank_transfer_currency ?? invRow?.currency ?? invoice.currency ?? "";
         const senderAccount = currencyFinal && SUPPORTED_CURRENCIES.includes(currencyFinal as (typeof SUPPORTED_CURRENCIES)[number])
           ? ACCOUNT_BY_CURRENCY[currencyFinal as (typeof SUPPORTED_CURRENCIES)[number]]
           : "";
@@ -161,7 +183,7 @@ export async function GET(
       return NextResponse.json({ error: "Failed to save bank transfer form" }, { status: 500 });
     }
 
-    await supabase
+    const { error: updateErr } = await supabase
       .from("invoices")
       .update({
         bank_transfer_form_path: storagePath,
@@ -171,6 +193,9 @@ export async function GET(
         bank_transfer_generated_by: session.user.id,
       })
       .eq("id", invoiceId);
+    if (updateErr) {
+      console.warn("[bank-transfer-form] Invoice update failed (migration 00107 may not be applied):", updateErr.message);
+    }
 
     await createAuditEvent({
       invoice_id: invoiceId,
