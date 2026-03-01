@@ -15,6 +15,10 @@ const FIELDS: { key: keyof CompanySettings; label: string; placeholder: string; 
   { key: "bank_account_gbp", label: "Bank account (GBP)", placeholder: "0611-405810-001", group: "bank" },
   { key: "bank_account_eur", label: "Bank account (EUR)", placeholder: "0611-405810-009", group: "bank" },
   { key: "bank_account_usd", label: "Bank account (USD)", placeholder: "0611-405810-002", group: "bank" },
+  { key: "invitation_subject_prefix", label: "Invitation subject prefix", placeholder: "TRT World – Invitation to the program:", group: "invitations" },
+  { key: "invitation_body_intro", label: "Invitation body intro", placeholder: "Use {program}, {topic}, {channel} as placeholders", group: "invitations" },
+  { key: "invitation_broadcast_channel", label: "Broadcast channel name", placeholder: "TRT World", group: "invitations" },
+  { key: "invitation_studio_intro", label: "Studio location intro", placeholder: "The recording will take place in our studio. The address is:", group: "invitations" },
 ];
 
 export function CompanyContactsSetupSection() {
@@ -133,7 +137,9 @@ export function CompanyContactsSetupSection() {
           <span className="h-2.5 w-2.5 rounded-full bg-violet-500" />
           Invitation templates
         </h2>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Subject, body and channel used when sending guest invitations. Placeholders: {"{program}"}, {"{topic}"}, {"{channel}"}.</p>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          Subject, body and channel used when sending guest invitations. In the body intro, use placeholders: <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-gray-700">{"{program}"}</code>, <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-gray-700">{"{topic}"}</code>, <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-gray-700">{"{channel}"}</code>
+        </p>
         <div className="space-y-3">
           {FIELDS.filter((f) => f.group === "invitations").map((f) => (
             <div key={f.key}>
