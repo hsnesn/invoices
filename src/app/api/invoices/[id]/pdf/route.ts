@@ -57,9 +57,19 @@ export async function GET(
       );
     }
 
-    // When redirect=1, redirect directly to the PDF (e.g. from guest contact list)
+    // When redirect=1, serve PDF inline so browser displays it (not download)
     if (request.nextUrl.searchParams.get("redirect") === "1") {
-      return NextResponse.redirect(data.signedUrl);
+      const pdfRes = await fetch(data.signedUrl);
+      if (!pdfRes.ok) {
+        return NextResponse.json({ error: "Failed to fetch PDF" }, { status: 502 });
+      }
+      const blob = await pdfRes.arrayBuffer();
+      return new NextResponse(blob, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": "inline; filename=invoice.pdf",
+        },
+      });
     }
 
     return NextResponse.json({ url: data.signedUrl });
