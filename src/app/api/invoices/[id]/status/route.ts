@@ -516,11 +516,9 @@ export async function POST(
           }
         }
       } else if (to_status === "paid") {
+        // Admin can force from any status (we are in the admin block)
         const adminCanForce = profile.role === "admin";
-        const financeCanMarkFromApproved =
-          profile.role === "finance" &&
-          ["approved_by_manager", "pending_admin", "ready_for_payment"].includes(fromStatus);
-        if (!adminCanForce && !financeCanMarkFromApproved) {
+        if (!adminCanForce) {
           return NextResponse.json(
             { error: "Invalid transition" },
             { status: 400 }
@@ -689,7 +687,8 @@ export async function POST(
       }
     } else if (profile.role === "finance") {
       if (to_status === "paid") {
-        if (fromStatus !== "ready_for_payment") {
+        const allowedFrom = ["approved_by_manager", "pending_admin", "ready_for_payment"];
+        if (!allowedFrom.includes(fromStatus)) {
           return NextResponse.json(
             { error: "Invalid transition" },
             { status: 400 }
