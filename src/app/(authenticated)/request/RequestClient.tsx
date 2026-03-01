@@ -387,10 +387,18 @@ export function RequestClient() {
         </div>
       </div>
 
-      {!hasRequiredFilters && (
+      {!hasRequiredFilters && !selectedDepartment && (
         <div className="rounded-2xl border border-gray-200/80 bg-gray-50/50 px-4 py-6 text-center dark:border-gray-700/60 dark:bg-gray-900/20">
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
             Select department, program, month and year to view demand and supply.
+          </p>
+        </div>
+      )}
+
+      {canManage && selectedDepartment && !hasRequiredFilters && (
+        <div className="rounded-2xl border border-gray-200/80 bg-amber-50/50 px-4 py-4 dark:border-amber-800/30 dark:bg-amber-950/20">
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Select program and month to view the calendar. Or use the Freelancer request below to create requirements from text.
           </p>
         </div>
       )}
@@ -407,7 +415,7 @@ export function RequestClient() {
         </div>
       )}
 
-      {canManage && hasRequiredFilters && (
+      {canManage && selectedDepartment && (
         <>
         <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
           <div className="mb-4">
@@ -469,6 +477,11 @@ export function RequestClient() {
             </button>
           </div>
         </div>
+        </>
+      )}
+
+      {canManage && hasRequiredFilters && (
+        <>
         <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">Recurring rules</h2>

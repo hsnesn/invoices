@@ -5,17 +5,18 @@ export const dynamic = "force-dynamic";
 
 function Tip({ children }: { children: React.ReactNode }) {
   return (
-    <div className="my-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm dark:border-sky-800 dark:bg-sky-950/40">
-      <span className="font-semibold text-sky-700 dark:text-sky-300">Quick tip:</span> {children}
+    <div className="my-4 rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50 to-sky-50/50 px-5 py-3.5 text-sm leading-relaxed shadow-sm dark:border-sky-800/60 dark:from-sky-950/50 dark:to-sky-950/30">
+      <span className="font-semibold text-sky-700 dark:text-sky-300">Quick tip:</span>{" "}
+      <span className="text-gray-700 dark:text-gray-300">{children}</span>
     </div>
   );
 }
 
 function StepList({ steps }: { steps: string[] }) {
   return (
-    <ol className="mt-2 list-inside list-decimal space-y-2">
+    <ol className="mt-3 list-inside list-decimal space-y-2.5 text-gray-700 dark:text-gray-300">
       {steps.map((s, i) => (
-        <li key={i}>{s}</li>
+        <li key={i} className="pl-1 leading-relaxed">{s}</li>
       ))}
     </ol>
   );
@@ -33,7 +34,7 @@ export default async function HelpPage() {
         </p>
       </div>
 
-      <section id="about" className="mb-10 scroll-mt-24 rounded-xl border border-sky-200 bg-sky-50/50 p-6 dark:border-sky-800 dark:bg-sky-950/30">
+      <section id="about" className="mb-10 scroll-mt-24 rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50 to-white p-6 shadow-sm dark:border-sky-800/60 dark:from-sky-950/40 dark:to-slate-900/50">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">About This System</h2>
         <p className="mt-2 text-gray-700 dark:text-gray-300">
           <strong>TRT UK Operations Platform</strong> is a central system for managing guest, contractor, and other invoices at TRT World UK. It streamlines approval workflows, reduces manual work with AI extraction, keeps everything in one place, and supports different roles.
@@ -43,13 +44,14 @@ export default async function HelpPage() {
         </p>
       </section>
 
-      <nav className="mb-10 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+      <nav className="mb-10 rounded-xl border border-gray-200/80 bg-gray-50/90 p-5 shadow-sm dark:border-gray-700/80 dark:bg-gray-800/40">
         <h2 className="mb-3 font-semibold text-gray-900 dark:text-white">Table of contents</h2>
         <ol className="list-inside list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
           <li><a href="#about" className="hover:text-sky-600 dark:hover:text-sky-400">About This System</a></li>
           <li><a href="#intro" className="hover:text-sky-600 dark:hover:text-sky-400">Introduction</a></li>
           <li><a href="#roles" className="hover:text-sky-600 dark:hover:text-sky-400">User roles</a></li>
           <li><a href="#dashboard" className="hover:text-sky-600 dark:hover:text-sky-400">Dashboard</a></li>
+          <li><a href="#nav-bar" className="hover:text-sky-600 dark:hover:text-sky-400">Navigation bar</a></li>
           <li><a href="#dashboard-customize" className="hover:text-sky-600 dark:hover:text-sky-400">Dashboard customization</a></li>
           <li><a href="#keyboard-shortcuts" className="hover:text-sky-600 dark:hover:text-sky-400">Keyboard shortcuts</a></li>
           <li><a href="#profile" className="hover:text-sky-600 dark:hover:text-sky-400">Profile</a></li>
@@ -80,7 +82,7 @@ export default async function HelpPage() {
         </ol>
       </nav>
 
-      <div className="space-y-10 text-gray-700 dark:text-gray-300">
+      <div className="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed">
         {/* Introduction */}
         <section id="intro" className="scroll-mt-24">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">1. Introduction</h2>
@@ -118,6 +120,39 @@ export default async function HelpPage() {
             "Use the search bar or keyboard shortcut (Ctrl+K or Cmd+K) to jump to a page quickly.",
             "Stats refresh every 30 seconds. Click \"Refresh\" for immediate update.",
           ]} />
+
+          <h3 id="nav-bar" className="mt-8 text-base font-semibold text-gray-900 dark:text-white">Navigation bar</h3>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">The top bar gives quick access to key actions and notifications.</p>
+          <div className="mt-4 space-y-4 rounded-xl border border-gray-200 bg-gray-50/80 p-5 dark:border-gray-700 dark:bg-gray-800/40">
+            <div className="flex gap-4">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+              </span>
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">Notification bell</p>
+                <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">Appears when you have pending tasks. Click to see: guest invoices awaiting approval, contractor invoices awaiting approval, other invoices awaiting payment, unread messages. Each item links straight to the relevant list.</p>
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-400">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              </span>
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">Messages badge</p>
+                <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">The Messages link shows an unread count when you have new messages. Click to open your inbox.</p>
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              </span>
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">Submit button</p>
+                <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">Quick access to submit invoices. Click for Guest Invoice or Contractor Invoice. If you have both, a dropdown lets you choose. You can also go via Dashboard or the relevant invoices page.</p>
+              </div>
+            </div>
+          </div>
+
           <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Dashboard alerts</h3>
           <p className="mt-2">
             The Dashboard may show proactive alerts at the top: <strong>Recurring invoices due soon</strong> (rent, subscriptions from Setup), <strong>Reminders due</strong> (e.g. fire extinguisher inspection), <strong>Projects with deadline soon</strong>. Click an alert to go to the relevant section.
@@ -202,7 +237,7 @@ export default async function HelpPage() {
 
           <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">6.2 Submitting a guest invoice (file upload)</h3>
           <StepList steps={[
-            "Go to Dashboard → Submit Invoice (or Guest Invoices → Submit).",
+            "Click Submit in the nav bar, or go to Dashboard → Guest Invoices → Submit.",
             "Select Department and Programme from the dropdowns.",
             "Fill in Service description if needed.",
             "Enter Transaction dates (from and to) and Currency (GBP, EUR, USD).",
@@ -512,8 +547,10 @@ export default async function HelpPage() {
 
           <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">14.4 Todo statuses (assignee)</h3>
           <p className="mt-2">When you are assigned to an office request, the todo has statuses: <strong>Pending</strong> (not started), <strong>In progress</strong>, <strong>Completed</strong>. Update the status as you work. When done, mark Completed and add completion notes.</p>
-          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">14.5 Attachments, project and vendor</h3>
-          <p className="mt-2">You can attach files (PDF, images) to a request. Link a request to a Project or Vendor when creating or editing. Admin can set up Reminders for recurring tasks (e.g. fire extinguisher inspection).</p>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">14.5 Reminders</h3>
+          <p className="mt-2">Admin and operations can add reminders for recurring tasks (e.g. fire extinguisher inspection, equipment checks). Go to <strong>Office Requests</strong>, find the <strong>Reminders</strong> section, click <strong>+ Add Reminder</strong>. Enter title, next due date, frequency in months, and optionally an assignee. The system sends reminder emails when due and shows alerts on the Dashboard.</p>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">14.6 Attachments, project and vendor</h3>
+          <p className="mt-2">You can attach files (PDF, images) to a request. Link a request to a Project or Vendor when creating or editing.</p>
         </section>
 
         {/* Projects */}
@@ -668,6 +705,7 @@ export default async function HelpPage() {
             <li><strong>Bulk download:</strong> Admin can select multiple invoices and download all their files as a zip.</li>
             <li><strong>Excel import:</strong> Admin can import invoices from an Excel file. Check the import screen for the required format.</li>
             <li><strong>Bulk mark paid:</strong> In Other Invoices, select multiple invoices and mark them as paid in one action.</li>
+            <li><strong>Filter by URL:</strong> Add <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-800">?group=pending</code> to the invoice list URL for pending only, <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-800">?group=paid</code> for paid. The metric cards&apos; &quot;View →&quot; links use these.</li>
           </ul>
           <Tip>Supported file types: PDF, DOCX, DOC, XLSX, XLS, JPEG.</Tip>
         </section>
@@ -713,6 +751,10 @@ export default async function HelpPage() {
             <div>
               <dt className="font-semibold text-gray-900 dark:text-white">Where do I start? What is the Dashboard?</dt>
               <dd className="mt-1">After you log in, you see the Dashboard. It has cards for each section (Guest Invoices, Contractor Invoices, etc.). Click a card to go there. The metric cards at the top show how many items are pending — click &quot;View →&quot; to go straight to them.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900 dark:text-white">What is the bell icon in the nav?</dt>
+              <dd className="mt-1">The notification bell appears when you have pending tasks (invoices awaiting approval, unread messages). Click it to see quick links to each list.</dd>
             </div>
             <div>
               <dt className="font-semibold text-gray-900 dark:text-white">How do I customize the Dashboard?</dt>
@@ -785,6 +827,10 @@ export default async function HelpPage() {
             <div>
               <dt className="font-semibold text-gray-900 dark:text-white">How do I submit an office request?</dt>
               <dd className="mt-1">Go to Office Requests → New request. Enter title, description, category (Furniture, IT Equipment, etc.), priority. Submit. Admin/operations will approve and optionally assign someone.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900 dark:text-white">Where are Reminders set up?</dt>
+              <dd className="mt-1">Go to Office Requests. In the Reminders section, click + Add Reminder. Enter title (e.g. Fire extinguisher maintenance), next due date, frequency in months, and optionally an assignee. Admin and operations only.</dd>
             </div>
             <div>
               <dt className="font-semibold text-gray-900 dark:text-white">How do I complete an office request?</dt>
