@@ -8,8 +8,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { canAccessInvoice } from "@/lib/invoice-access";
 import { generateBankTransferForm } from "@/lib/bank-transfer-form";
+import { sendEmailWithAttachment } from "@/lib/email";
 
 const BUCKET = "invoices";
+const LONDON_FINANCE_EMAIL = "london.finance@trtworld.com";
 
 export async function GET(
   request: NextRequest,
@@ -74,7 +76,7 @@ export async function GET(
 
     const meta = parseServiceDescription(invoice.service_description);
     const invNumber = meta.invoice_number ?? meta["invoice number"] ?? invoiceId.slice(0, 8);
-    const guestName = meta.guest_name ?? meta["guest name"] ?? beneficiaryName || "Guest";
+    const guestName = meta.guest_name ?? meta["guest name"] ?? (beneficiaryName || "Guest");
     const dateStr = new Date().toISOString().slice(0, 10);
     const safeGuestName = guestName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-").slice(0, 40) || "Guest";
     const formFileName = `${validCurrency}-TRTW-${safeGuestName}-${invNumber}-${dateStr}.docx`;
@@ -115,6 +117,28 @@ export async function GET(
         file_name: formFileName,
         sort_order: nextOrder,
       });
+    }
+
+    // Send form to London Finance by email
+    try {
+      const { success } = await sendEmailWithAttachment({
+        to: LONDON_FINANCE_EMAIL,
+        subject: `Bank transfer form — ${formFileName}`,
+        html: `
+          <p>A bank transfer form has been generated for an international invoice.</p>
+          <p><strong>Invoice:</strong> ${invNumber}</p>
+          <p><strong>Guest:</strong> ${guestName}</p>
+          <p><strong>Amount:</strong> ${formData.amount} ${validCurrency}</p>
+          <p><strong>Currency:</strong> ${validCurrency}</p>
+          <p>The form is attached. Please process the payment.</p>
+        `,
+        attachments: [{ filename: formFileName, content: docxBuffer }],
+      });
+      if (!success) {
+        console.warn("[bank-transfer-form] Failed to email London Finance");
+      }
+    } catch (e) {
+      console.warn("[bank-transfer-form] Email to London Finance failed:", e);
     }
 
     return new NextResponse(new Uint8Array(docxBuffer), {
