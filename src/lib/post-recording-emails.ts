@@ -110,6 +110,31 @@ export async function sendInvoiceToProducer(params: {
   });
 }
 
+/** Notify producer that guest requested a new invoice link (used or expired). */
+export async function sendGuestRequestedNewLinkEmail(params: {
+  to: string;
+  producerName: string;
+  guestName: string;
+  guestEmail: string | null;
+  programName: string;
+  producerGuestId: string;
+}) {
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const resendLink = `${APP_URL}/invoices/invited-guests?resend=${params.producerGuestId}`;
+  const body = `
+<p>Dear ${params.producerName},</p>
+<p><strong>${params.guestName}</strong>${params.guestEmail ? ` (${params.guestEmail})` : ""} has requested a new invoice submission link for <strong>${params.programName}</strong>.</p>
+<p>The previous link may have expired or already been used.</p>
+<p><a href="${resendLink}" style="color:#2563eb;font-weight:600">Click here to send a new link</a> (you will need to log in).</p>
+<p>Best regards,<br/>${APP_NAME}</p>
+`;
+  return sendEmail({
+    to: params.to,
+    subject: `New link requested – ${params.guestName} – ${params.programName}`,
+    html: wrap(body),
+  });
+}
+
 /** Guest does not receive payment: thank you, contribution was valuable. */
 export async function sendPostRecordingNoPayment(params: {
   to: string;

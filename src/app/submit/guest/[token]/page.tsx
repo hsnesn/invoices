@@ -35,15 +35,20 @@ export default function GuestInvoiceSubmitPage() {
   const [hasExpenses, setHasExpenses] = useState(false);
   const [expenses, setExpenses] = useState<{ label: string; amount: string }[]>([{ label: "", amount: "" }]);
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
+  const [requestingLink, setRequestingLink] = useState(false);
+  const [linkRequested, setLinkRequested] = useState(false);
 
   useEffect(() => {
     if (!token) return;
-    fetch(`/api/guest-invoice-submit/${token}`)
+    fetch(`/api/guest-invoice-submit/${token}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
-        if (d.error) setError(d.error);
-        else {
+        if (d.error) {
+          setError(d.error);
+          setData(null);
+        } else {
           setData(d);
+          setError(null);
           if (d.payment_currency) setCurrency(d.payment_currency);
         }
       })
@@ -69,6 +74,10 @@ export default function GuestInvoiceSubmitPage() {
       if (res.ok) {
         setSuccess(true);
       } else {
+        if (res.status === 410) {
+          setData(null);
+          setMode(null);
+        }
         setError(d.error ?? "Upload failed");
       }
     } catch {
@@ -125,12 +134,39 @@ export default function GuestInvoiceSubmitPage() {
       if (res.ok) {
         setSuccess(true);
       } else {
+        if (res.status === 410) {
+          setData(null);
+          setMode(null);
+        }
         setError(d.error ?? "Generation failed");
       }
     } catch {
       setError("Connection error. Please try again.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleRequestNewLink() {
+    if (!token || requestingLink) return;
+    setRequestingLink(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/guest-invoice-submit/request-new-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setLinkRequested(true);
+      } else {
+        setError(d.error ?? "Request failed");
+      }
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally {
+      setRequestingLink(false);
     }
   }
 
@@ -149,9 +185,25 @@ export default function GuestInvoiceSubmitPage() {
         <TrtLogo size="md" />
         <div className="mt-6 max-w-md rounded-xl border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-800 dark:bg-rose-950/30">
           <p className="font-medium text-rose-800 dark:text-rose-200">{error}</p>
-          <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">
-            Please contact the producer if you need a new link.
-          </p>
+          {linkRequested ? (
+            <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+              We have notified the producer. They will send you a new link soon.
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">
+                You can request a new link and we will notify the producer.
+              </p>
+              <button
+                type="button"
+                onClick={handleRequestNewLink}
+                disabled={requestingLink}
+                className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+              >
+                {requestingLink ? "Sending…" : "Request new link"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
@@ -121,6 +121,9 @@ export function InvitedGuestsClient({
   const [sendInvoiceLinkModal, setSendInvoiceLinkModal] = useState<{ guest_name: string; email: string | null; program_name?: string; title?: string } | null>(null);
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const loadGuests = React.useCallback(() => {
     setLoading(true);
     fetch("/api/producer-guests", { credentials: "same-origin" })
@@ -149,6 +152,26 @@ export function InvitedGuestsClient({
   useEffect(() => {
     loadGuests();
   }, [loadGuests]);
+
+  const resendHandled = React.useRef(false);
+  useEffect(() => {
+    const resendId = searchParams.get("resend");
+    if (!resendId || resendHandled.current) return;
+    resendHandled.current = true;
+    fetch(`/api/producer-guests/${resendId}/resend-post-recording-email`, { method: "POST", credentials: "same-origin" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.ok) {
+          toast.success((data as { message?: string }).message ?? "New link sent to guest");
+        } else {
+          toast.error((data as { error?: string }).error ?? "Failed to resend");
+        }
+      })
+      .catch(() => toast.error("Failed to resend"))
+      .finally(() => {
+        router.replace("/invoices/invited-guests", { scroll: false });
+      });
+  }, [searchParams, router]);
 
   useEffect(() => {
     if (acceptanceModal && acceptanceForm.generate_invoice) {
@@ -260,7 +283,6 @@ export function InvitedGuestsClient({
     return () => clearTimeout(t);
   }, [form.guest_name]);
 
-  const router = useRouter();
   const selectedProducer = producers.find((p) => p.id === currentUserId) ?? { id: currentUserId, full_name: currentUserFullName };
 
   const filteredGuests = guests.filter((g) => {
