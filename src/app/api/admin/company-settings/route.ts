@@ -17,6 +17,10 @@ const COMPANY_KEYS = [
   "bank_account_eur",
   "bank_account_usd",
   "app_name",
+  "invitation_subject_prefix",
+  "invitation_body_intro",
+  "invitation_broadcast_channel",
+  "invitation_studio_intro",
 ] as const;
 
 async function requireSetupAccess() {

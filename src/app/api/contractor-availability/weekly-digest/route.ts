@@ -5,10 +5,9 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
-
-const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
 
 export async function GET(request: Request) {
   try {
@@ -65,7 +64,7 @@ export async function GET(request: Request) {
     }
 
     for (const to of recipients) {
-      await sendWeeklyRequirementsDigestEmail({ to, weekLabel, requirements });
+      await sendWeeklyRequirementsDigestEmail({ to, weekLabel, requirements, replyTo: company.email_operations });
     }
 
     return NextResponse.json({ ok: true, sent: recipients.length, weekLabel });

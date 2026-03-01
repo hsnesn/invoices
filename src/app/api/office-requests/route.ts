@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { sendOfficeRequestNewToOperationsEmail } from "@/lib/email";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -192,7 +193,8 @@ export async function POST(request: NextRequest) {
     const { data: authUser } = await supabase.auth.admin.getUserById(session.user.id);
     const requesterEmail = (authUser?.user?.email ?? "").trim();
     const requesterName = ((profile.full_name ?? authUser?.user?.user_metadata?.full_name ?? requesterEmail) || "Requester").trim();
-    const operationsEmail = process.env.OPERATIONS_ROOM_EMAIL ?? "london.operations@trtworld.com";
+    const company = await getCompanySettingsAsync();
+    const operationsEmail = process.env.OPERATIONS_ROOM_EMAIL ?? company.email_operations;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const link = `${appUrl}/office-requests`;
 

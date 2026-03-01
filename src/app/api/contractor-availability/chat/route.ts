@@ -8,11 +8,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import OpenAI from "openai";
 import { parseFreelancerRequest } from "@/lib/parse-freelancer-request";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-
-const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
 
 function canAccess(role: string) {
   return ["admin", "operations", "manager"].includes(role);
@@ -205,11 +204,12 @@ export async function POST(request: NextRequest) {
             });
             if (error) throw error;
 
+            const company = await getCompanySettingsAsync();
             const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
             const requesterName = (profile as { full_name?: string }).full_name ?? "A user";
             const { sendFreelancerRequestToLondonOps } = await import("@/lib/email");
             await sendFreelancerRequestToLondonOps({
-              to: LONDON_OPS_EMAIL,
+              to: company.email_operations,
               monthLabel,
               requesterName,
               requirements: toInsert,

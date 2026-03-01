@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { getMergedRequirements } from "@/lib/contractor-requirements";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -205,6 +206,7 @@ export async function POST(request: NextRequest) {
 
       const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const company = await getCompanySettingsAsync();
       const { data: profiles } = await supabase.from("profiles").select("id, full_name");
       const nameMap = new Map<string, string>();
       for (const p of profiles ?? []) {
@@ -219,7 +221,8 @@ export async function POST(request: NextRequest) {
         }));
       const { sendContractorAssignmentsPendingEmail } = await import("@/lib/email");
       await sendContractorAssignmentsPendingEmail({
-        to: "london.operations@trtworld.com",
+        to: company.email_operations,
+        replyTo: company.email_operations,
         monthLabel,
         count: deduped.length,
         reviewUrl: `${appUrl}/contractor-availability?tab=assignments&month=${month}`,

@@ -16,6 +16,10 @@ export type CompanySettings = {
   bank_account_eur: string;
   bank_account_usd: string;
   app_name: string;
+  invitation_subject_prefix: string;
+  invitation_body_intro: string;
+  invitation_broadcast_channel: string;
+  invitation_studio_intro: string;
 };
 
 const DEFAULTS: CompanySettings = {
@@ -30,6 +34,10 @@ const DEFAULTS: CompanySettings = {
   bank_account_eur: "0611-405810-009",
   bank_account_usd: "0611-405810-002",
   app_name: "TRT UK Operations Platform",
+  invitation_subject_prefix: "TRT World – Invitation to the program:",
+  invitation_body_intro: "I am writing to invite you to participate in <strong>{program}</strong>, which will be broadcast on {channel} and will focus on {topic}.",
+  invitation_broadcast_channel: "TRT World",
+  invitation_studio_intro: "The recording will take place in our studio. The address is:",
 };
 
 const KEYS = [
@@ -44,6 +52,10 @@ const KEYS = [
   "bank_account_eur",
   "bank_account_usd",
   "app_name",
+  "invitation_subject_prefix",
+  "invitation_body_intro",
+  "invitation_broadcast_channel",
+  "invitation_studio_intro",
 ] as const;
 
 function unwrapJsonb(v: unknown): string {

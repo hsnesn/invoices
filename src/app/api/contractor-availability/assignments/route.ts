@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -183,6 +184,7 @@ export async function POST(request: NextRequest) {
       const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const calendarUrl = `${appUrl}/api/contractor-availability/export/ical?month=${month}`;
+      const company = await getCompanySettingsAsync();
       const { sendContractorAssignmentConfirmedEmail, sendContractorAssignmentConfirmedToLondonOps } = await import("@/lib/email");
 
       const byPersonForLondon: { name: string; email: string; datesWithRole: { date: string; role: string }[] }[] = [];
@@ -197,13 +199,14 @@ export async function POST(request: NextRequest) {
             monthLabel,
             datesWithRole: sorted,
             calendarUrl,
+            replyTo: company.email_operations,
           });
           byPersonForLondon.push({ name, email, datesWithRole: sorted });
         }
       }
 
       if (byPersonForLondon.length > 0) {
-        await sendContractorAssignmentConfirmedToLondonOps({ monthLabel, byPerson: byPersonForLondon });
+        await sendContractorAssignmentConfirmedToLondonOps({ monthLabel, byPerson: byPersonForLondon, operationsEmail: company.email_operations });
       }
 
       return NextResponse.json({ ok: true, approved: ids.length });

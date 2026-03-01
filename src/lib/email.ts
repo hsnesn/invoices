@@ -203,7 +203,9 @@ export async function sendLoginLockoutEmailToUser(email: string): Promise<{ succ
 }
 
 export async function sendLoginLockoutEmailToAdmin(userEmail: string): Promise<{ success: boolean }> {
-  const adminEmail = process.env.ADMIN_LOCKOUT_EMAIL ?? "london.finance@trtworld.com";
+  const { getCompanySettingsAsync } = await import("@/lib/company-settings");
+  const company = await getCompanySettingsAsync();
+  const adminEmail = process.env.ADMIN_LOCKOUT_EMAIL ?? company.email_finance ?? DEFAULT_FINANCE_EMAIL;
   const html = await wrapWithLogo(
     "Login Lockout Alert",
     `<p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">The account <strong>${userEmail}</strong> has been locked after 3 failed login attempts.</p>
@@ -732,9 +734,6 @@ export async function sendSalaryPaymentConfirmationEmail(params: {
 /* Contractor availability submitted → London Operations               */
 /* ------------------------------------------------------------------ */
 
-const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
-const BANK_TRANSFER_FORM_EMAIL = process.env.BANK_TRANSFER_FORM_EMAIL ?? "london.finance@trtworld.com";
-
 /** International bank transfer form (Word docx) — sent to finance when generated. */
 export async function sendBankTransferFormEmail(params: {
   docxBuffer: Buffer;
@@ -746,7 +745,9 @@ export async function sendBankTransferFormEmail(params: {
   invoiceNumber?: string | null;
   invoiceId: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const to = params.recipientEmail?.trim() || BANK_TRANSFER_FORM_EMAIL;
+  const { getCompanySettingsAsync } = await import("@/lib/company-settings");
+  const company = await getCompanySettingsAsync();
+  const to = params.recipientEmail?.trim() || process.env.BANK_TRANSFER_FORM_EMAIL || company.email_bank_transfer;
   const filename = params.attachmentFilename ?? `bank-transfer-form-${params.invoiceNumber ?? params.invoiceId}.docx`;
   const subject = params.invoiceNumber
     ? `Bank Transfer Form — Invoice ${params.invoiceNumber} (${params.beneficiaryName})`
@@ -877,6 +878,7 @@ export async function sendWeeklyRequirementsDigestEmail(params: {
   to: string;
   weekLabel: string;
   requirements: { date: string; role: string; count_needed: number }[];
+  replyTo?: string;
 }) {
   const byDate = new Map<string, { role: string; count: number }[]>();
   for (const r of params.requirements) {
@@ -892,9 +894,10 @@ export async function sendWeeklyRequirementsDigestEmail(params: {
     .join("");
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const requestUrl = `${appUrl}/request`;
+  const replyTo = params.replyTo ?? (await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync()).then((c) => c.email_operations));
   return sendEmail({
     to: params.to,
-    replyTo: LONDON_OPS_EMAIL,
+    replyTo,
     subject: `Next week's requirements — ${params.weekLabel}`,
     html: await wrapWithLogo("Next Week's Requirements", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Here is the scheduled demand for next week:</p>
@@ -919,6 +922,7 @@ export async function sendContractorAssignmentsPendingEmail(params: {
   count: number;
   reviewUrl: string;
   assignments?: { personName: string; date: string; role: string }[];
+  replyTo?: string;
 }) {
   const tableHtml =
     params.assignments && params.assignments.length > 0
@@ -934,9 +938,10 @@ export async function sendContractorAssignmentsPendingEmail(params: {
         </table>
       </div>`
       : "";
+  const replyTo = params.replyTo ?? (await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync()).then((c) => c.email_operations));
   return sendEmail({
     to: params.to,
-    replyTo: LONDON_OPS_EMAIL,
+    replyTo,
     subject: `Contractor assignments pending review — ${params.monthLabel}`,
     html: await wrapWithLogo("Assignments Pending Review", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">AI has suggested <strong>${params.count}</strong> contractor assignments for ${params.monthLabel}.</p>
@@ -952,10 +957,12 @@ export async function sendContractorReminderEmail(params: {
   personName: string;
   dateLabel: string;
   role: string;
+  replyTo?: string;
 }) {
+  const replyTo = params.replyTo ?? (await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync()).then((c) => c.email_operations));
   return sendEmail({
     to: params.to,
-    replyTo: LONDON_OPS_EMAIL,
+    replyTo,
     subject: `Reminder: You are booked tomorrow (${params.role}) — ${params.dateLabel}`,
     html: await wrapWithLogo("Schedule Reminder", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
@@ -971,6 +978,7 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
   monthLabel: string;
   datesWithRole: { date: string; role: string }[];
   calendarUrl?: string;
+  replyTo?: string;
 }) {
   const rows =
     params.datesWithRole.length > 0
@@ -990,9 +998,10 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
   const calendarBtn = params.calendarUrl
     ? `<div style="text-align:center;margin:20px 0"><a href="${params.calendarUrl}" style="display:inline-block;background:#10b981;color:#ffffff;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;box-shadow:0 2px 8px rgba(16,185,129,0.4)">Add to calendar (.ics)</a></div><p style="margin:0 0 12px;font-size:12px;color:#64748b;text-align:center">Download and add these dates to your calendar app</p>`
     : "";
+  const replyTo = params.replyTo ?? (await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync()).then((c) => c.email_operations));
   return sendEmail({
     to: params.to,
-    replyTo: LONDON_OPS_EMAIL,
+    replyTo,
     subject: `Your schedule is confirmed — ${params.monthLabel}`,
     html: await wrapWithLogo("Schedule Confirmed", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Hi${params.personName ? ` ${params.personName}` : ""},</p>
@@ -1008,6 +1017,7 @@ export async function sendContractorAssignmentConfirmedEmail(params: {
 export async function sendContractorAssignmentConfirmedToLondonOps(params: {
   monthLabel: string;
   byPerson: { name: string; email: string; datesWithRole: { date: string; role: string }[] }[];
+  operationsEmail?: string;
 }) {
   const rows = params.byPerson
     .map(
@@ -1015,8 +1025,9 @@ export async function sendContractorAssignmentConfirmedToLondonOps(params: {
         `<tr><td style="padding:8px 12px;color:#1e293b">${p.name}</td><td style="padding:8px 12px;color:#64748b">${p.email}</td><td style="padding:8px 12px;color:#1e293b">${p.datesWithRole.map((d) => `${new Date(d.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })} (${d.role})`).join(", ")}</td></tr>`
     )
     .join("");
+  const opsEmail = params.operationsEmail ?? (await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync()).then((c) => c.email_operations));
   return sendEmail({
-    to: LONDON_OPS_EMAIL,
+    to: opsEmail,
     subject: `Contractor schedule confirmed — ${params.monthLabel}`,
     html: await wrapWithLogo("Schedule Confirmed (Copy)", `
       <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The following contractor assignments have been confirmed for <strong>${params.monthLabel}</strong>:</p>

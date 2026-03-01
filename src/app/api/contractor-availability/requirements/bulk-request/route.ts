@@ -6,11 +6,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { parseFreelancerRequest } from "@/lib/parse-freelancer-request";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-
-const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
 
 function canManage(role: string) {
   return ["admin", "operations", "manager"].includes(role);
@@ -108,10 +107,10 @@ export async function POST(request: NextRequest) {
     const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
     const requesterName = (profile as { full_name?: string }).full_name ?? "A user";
 
-    // Send email in background so response returns quickly (avoids timeout)
+    const company = await getCompanySettingsAsync();
     const { sendFreelancerRequestToLondonOps } = await import("@/lib/email");
     sendFreelancerRequestToLondonOps({
-      to: LONDON_OPS_EMAIL,
+      to: company.email_operations,
       monthLabel,
       requesterName,
       requirements: toInsert.map((x) => ({ date: x.date, role: x.role, count_needed: x.count_needed })),

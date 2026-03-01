@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import type { CompanySettings } from "@/lib/company-settings";
 
-const FIELDS: { key: keyof CompanySettings; label: string; placeholder: string; group: "company" | "contacts" | "bank" }[] = [
+const FIELDS: { key: keyof CompanySettings; label: string; placeholder: string; group: "company" | "contacts" | "bank" | "invitations" }[] = [
   { key: "company_name", label: "Company name", placeholder: "e.g. TRT WORLD (UK)", group: "company" },
   { key: "company_address", label: "Company address", placeholder: "e.g. 200 Grays Inn Road, London, WC1X 8XZ", group: "company" },
   { key: "signature_name", label: "Signature name", placeholder: "e.g. Hasan ESEN", group: "company" },
@@ -118,6 +118,28 @@ export function CompanyContactsSetupSection() {
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{f.label}</label>
               <input
                 type="email"
+                value={edit[f.key] ?? settings?.[f.key] ?? ""}
+                onChange={(e) => setEdit((p) => ({ ...p, [f.key]: e.target.value }))}
+                placeholder={f.placeholder}
+                className={inputCls}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900/80">
+        <h2 className="mb-4 font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-violet-500" />
+          Invitation templates
+        </h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Subject, body and channel used when sending guest invitations. Placeholders: {"{program}"}, {"{topic}"}, {"{channel}"}.</p>
+        <div className="space-y-3">
+          {FIELDS.filter((f) => f.group === "invitations").map((f) => (
+            <div key={f.key}>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{f.label}</label>
+              <input
+                type="text"
                 value={edit[f.key] ?? settings?.[f.key] ?? ""}
                 onChange={(e) => setEdit((p) => ({ ...p, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}

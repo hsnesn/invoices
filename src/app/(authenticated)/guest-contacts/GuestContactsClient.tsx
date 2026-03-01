@@ -2529,7 +2529,8 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
   const [recordDate, setRecordDate] = useState("");
   const [recordTime, setRecordTime] = useState("");
   const [format, setFormat] = useState<"remote" | "studio">("remote");
-  const [studioAddress, setStudioAddress] = useState("TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ");
+  const DEFAULT_STUDIO = "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ";
+  const [studioAddress, setStudioAddress] = useState(DEFAULT_STUDIO);
   const [includeProgramDescription, setIncludeProgramDescription] = useState(true);
   const [attachCalendar, setAttachCalendar] = useState(true);
   const [bccProducer, setBccProducer] = useState(true);
@@ -2555,6 +2556,13 @@ function BulkEmailModal({ contacts, programs: programNames, topics: topicNames, 
       return [];
     }
   });
+
+  useEffect(() => {
+    fetch("/api/settings/invitation-defaults", { credentials: "same-origin" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.studio_address) setStudioAddress(d.studio_address); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (mode !== "invite") return;

@@ -4,6 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
     }
 
     const dateLabel = tomorrow.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    const company = await getCompanySettingsAsync();
     const { sendContractorReminderEmail } = await import("@/lib/email");
 
     let sent = 0;
@@ -57,6 +59,7 @@ export async function GET(request: Request) {
           personName: nameMap.get(uid) ?? "",
           dateLabel,
           role: byUser.get(uid) ?? "—",
+          replyTo: company.email_operations,
         });
         sent++;
       }

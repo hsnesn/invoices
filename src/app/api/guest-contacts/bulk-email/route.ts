@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateInviteIcs } from "@/lib/ics-generator";
 import { getProgramDescription } from "@/lib/program-descriptions";
 import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 500;
@@ -26,6 +27,9 @@ function buildInviteHtml(params: {
   programDescription?: string | null;
   customGreeting?: string | null;
   greetingType?: GreetingType;
+  broadcastChannel: string;
+  bodyIntro: string;
+  studioIntro: string;
 }): string {
   const greeting =
     params.customGreeting?.trim() ||
@@ -43,7 +47,7 @@ function buildInviteHtml(params: {
   const formatText =
     params.format === "remote"
       ? "The recording will be conducted remotely via Skype or Zoom."
-      : `The recording will take place in our studio. The address is: ${safe.studioAddress || "—"}`;
+      : `${params.studioIntro.trim()} ${safe.studioAddress || "—"}`;
   const progDescBlock = safe.programDescription
     ? `<p><em>${safe.programDescription}</em></p>`
     : "";
@@ -55,7 +59,7 @@ function buildInviteHtml(params: {
 <div style="max-width:600px;margin:0 auto;padding:20px">
 <p>${safe.greeting},</p>
 <p>I hope this message finds you well.</p>
-<p>I am writing to invite you to participate in <strong>${safe.programName}</strong>, which will be broadcast on TRT World and will focus on ${safe.topic}.</p>
+<p>${params.bodyIntro.replace(/{program}/g, safe.programName).replace(/{channel}/g, params.broadcastChannel).replace(/{topic}/g, safe.topic)}</p>
 ${progDescBlock}
 <p>The recording is scheduled for <strong>${safe.recordDate}</strong> at <strong>${safe.recordTime}</strong>.</p>
 <p>${formatText}</p>
@@ -129,8 +133,8 @@ export async function POST(request: NextRequest) {
       const greetingType = valid.includes(body.greeting_type as GreetingType) ? (body.greeting_type as GreetingType) : "dear";
 
       const programDescription = includeProgramDescription ? getProgramDescription(programName) : null;
-
-      const subjectBase = `TRT World – Invitation to the program: ${programName}`;
+      const company = await getCompanySettingsAsync();
+      const subjectBase = `${company.invitation_subject_prefix.trim()} ${programName}`;
       const supabase = createAdminClient();
       let sent = 0;
 
@@ -148,6 +152,9 @@ export async function POST(request: NextRequest) {
           programDescription,
           greetingType,
           customGreeting: customGreetings[c.guest_name],
+          broadcastChannel: company.invitation_broadcast_channel,
+          bodyIntro: company.invitation_body_intro,
+          studioIntro: company.invitation_studio_intro,
         });
 
         const attachments: { filename: string; content: Buffer | string }[] = [];

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 import { createSalaryAuditEvent, runSalaryExtraction } from "@/lib/salary-extraction";
 import { sendSalaryPaymentConfirmationEmail } from "@/lib/email";
 
@@ -251,7 +252,8 @@ export async function PATCH(
           }
         }
       }
-      emailTo = emailTo ?? "london.finance@trtworld.com";
+      const company = await getCompanySettingsAsync();
+      emailTo = emailTo ?? company.email_finance;
       const salaryForEmail: SalaryForEmail = {
         ...existing,
         paid_date: paidDate,

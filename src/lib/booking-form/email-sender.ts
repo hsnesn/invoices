@@ -2,8 +2,6 @@ import { sendEmailWithAttachment } from "@/lib/email";
 import type { BookingFormData, ApprovalContext } from "./types";
 import { sanitizeFilenamePart } from "./pdf-generator";
 import { getLogoUrl } from "@/lib/get-logo-url";
-
-const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
 const fmtCurrency = (v: number) =>
   `£${v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
@@ -55,13 +53,14 @@ export async function sendBookingFormEmailA(
   }
   const subject = `${data.name} – ${data.month}`;
   const details = buildDetailsSection(data);
+  const opsEmail = await getOperationsEmail();
   const body = `
 <p>Dear ${escapeHtml(ctx.approverName)},</p>
 <p>This is to confirm that you have approved the freelancer booking form and payment details for <strong>${escapeHtml(data.name)}</strong> for <strong>${escapeHtml(data.month)}</strong>. The approved Booking Form is attached.</p>
 <h3 style="margin:16px 0 8px;font-size:15px;color:#1e293b">Booking Form Details</h3>
 ${details}
 <p>Please note that this approval will be recorded as final acceptance for processing and audit purposes.</p>
-<p>If you believe this approval was made in error or if any corrections are required, please contact <a href="mailto:${LONDON_OPS_EMAIL}">${LONDON_OPS_EMAIL}</a> immediately. Otherwise, this approval will be treated as final and recorded accordingly.</p>
+<p>If you believe this approval was made in error or if any corrections are required, please contact <a href="mailto:${opsEmail}">${opsEmail}</a> immediately. Otherwise, this approval will be treated as final and recorded accordingly.</p>
 <p>Kind regards,</p>
 <p><strong>Attachment:</strong> Booking Form (PDF)</p>`;
 
@@ -87,6 +86,7 @@ export async function sendBookingFormEmailB(
   pdfBuffer: ArrayBuffer,
   idempotencyKey: string
 ): Promise<{ success: boolean; messageId?: string; error?: unknown }> {
+  const opsEmail = await getOperationsEmail();
   const subject = `${data.name} – ${data.month}`;
   const approvalDateTime = ctx.approvedAt.toLocaleString("en-GB", {
     day: "numeric",
@@ -113,7 +113,7 @@ ${details}
 
   const filename = `BookingForm_${sanitizeFilenamePart(data.name)}_${sanitizeFilenamePart(data.month)}.pdf`;
   const result = await sendEmailWithAttachment({
-    to: LONDON_OPS_EMAIL,
+    to: opsEmail,
     subject,
     html: await wrapEmail(body),
     attachments: [{ filename, content: pdfBuffer }],

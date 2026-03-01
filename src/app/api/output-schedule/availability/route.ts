@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { getCompanySettingsAsync } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -124,9 +125,10 @@ export async function POST(request: NextRequest) {
     if (userEmail && valid.length > 0) {
       const [y, m] = minDate.split("-").map(Number);
       const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+      const company = await getCompanySettingsAsync();
       const { sendContractorAvailabilitySubmittedEmail } = await import("@/lib/email");
       await sendContractorAvailabilitySubmittedEmail({
-        to: "london.operations@trtworld.com",
+        to: company.email_operations,
         replyTo: userEmail,
         personName: profile.full_name ?? "Unknown",
         personEmail: userEmail,

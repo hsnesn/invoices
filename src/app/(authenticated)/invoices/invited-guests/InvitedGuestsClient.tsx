@@ -83,6 +83,8 @@ export function InvitedGuestsClient({
     swift_bic: "",
   });
   const [acceptanceBankDetails, setAcceptanceBankDetails] = useState<BankDetailsValues>(BANK_DETAILS_DEFAULT);
+  const DEFAULT_STUDIO = "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ";
+  const [defaultStudioAddress, setDefaultStudioAddress] = useState(DEFAULT_STUDIO);
 
   const [form, setForm] = useState({
     guest_name: "",
@@ -94,7 +96,7 @@ export function InvitedGuestsClient({
     record_date: "",
     record_time: "",
     format: "remote" as "remote" | "studio",
-    studio_address: "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ",
+    studio_address: defaultStudioAddress,
     include_program_description: true,
     attach_calendar: true,
     bcc_producer: true,
@@ -158,6 +160,18 @@ export function InvitedGuestsClient({
   useEffect(() => {
     loadGuests();
   }, [loadGuests]);
+
+  useEffect(() => {
+    fetch("/api/settings/invitation-defaults", { credentials: "same-origin" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.studio_address) {
+          setDefaultStudioAddress(d.studio_address);
+          setForm((prev) => prev.studio_address === DEFAULT_STUDIO ? { ...prev, studio_address: d.studio_address } : prev);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const resendHandled = React.useRef(false);
   useEffect(() => {
@@ -745,7 +759,7 @@ export function InvitedGuestsClient({
       record_date: "",
       record_time: "",
       format: "remote",
-      studio_address: "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ",
+      studio_address: defaultStudioAddress,
       include_program_description: true,
       attach_calendar: true,
       bcc_producer: true,
@@ -1140,7 +1154,7 @@ export function InvitedGuestsClient({
                               record_date: "",
                               record_time: "",
                               format: "remote",
-                              studio_address: "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ",
+                              studio_address: defaultStudioAddress,
                               include_program_description: true,
                               attach_calendar: true,
                               bcc_producer: true,
@@ -1371,7 +1385,7 @@ export function InvitedGuestsClient({
                                   record_date: "",
                                   record_time: "",
                                   format: "remote",
-                                  studio_address: "TRT World London Studios 200 Gray's Inn Rd, London WC1X 8XZ",
+                                  studio_address: defaultStudioAddress,
                                   include_program_description: true,
                                   attach_calendar: true,
                                   bcc_producer: true,
