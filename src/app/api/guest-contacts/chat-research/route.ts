@@ -21,6 +21,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const query = typeof body?.query === "string" ? body.query.trim() : null;
     const guestName = typeof body?.guest_name === "string" ? body.guest_name.trim() || null : null;
+    const guestList = Array.isArray(body?.guest_list)
+      ? (body.guest_list as string[]).filter((n): n is string => typeof n === "string" && n.trim().length > 0).slice(0, 50)
+      : [];
 
     if (!query) {
       return NextResponse.json({ error: "query is required" }, { status: 400 });
@@ -34,9 +37,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const scope = guestName
-      ? `Focus ONLY on this specific person: "${guestName}".`
-      : "Search across public figures, experts, and potential TV guests in general.";
+    let scope: string;
+    if (guestName) {
+      scope = `Focus ONLY on this specific person: "${guestName}".`;
+    } else if (guestList.length > 0) {
+      scope = `The user has provided their internal guest list. Research the following people (${guestList.length} guests):\n${guestList.map((n) => `- ${n}`).join("\n")}\n\nAnswer the user's query about these specific guests. If the query asks to analyze or compare them, do so for the people listed above.`;
+    } else {
+      scope = "Search across public figures, experts, and potential TV guests in general.";
+    }
     const prompt = `You are a research assistant for a broadcast/TV production company. ${scope}
 
 **User query:** ${query}

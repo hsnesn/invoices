@@ -708,12 +708,24 @@ export function GuestContactsClient({
     const q = chatInput.trim();
     if (!q) return;
     const guest = chatScope === "selected" ? chatSelectedGuest : null;
+    let guestList: string[] = [];
+    if (chatScope === "all") {
+      try {
+        const namesRes = await fetch("/api/guest-contacts/names-for-research", { credentials: "same-origin" });
+        if (namesRes.ok) {
+          const { names } = await namesRes.json();
+          guestList = Array.isArray(names) ? names : [];
+        }
+      } catch {
+        guestList = filteredContacts.map((c) => c.guest_name);
+      }
+    }
     setChatLoading(true);
     try {
       const res = await fetch("/api/guest-contacts/chat-research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, guest_name: guest }),
+        body: JSON.stringify({ query: q, guest_name: guest, guest_list: guestList }),
         credentials: "same-origin",
       });
       const data = await res.json();
@@ -2027,7 +2039,7 @@ export function GuestContactsClient({
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatHistory.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Search across all guests or focus on a selected guest. Ask about risk factors, biography, recent appearances, etc.
+                  Search across all guests (fetched fresh each time) or focus on a selected guest. Ask about risk factors, biography, recent appearances, etc.
                 </p>
               ) : (
                 chatHistory.map((h, i) => (
@@ -2077,7 +2089,7 @@ export function GuestContactsClient({
                     onChange={() => setChatScope("all")}
                     className="h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
                   />
-                  Search all guests
+                  All guests (fetches latest from DB)
                 </label>
                 <label className="flex cursor-pointer items-center gap-2 text-sm">
                   <input
