@@ -30,6 +30,12 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+async function getOperationsEmail(): Promise<string> {
+  const { getCompanySettingsAsync } = await import("@/lib/company-settings");
+  const company = await getCompanySettingsAsync();
+  return company.email_operations;
+}
+
 async function wrapEmail(body: string): Promise<string> {
   const logoUrl = await getLogoUrl("logo_email");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>

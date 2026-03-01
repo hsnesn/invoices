@@ -44,9 +44,10 @@ export async function GET(request: Request) {
 
     const weekLabel = `${nextMonday.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${nextSunday.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
 
+    const company = await getCompanySettingsAsync();
     const { sendWeeklyRequirementsDigestEmail } = await import("@/lib/email");
 
-    const recipients: string[] = [LONDON_OPS_EMAIL];
+    const recipients: string[] = [company.email_operations];
 
     const { data: profiles } = await supabase
       .from("profiles")

@@ -1025,7 +1025,7 @@ export async function sendContractorAssignmentConfirmedToLondonOps(params: {
         `<tr><td style="padding:8px 12px;color:#1e293b">${p.name}</td><td style="padding:8px 12px;color:#64748b">${p.email}</td><td style="padding:8px 12px;color:#1e293b">${p.datesWithRole.map((d) => `${new Date(d.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })} (${d.role})`).join(", ")}</td></tr>`
     )
     .join("");
-  const opsEmail = params.operationsEmail ?? (await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync()).then((c) => c.email_operations));
+  const opsEmail = params.operationsEmail ?? (await import("@/lib/company-settings").then((m) => m.getCompanySettingsAsync()).then((c) => c.email_operations)) ?? "london.operations@trtworld.com";
   return sendEmail({
     to: opsEmail,
     subject: `Contractor schedule confirmed — ${params.monthLabel}`,
