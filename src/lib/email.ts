@@ -732,12 +732,14 @@ const BANK_TRANSFER_FORM_EMAIL = process.env.BANK_TRANSFER_FORM_EMAIL ?? "london
 /** International bank transfer form (Word docx) — sent to finance when generated. */
 export async function sendBankTransferFormEmail(params: {
   docxBuffer: Buffer;
+  attachmentFilename?: string;
   beneficiaryName: string;
   amount: string;
   currency: string;
   invoiceNumber?: string | null;
   invoiceId: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const filename = params.attachmentFilename ?? `bank-transfer-form-${params.invoiceNumber ?? params.invoiceId}.docx`;
   const subject = params.invoiceNumber
     ? `Bank Transfer Form — Invoice ${params.invoiceNumber} (${params.beneficiaryName})`
     : `Bank Transfer Form — ${params.beneficiaryName} — ${params.amount} ${params.currency}`;
@@ -750,13 +752,13 @@ export async function sendBankTransferFormEmail(params: {
         <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Invoice</td><td style="padding:8px 12px;color:#1e293b">${params.invoiceNumber ? `#${params.invoiceNumber}` : params.invoiceId}</td></tr>
       </table>
     </div>
-    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Türkiye İş Bankası London Branch transfer form. Attachment: bank-transfer-form.docx</p>
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Türkiye İş Bankası London Branch transfer form. Attachment: ${escapeHtml(filename)}</p>
   `);
   const res = await sendEmailWithAttachment({
     to: BANK_TRANSFER_FORM_EMAIL,
     subject,
     html,
-    attachments: [{ filename: `bank-transfer-form-${params.invoiceNumber ?? params.invoiceId}.docx`, content: params.docxBuffer }],
+    attachments: [{ filename, content: params.docxBuffer }],
   });
   return { success: res.success ?? false, error: res.error as string | undefined };
 }

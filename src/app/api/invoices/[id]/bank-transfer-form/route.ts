@@ -16,6 +16,20 @@ const STORAGE_PREFIX = "bank-transfer";
 const SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP"] as const;
 const WARNING_INCOMPLETE = "WARNING: MISSING BANK DETAILS – VERIFY BEFORE PAYMENT";
 
+/** Filename format: EUR-TRTW-AhmetYilmaz-2025-01-15-INV-2025-001.docx */
+function buildBankTransferFormFileName(
+  currency: string,
+  guestName: string,
+  date: Date,
+  invoiceNumber: string | null,
+  fallbackId: string
+): string {
+  const guestPart = guestName.replace(/\s+/g, "").replace(/[/\\?*:|"<>]/g, "").trim() || "Unknown";
+  const datePart = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const invPart = (invoiceNumber ?? fallbackId).replace(/[/\\?*:|"<>]/g, "-").replace(/\s+/g, "-").trim() || "unknown";
+  return `${currency.toUpperCase()}-TRTW-${guestPart}-${datePart}-${invPart}.docx`;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -76,6 +90,7 @@ export async function GET(
 
       if (!downloadError && fileData) {
         const buf = Buffer.from(await fileData.arrayBuffer());
+        const fileName = existingPath.split("/").pop() || "bank-transfer-form.docx";
         const { data: inv } = await supabase
           .from("invoices")
           .select("currency")
@@ -91,7 +106,7 @@ export async function GET(
         return new NextResponse(new Uint8Array(buf), {
           headers: {
             "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "Content-Disposition": `attachment; filename="bank-transfer-form.docx"`,
+            "Content-Disposition": `attachment; filename="${fileName}"`,
             "X-Form-Status": formStatus,
             "X-Sender-Account-Number": senderAccount,
             "X-Currency-Final": currencyFinal,
@@ -171,7 +186,15 @@ export async function GET(
 
     const docxBuffer = generateBankTransferForm(formData);
 
-    const storagePath = `${STORAGE_PREFIX}/${invoiceId}/bank-transfer-form.docx`;
+    const now = new Date();
+    const formFileName = buildBankTransferFormFileName(
+      validCurrency,
+      beneficiaryName,
+      now,
+      parsedInvoiceNumber,
+      invoiceId
+    );
+    const storagePath = `${STORAGE_PREFIX}/${invoiceId}/${formFileName}`;
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
       .upload(storagePath, docxBuffer, {
@@ -214,6 +237,7 @@ export async function GET(
     // Send form by email to finance as soon as it is generated
     const emailResult = await sendBankTransferFormEmail({
       docxBuffer,
+      attachmentFilename: formFileName,
       beneficiaryName,
       amount: amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: validCurrency,
@@ -227,7 +251,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(docxBuffer), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="bank-transfer-form.docx"`,
+        "Content-Disposition": `attachment; filename="${formFileName}"`,
         "X-Form-Status": formStatus,
         "X-Sender-Account-Number": senderAccount,
         "X-Currency-Final": validCurrency,

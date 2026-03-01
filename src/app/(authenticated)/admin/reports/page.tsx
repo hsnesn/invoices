@@ -11,5 +11,5 @@ export default async function ReportsPage() {
     profile.role === "finance" ||
     profile.allowed_pages?.includes("reports");
   if (!allowed) redirect("/dashboard");
-  return <ReportsClient />;
+  return <ReportsClient currentRole={profile.role ?? "viewer"} />;
 }

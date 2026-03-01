@@ -15,12 +15,16 @@ type ReportData = {
   byStatus: Record<string, number>;
   byProducer: Record<string, { count: number; amount: number; paidCount: number; paidAmount: number; unpaidCount: number; unpaidAmount: number }>;
   byPaymentType: Record<string, { count: number; amount: number }>;
+  byCurrency?: Record<string, { count: number; amount: number }>;
+  byProgram?: Record<string, { count: number; amount: number }>;
+  transferForms?: { byCurrency: Record<string, { total: number; ready: number; incomplete: number }>; total: number };
   monthlyTrend: { month: string; count: number; amount: number }[];
   yoy: { thisYear: { year: number; count: number; amount: number }; lastYear: { year: number; count: number; amount: number } };
   processing: { avg: number | null; min: number | null; max: number | null; count: number };
   topGuests: Record<string, { count: number; amount: number }>;
   rejections: { byProducer: Record<string, number>; byDepartment: Record<string, number>; reasons: Record<string, number> };
   freelancer: { byContractor: Record<string, { count: number; amount: number }>; byServiceDesc: Record<string, { count: number; amount: number }>; byBookedBy: Record<string, { count: number; amount: number }>; total: number; totalAmount: number };
+  salaries?: { stats: { total: number; paid: number; pendingNet: number; paidNet: number }; list: { id: string; employee_name: string; status: string; net_pay: number; employer_total_cost: number; payment_month: string; payment_year: number }[] } | null;
   generatedAt: string; emailSent?: boolean; emailError?: string;
 };
 
@@ -38,11 +42,14 @@ function pctChange(cur: number, prev: number) { if (prev === 0) return cur > 0 ?
 /* COMPONENT                                                           */
 /* ------------------------------------------------------------------ */
 
-export function ReportsClient() {
+const SALARY_ROLES = ["admin", "operations", "finance"] as const;
+
+export function ReportsClient({ currentRole = "viewer" }: { currentRole?: string }) {
   const { locale: exportLocale } = useExportLocale();
+  const canSeeSalaries = SALARY_ROLES.includes(currentRole as (typeof SALARY_ROLES)[number]);
   const now = new Date();
   const [reportType, setReportType] = useState<"monthly" | "quarterly" | "department" | "custom">("monthly");
-  const [invoiceType, setInvoiceType] = useState<"all" | "guest" | "freelancer">("all");
+  const [invoiceType, setInvoiceType] = useState<"all" | "guest" | "freelancer" | "other">("all");
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [quarter, setQuarter] = useState(Math.ceil((now.getMonth() + 1) / 3));
@@ -53,28 +60,43 @@ export function ReportsClient() {
   const [emailTo, setEmailTo] = useState("");
   const [sendEmail, setSendEmail] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "producers" | "guests" | "rejections" | "freelancer">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "producers" | "guests" | "rejections" | "freelancer" | "currency" | "programs" | "transfer" | "salaries">("overview");
 
   const generate = useCallback(async () => {
     setLoading(true); setReport(null);
     try {
       const res = await fetch("/api/reports/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: reportType, year, month, quarter, invoiceType, sendEmail, emailTo: sendEmail ? emailTo : undefined, dateFrom: reportType === "custom" ? dateFrom : undefined, dateTo: reportType === "custom" ? dateTo : undefined }),
+        body: JSON.stringify({
+          type: reportType, year, month, quarter, invoiceType,
+          includeSalaries: canSeeSalaries,
+          sendEmail, emailTo: sendEmail ? emailTo : undefined,
+          dateFrom: reportType === "custom" ? dateFrom : undefined,
+          dateTo: reportType === "custom" ? dateTo : undefined,
+        }),
       });
       if (res.ok) { setReport(await res.json()); setActiveTab("overview"); }
-      else toast.error("Failed to generate report");
+      else { const err = await res.json().catch(() => ({})); toast.error(err?.error ?? "Failed to generate report"); }
     } finally { setLoading(false); }
-  }, [reportType, year, month, quarter, invoiceType, sendEmail, emailTo, dateFrom, dateTo]);
+  }, [reportType, year, month, quarter, invoiceType, canSeeSalaries, sendEmail, emailTo, dateFrom, dateTo]);
 
   const sendReportEmail = useCallback(async () => {
     if (!emailTo.trim() || !report) return;
     setEmailSending(true);
     try {
-      const res = await fetch("/api/reports/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: reportType, year, month, quarter, invoiceType, sendEmail: true, emailTo, dateFrom: reportType === "custom" ? dateFrom : undefined, dateTo: reportType === "custom" ? dateTo : undefined }) });
+      const res = await fetch("/api/reports/generate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: reportType, year, month, quarter, invoiceType,
+          includeSalaries: canSeeSalaries,
+          sendEmail: true, emailTo,
+          dateFrom: reportType === "custom" ? dateFrom : undefined,
+          dateTo: reportType === "custom" ? dateTo : undefined,
+        }),
+      });
       if (res.ok) { const d = await res.json(); setReport(d); d.emailSent ? toast.success("Report sent!") : toast.error(`Failed: ${d.emailError}`); }
     } finally { setEmailSending(false); }
-  }, [emailTo, report, reportType, year, month, quarter, invoiceType, dateFrom, dateTo]);
+  }, [emailTo, report, reportType, year, month, quarter, invoiceType, canSeeSalaries, dateFrom, dateTo]);
 
   const exportPdf = useCallback(async () => {
     if (!report) return;
@@ -164,10 +186,19 @@ export function ReportsClient() {
 
   const years = useMemo(() => { const y = new Date().getFullYear(); return Array.from({ length: 5 }, (_, i) => y - i); }, []);
   const TABS = useMemo(() => {
-    const t: { key: typeof activeTab; label: string }[] = [{ key: "overview", label: "Overview" }, { key: "producers", label: "Producers" }, { key: "guests", label: "Top Guests" }, { key: "rejections", label: "Rejections" }];
+    const t: { key: typeof activeTab; label: string }[] = [
+      { key: "overview", label: "Overview" },
+      { key: "producers", label: "Producers" },
+      { key: "guests", label: "Top Guests" },
+      { key: "rejections", label: "Rejections" },
+    ];
     if (!report || report.invoiceType !== "guest") t.push({ key: "freelancer", label: "Contractor" });
+    if (report?.byCurrency && Object.keys(report.byCurrency).length > 0) t.push({ key: "currency", label: "Currency" });
+    if (report?.byProgram && Object.keys(report.byProgram).length > 0) t.push({ key: "programs", label: "Programs" });
+    if (report?.transferForms && report.transferForms.total > 0) t.push({ key: "transfer", label: "Transfer Forms" });
+    if (canSeeSalaries && report?.salaries) t.push({ key: "salaries", label: "Salaries" });
     return t;
-  }, [report]);
+  }, [report, canSeeSalaries]);
 
   return (
     <div className="space-y-5">
@@ -191,7 +222,7 @@ export function ReportsClient() {
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Invoice Type</label>
             <select value={invoiceType} onChange={e => setInvoiceType(e.target.value as typeof invoiceType)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-              <option value="all">All Invoices</option><option value="guest">Guest Only</option><option value="freelancer">Contractor Only</option>
+              <option value="all">All Invoices</option><option value="guest">Guest Only</option><option value="freelancer">Contractor Only</option><option value="other">Other Only</option>
             </select>
           </div>
           {reportType !== "custom" && <div><label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Year</label><select value={year} onChange={e => setYear(Number(e.target.value))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div>}
@@ -239,6 +270,10 @@ export function ReportsClient() {
           {activeTab === "guests" && <GuestsTab report={report} />}
           {activeTab === "rejections" && <RejectionsTab report={report} />}
           {activeTab === "freelancer" && <FreelancerTab report={report} />}
+          {activeTab === "currency" && report.byCurrency && <CurrencyTab byCurrency={report.byCurrency} />}
+          {activeTab === "programs" && report.byProgram && <ProgramsTab byProgram={report.byProgram} total={report.summary.totalAmount} />}
+          {activeTab === "transfer" && report.transferForms && <TransferFormsTab data={report.transferForms} />}
+          {activeTab === "salaries" && report.salaries && <SalariesTab data={report.salaries} />}
         </div>
       )}
     </div>
@@ -328,6 +363,21 @@ function OverviewTab({ report }: { report: ReportData }) {
 
       {/* Department table */}
       <SortableTable title="Department Breakdown" icon="dept" entries={Object.entries(report.byDepartment).map(([name, d]) => ({ name, count: d.count, amount: d.amount }))} total={report.summary.totalAmount} />
+
+      {/* Currency breakdown (when available) */}
+      {report.byCurrency && Object.keys(report.byCurrency).length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Currency Distribution</h3>
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(report.byCurrency).sort((a, b) => b[1].amount - a[1].amount).map(([cur, d]) => (
+              <div key={cur} className="rounded-lg border border-slate-200 px-4 py-2 dark:border-slate-600">
+                <span className="font-semibold text-gray-800 dark:text-gray-200">{cur}</span>
+                <span className="ml-2 text-gray-600 dark:text-gray-400">({d.count}) {fmt(d.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -478,6 +528,107 @@ function FreelancerTab({ report }: { report: ReportData }) {
           </ResponsiveContainer>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* TAB: CURRENCY                                                        */
+/* ================================================================== */
+
+function CurrencyTab({ byCurrency }: { byCurrency: Record<string, { count: number; amount: number }> }) {
+  const entries = Object.entries(byCurrency).sort((a, b) => b[1].amount - a[1].amount);
+  if (entries.length === 0) return <Empty text="No currency data for this period." />;
+  const total = entries.reduce((s, [, d]) => s + d.amount, 0);
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700"><h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Currency Distribution</h3></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-700/50"><tr><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Currency</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Count</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Amount</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">%</th></tr></thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">{entries.map(([cur, d]) => <tr key={cur} className="hover:bg-slate-50 dark:hover:bg-slate-700/50"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{cur}</td><td className="px-4 py-2 text-right">{d.count}</td><td className="px-4 py-2 text-right font-bold">{fmt(d.amount)}</td><td className="px-4 py-2 text-right text-gray-500">{total > 0 ? ((d.amount / total) * 100).toFixed(1) : 0}%</td></tr>)}</tbody>
+            <tfoot><tr className="bg-slate-50 dark:bg-slate-700/50 font-bold"><td className="px-4 py-2">Total</td><td className="px-4 py-2 text-right">{entries.reduce((s, [, d]) => s + d.count, 0)}</td><td className="px-4 py-2 text-right">{fmt(total)}</td><td className="px-4 py-2 text-right">100%</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">By Currency</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={entries.map(([name, d]) => ({ name, amount: d.amount, count: d.count }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} /><Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} /></BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* TAB: PROGRAMS                                                        */
+/* ================================================================== */
+
+function ProgramsTab({ byProgram, total }: { byProgram: Record<string, { count: number; amount: number }>; total: number }) {
+  const entries = Object.entries(byProgram).filter(([k]) => k !== "N/A").sort((a, b) => b[1].amount - a[1].amount);
+  if (entries.length === 0) return <Empty text="No program data for this period." />;
+  return (
+    <div className="space-y-4">
+      <SortableTable title="Spending by Programme" icon="program" entries={entries.map(([name, d]) => ({ name, count: d.count, amount: d.amount }))} total={total} />
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Top Programmes</h3>
+        <ResponsiveContainer width="100%" height={Math.max(200, Math.min(entries.length, 12) * 32)}>
+          <BarChart layout="vertical" data={entries.slice(0, 12).map(([name, d]) => ({ name: name.length > 25 ? name.slice(0, 25) + "…" : name, amount: d.amount }))}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis type="number" tick={{ fontSize: 10 }} /><YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 10 }} /><Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} /><Bar dataKey="amount" fill="#8b5cf6" radius={[0, 4, 4, 0]} /></BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* TAB: TRANSFER FORMS                                                   */
+/* ================================================================== */
+
+function TransferFormsTab({ data }: { data: { byCurrency: Record<string, { total: number; ready: number; incomplete: number }>; total: number } }) {
+  const entries = Object.entries(data.byCurrency);
+  if (entries.length === 0) return <Empty text="No transfer form data for this period." />;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card label="Total Forms" value={String(data.total)} color="bg-blue-500" />
+        <Card label="Currencies" value={String(entries.length)} color="bg-indigo-500" />
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700"><h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Transfer Form Status by Currency</h3></div>
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-700/50"><tr><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Currency</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Total</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Ready</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Incomplete</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-700">{entries.map(([cur, d]) => <tr key={cur} className="hover:bg-slate-50 dark:hover:bg-slate-700/50"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{cur}</td><td className="px-4 py-2 text-right">{d.total}</td><td className="px-4 py-2 text-right text-emerald-600">{d.ready}</td><td className="px-4 py-2 text-right text-amber-600">{d.incomplete}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* TAB: SALARIES (admin, operations, finance only)                     */
+/* ================================================================== */
+
+function SalariesTab({ data }: { data: { stats: { total: number; paid: number; pendingNet: number; paidNet: number }; list: { id: string; employee_name: string; status: string; net_pay: number; employer_total_cost: number; payment_month: string; payment_year: number }[] } }) {
+  const { stats, list } = data;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card label="Total Records" value={String(stats.total)} color="bg-blue-500" />
+        <Card label="Paid" value={String(stats.paid)} color="bg-emerald-500" />
+        <Card label="Pending Net" value={fmt(stats.pendingNet)} color="bg-amber-500" />
+        <Card label="Paid Net" value={fmt(stats.paidNet)} color="bg-teal-500" />
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700"><h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Salaries in Period</h3></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-700/50"><tr><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Employee</th><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Status</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Net Pay</th><th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Employer Cost</th><th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Period</th></tr></thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">{list.map((r) => <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{r.employee_name ?? "—"}</td><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${r.status === "paid" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>{r.status}</span></td><td className="px-4 py-2 text-right font-semibold">{fmt(Number(r.net_pay) || 0)}</td><td className="px-4 py-2 text-right">{fmt(Number(r.employer_total_cost) || 0)}</td><td className="px-4 py-2 text-gray-500">{r.payment_year}-{r.payment_month ?? "—"}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

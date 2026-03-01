@@ -83,19 +83,33 @@ function canUserSeeFreelancerInvoice(
   return false;
 }
 
+function canUserSeeOtherInvoice(role: string, allowedPages: string[] | null): boolean {
+  return role === "admin" || role === "finance" || role === "operations" || (role === "viewer" && (allowedPages ?? []).includes("other_invoices")) || false;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { session, profile } = await requireAuth();
     const body = await req.json();
-    const { type, year, month, quarter, invoiceType, dateFrom, dateTo } = body as {
+    const { type, year, month, quarter, invoiceType, dateFrom, dateTo, includeSalaries } = body as {
       type: "monthly" | "quarterly" | "department" | "custom";
       year?: number; month?: number; quarter?: number;
-      invoiceType?: "guest" | "freelancer" | "all";
+      invoiceType?: "guest" | "freelancer" | "other" | "all";
       dateFrom?: string; dateTo?: string;
+      includeSalaries?: boolean;
     };
 
     const supabase = createAdminClient();
     const invType = invoiceType ?? "all";
+
+    if (invType === "other" && !canUserSeeOtherInvoice(profile.role, profile.allowed_pages ?? null)) {
+      return NextResponse.json({ error: "Forbidden: you don't have access to other invoices" }, { status: 403 });
+    }
+
+    const canSeeSalaries = (profile.role === "admin" || profile.role === "operations" || profile.role === "finance");
+    if (includeSalaries && !canSeeSalaries) {
+      return NextResponse.json({ error: "Forbidden: salaries reports are restricted to admin, operations, and finance" }, { status: 403 });
+    }
 
     const { data: orMembers } = await supabase
       .from("operations_room_members")
@@ -106,8 +120,9 @@ export async function POST(req: NextRequest) {
 
     let query = supabase.from("invoices").select(`
       id, created_at, department_id, program_id, submitter_user_id, invoice_type, service_description,
+      currency, bank_transfer_form_path, bank_transfer_form_status, bank_transfer_currency,
       invoice_workflows(status, rejection_reason, manager_user_id, paid_date, created_at, updated_at),
-      invoice_extracted_fields(gross_amount),
+      invoice_extracted_fields(gross_amount, extracted_currency),
       freelancer_invoice_fields(contractor_name, service_description, service_days_count, service_rate_per_day, additional_cost, booked_by, service_month)
     `).order("created_at", { ascending: false });
 
@@ -119,13 +134,18 @@ export async function POST(req: NextRequest) {
     const allInvoices = rawInvoices.filter((inv) => {
       const isGuest = inv.invoice_type === "guest" || inv.invoice_type === "salary";
       const isFl = inv.invoice_type === "freelancer";
+      const isOther = inv.invoice_type === "other";
       if (isGuest) return canUserSeeGuestInvoice(inv as never, session.user.id, profile.role, profile.full_name ?? null);
       if (isFl) return canUserSeeFreelancerInvoice(inv as never, session.user.id, profile.role, isOperationsRoomMember);
+      if (isOther) return canUserSeeOtherInvoice(profile.role, profile.allowed_pages ?? null);
       return true;
     });
 
     const { data: departments } = await supabase.from("departments").select("id,name");
     const deptMap = Object.fromEntries((departments ?? []).map((d: { id: string; name: string }) => [d.id, d.name]));
+
+    const { data: programs } = await supabase.from("programs").select("id,name");
+    const progMap = Object.fromEntries((programs ?? []).map((p: { id: string; name: string }) => [p.id, p.name]));
 
     const { data: profiles } = await supabase.from("profiles").select("id,full_name");
     const profMap = Object.fromEntries((profiles ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name ?? p.id]));
@@ -150,7 +170,7 @@ export async function POST(req: NextRequest) {
 
     const processRow = (inv: typeof allInvoices[number]) => {
       const wf = unwrap(inv.invoice_workflows as WfShape[] | WfShape | null);
-      const ext = unwrap(inv.invoice_extracted_fields as ExtShape[] | ExtShape | null);
+      const ext = unwrap(inv.invoice_extracted_fields as (ExtShape & { extracted_currency?: string | null })[] | (ExtShape & { extracted_currency?: string | null }) | null);
       const fl = unwrap(inv.freelancer_invoice_fields as FlShape[] | FlShape | null);
       const status = wf?.status ?? "submitted";
       const isFreelancer = inv.invoice_type === "freelancer";
@@ -166,8 +186,15 @@ export async function POST(req: NextRequest) {
       const paidDate = wf?.paid_date ?? null;
       const serviceDesc = fl?.service_description ?? "—";
       const bookedBy = fl?.booked_by ?? "—";
+      const currency = (inv as { bank_transfer_currency?: string | null }).bank_transfer_currency
+        ?? (ext as { extracted_currency?: string | null })?.extracted_currency
+        ?? (inv as { currency?: string | null }).currency
+        ?? "GBP";
+      const programName = inv.program_id ? progMap[inv.program_id] ?? "Unknown" : "N/A";
+      const hasTransferForm = !!(inv as { bank_transfer_form_path?: string | null }).bank_transfer_form_path;
+      const transferFormStatus = (inv as { bank_transfer_form_status?: string | null }).bank_transfer_form_status ?? "incomplete";
 
-      return { id: inv.id, createdAt: inv.created_at, type: inv.invoice_type, status, amount, department: inv.department_id ? deptMap[inv.department_id] ?? "Unknown" : "N/A", submitter: profMap[inv.submitter_user_id] ?? "Unknown", contractor: fl?.contractor_name ?? "—", paidDate, producer, paymentType, guest, rejectionReason, serviceDesc, bookedBy };
+      return { id: inv.id, createdAt: inv.created_at, type: inv.invoice_type, status, amount, currency, programName, hasTransferForm, transferFormStatus, department: inv.department_id ? deptMap[inv.department_id] ?? "Unknown" : "N/A", submitter: profMap[inv.submitter_user_id] ?? "Unknown", contractor: fl?.contractor_name ?? "—", paidDate, producer, paymentType, guest, rejectionReason, serviceDesc, bookedBy };
     };
 
     const processed = filtered.map(processRow);
@@ -199,6 +226,26 @@ export async function POST(req: NextRequest) {
     // By payment type (guest only)
     const byPaymentType: Record<string, { count: number; amount: number }> = {};
     for (const r of processed) { if (r.type === "freelancer") continue; const pt = r.paymentType.toLowerCase().includes("unpaid") ? "Unpaid Guest" : "Paid Guest"; if (!byPaymentType[pt]) byPaymentType[pt] = { count: 0, amount: 0 }; byPaymentType[pt].count++; byPaymentType[pt].amount += r.amount; }
+
+    // By currency
+    const byCurrency: Record<string, { count: number; amount: number }> = {};
+    for (const r of processed) { const c = (r.currency ?? "GBP").toUpperCase(); if (!byCurrency[c]) byCurrency[c] = { count: 0, amount: 0 }; byCurrency[c].count++; byCurrency[c].amount += r.amount; }
+
+    // By program
+    const byProgram: Record<string, { count: number; amount: number }> = {};
+    for (const r of processed) { const prog = r.programName; if (!byProgram[prog]) byProgram[prog] = { count: 0, amount: 0 }; byProgram[prog].count++; byProgram[prog].amount += r.amount; }
+
+    // International transfer forms (invoices with bank transfer form path)
+    const transferForms: { byCurrency: Record<string, { total: number; ready: number; incomplete: number }>; total: number } = { byCurrency: {}, total: 0 };
+    for (const r of processed) {
+      if (!r.hasTransferForm) continue;
+      const cur = (r.currency ?? "GBP").toUpperCase();
+      if (!transferForms.byCurrency[cur]) transferForms.byCurrency[cur] = { total: 0, ready: 0, incomplete: 0 };
+      transferForms.byCurrency[cur].total++;
+      transferForms.total++;
+      if (r.transferFormStatus === "ready") transferForms.byCurrency[cur].ready++;
+      else transferForms.byCurrency[cur].incomplete++;
+    }
 
     // Monthly trend (all invoices in year, not just filtered period)
     const monthlyTrend: { month: string; count: number; amount: number }[] = [];
@@ -270,16 +317,43 @@ export async function POST(req: NextRequest) {
       : type === "monthly" ? `${new Date(targetYear, targetMonth - 1).toLocaleString("en-GB", { month: "long" })} ${targetYear}`
       : type === "quarterly" ? `Q${targetQuarter} ${targetYear}` : `${targetYear}`;
 
+    let salariesData: { stats: unknown; list: unknown[] } | null = null;
+    if (includeSalaries && canSeeSalaries) {
+      const salaryMonth = type === "monthly" ? String(targetMonth).padStart(2, "0") : undefined;
+      const salaryYear = targetYear;
+      const { data: salaryList } = await supabase
+        .from("salaries")
+        .select("id, employee_name, status, net_pay, employer_total_cost, payment_month, payment_year, created_at")
+        .order("created_at", { ascending: false });
+      const filteredSalaries = (salaryList ?? []).filter((s) => {
+        if (type === "monthly" && salaryMonth) return s.payment_year === salaryYear && s.payment_month === salaryMonth;
+        if (type === "quarterly") {
+          const m = s.payment_month ? parseInt(s.payment_month, 10) : 0;
+          return s.payment_year === salaryYear && m >= (targetQuarter - 1) * 3 + 1 && m <= targetQuarter * 3;
+        }
+        return s.payment_year === salaryYear;
+      });
+      const { data: salaryStats } = await supabase.from("salaries").select("status, net_pay, employer_total_cost");
+      const allS = salaryStats ?? [];
+      const paidS = allS.filter((s) => s.status === "paid");
+      salariesData = {
+        stats: { total: allS.length, paid: paidS.length, pendingNet: allS.filter((s) => s.status !== "paid").reduce((a, s) => a + (Number(s.net_pay) || 0), 0), paidNet: paidS.reduce((a, s) => a + (Number(s.net_pay) || 0), 0) },
+        list: filteredSalaries,
+      };
+    }
+
     const report = {
       period: periodLabel, type, invoiceType: invType,
       summary: { totalInvoices, totalAmount, paidInvoices: paidInvoices.length, paidAmount, pendingAmount, rejectedCount },
       rows: processed,
       byDepartment, byStatus, byProducer, byPaymentType,
+      byCurrency, byProgram, transferForms,
       monthlyTrend, yoy,
       processing: { avg: avgProcessingDays, min: minProcessingDays, max: maxProcessingDays, count: processingTimes.length },
       topGuests,
       rejections: { byProducer: rejectionsByProducer, byDepartment: rejectionsByDept, reasons: rejectionReasons },
       freelancer: { byContractor, byServiceDesc, byBookedBy, total: flRows.length, totalAmount: flRows.reduce((s, r) => s + r.amount, 0) },
+      salaries: salariesData,
       generatedAt: new Date().toISOString(),
     };
 
