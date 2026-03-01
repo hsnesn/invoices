@@ -360,6 +360,7 @@ export function InvitedGuestsClient({
 
   const selectedGuests = filteredGuests.filter((g) => selectedIds.has(g.id));
   const selectedWithEmail = selectedGuests.filter((g) => g.email && g.email.includes("@"));
+  const selectedDeletable = selectedGuests.filter((g) => !g.id.startsWith("inv-"));
 
   const handleSendInvite = async () => {
     if (!form.guest_name.trim()) {
@@ -836,6 +837,35 @@ export function InvitedGuestsClient({
             className={`${btnBase} ${btnEmerald} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             Bulk mark accepted
+          </button>
+          <button
+            onClick={async () => {
+              if (selectedDeletable.length === 0) return;
+              if (!confirm(`Remove ${selectedDeletable.length} guest(s) from invited guests? They will remain in the contact list.`)) return;
+              try {
+                const res = await fetch("/api/producer-guests/bulk-delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ids: selectedDeletable.map((g) => g.id) }),
+                  credentials: "same-origin",
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  toast.success(`Removed ${(data as { deleted?: number }).deleted ?? selectedDeletable.length} guest(s) from invited guests`);
+                  setSelectedIds(new Set());
+                  loadGuests();
+                } else {
+                  toast.error((data as { error?: string }).error ?? "Failed to remove");
+                }
+              } catch {
+                toast.error("Failed to remove");
+              }
+            }}
+            disabled={selectedDeletable.length === 0}
+            className={`${btnBase} border border-red-500/50 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60 disabled:opacity-50 disabled:cursor-not-allowed`}
+            title="Remove from invited guests (contact list unchanged)"
+          >
+            Bulk remove ({selectedDeletable.length})
           </button>
           <button
             onClick={() => { setQuickAddModal(true); setQuickAddPaste(""); }}

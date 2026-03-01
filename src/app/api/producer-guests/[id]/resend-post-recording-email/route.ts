@@ -58,7 +58,7 @@ export async function POST(
 
       const invId = (guest as { matched_invoice_id?: string | null }).matched_invoice_id;
       if (!invId) {
-        const limitCheck = await checkGuestInvoiceLinkLimit(supabase, guest.producer_user_id);
+        const limitCheck = isAdmin ? { ok: true } : await checkGuestInvoiceLinkLimit(supabase, guest.producer_user_id);
         if (!limitCheck.ok) {
           return NextResponse.json(
             { error: `Daily limit of 5 invoice links reached for this producer. Try again tomorrow.` },

@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const recordingTopic = body.recording_topic?.trim() || "the programme";
     const programName = body.program_name?.trim() || "our programme";
 
-    if (body.payment_received) {
+    if (body.payment_received && !isAdmin) {
       const linksPerProducer = new Map<string, number>();
       for (const g of allowed) {
         const pid = g.producer_user_id;

@@ -298,7 +298,7 @@ export async function POST(
           });
         }
       } else {
-        const limitCheck = await checkGuestInvoiceLinkLimit(supabase, guest.producer_user_id);
+        const limitCheck = isAdmin ? { ok: true } : await checkGuestInvoiceLinkLimit(supabase, guest.producer_user_id);
         if (!limitCheck.ok) {
           return NextResponse.json(
             { error: `Daily limit of 5 invoice links reached. Try again tomorrow.` },

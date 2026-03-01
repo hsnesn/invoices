@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    if (!generateInvoice) {
+    if (!generateInvoice && profile.role !== "admin") {
       const limitCheck = await checkGuestInvoiceLinkLimit(supabase, session.user.id);
       if (!limitCheck.ok) {
         return NextResponse.json(
