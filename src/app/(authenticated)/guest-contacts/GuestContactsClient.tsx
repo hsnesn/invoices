@@ -104,6 +104,7 @@ export function GuestContactsClient({
   similarNames: similarNamesProp,
   isAdmin,
   canExport = true,
+  canUseRiskResearch = false,
 }: {
   contacts: Contact[];
   filteredContacts: Contact[];
@@ -121,6 +122,7 @@ export function GuestContactsClient({
   similarNames: string[][];
   isAdmin?: boolean;
   canExport?: boolean;
+  canUseRiskResearch?: boolean;
 }) {
   const router = useRouter();
   const { locale: exportLocale } = useExportLocale();
@@ -140,6 +142,16 @@ export function GuestContactsClient({
   const [assessment, setAssessment] = useState<string | null>(null);
   const [assessmentCached, setAssessmentCached] = useState(false);
   const [appearances, setAppearances] = useState<Appearance[]>([]);
+  const [riskAnalysis, setRiskAnalysis] = useState<string | null>(null);
+  const [riskAnalysisSources, setRiskAnalysisSources] = useState<string[]>([]);
+  const [riskAnalysisLoading, setRiskAnalysisLoading] = useState(false);
+  const [riskAnalysisError, setRiskAnalysisError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatScope, setChatScope] = useState<"all" | "selected">("all");
+  const [chatSelectedGuest, setChatSelectedGuest] = useState<string | null>(null);
+  const [chatHistory, setChatHistory] = useState<{ query: string; summary: string; sources: string[]; guestName?: string | null }[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [addModal, setAddModal] = useState(false);
@@ -575,6 +587,9 @@ export function GuestContactsClient({
     setAssessment(null);
     setAssessmentCached(false);
     setAppearances([]);
+    setRiskAnalysis(null);
+    setRiskAnalysisSources([]);
+    setRiskAnalysisError(null);
     setAssessmentLoading(true);
     try {
       const controller = new AbortController();
@@ -620,6 +635,67 @@ export function GuestContactsClient({
     setAssessment(null);
     setAssessmentCached(false);
     setAppearances([]);
+    setRiskAnalysis(null);
+    setRiskAnalysisSources([]);
+    setRiskAnalysisError(null);
+  };
+
+  const runRiskAnalysis = async () => {
+    if (!selectedGuest) return;
+    const contact = filteredContacts.find((c) => c.guest_name === selectedGuest);
+    const title = contact?.title ?? "";
+    setRiskAnalysisLoading(true);
+    setRiskAnalysisError(null);
+    setRiskAnalysis(null);
+    setRiskAnalysisSources([]);
+    try {
+      const res = await fetch("/api/guest-contacts/risk-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guest_name: selectedGuest, title }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRiskAnalysis(data.summary ?? "No summary returned.");
+        setRiskAnalysisSources(data.sources ?? []);
+      } else {
+        setRiskAnalysisError(data.error ?? "Risk analysis failed.");
+      }
+    } catch (e) {
+      setRiskAnalysisError(toUserFriendlyError(e));
+    } finally {
+      setRiskAnalysisLoading(false);
+    }
+  };
+
+  const runChatResearch = async () => {
+    const q = chatInput.trim();
+    if (!q) return;
+    const guest = chatScope === "selected" ? chatSelectedGuest : null;
+    setChatLoading(true);
+    try {
+      const res = await fetch("/api/guest-contacts/chat-research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, guest_name: guest }),
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setChatHistory((prev) => [
+          ...prev,
+          { query: q, summary: data.summary ?? "", sources: data.sources ?? [], guestName: guest },
+        ]);
+        setChatInput("");
+      } else {
+        toast.error(data.error ?? "Research failed");
+      }
+    } catch (e) {
+      toast.error(toUserFriendlyError(e));
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   const filterBy = filterParams.filterBy ?? "all";
@@ -964,6 +1040,15 @@ export function GuestContactsClient({
             Card
           </button>
         </div>
+        {canUseRiskResearch && (
+          <button
+            type="button"
+            onClick={() => setChatOpen(true)}
+            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+          >
+            Research chat
+          </button>
+        )}
         {isAdmin && (
           <>
             <button
@@ -1736,6 +1821,161 @@ export function GuestContactsClient({
                 )}
               </>
             ) : null}
+            {canUseRiskResearch && (
+            <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+              <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                Risk Analysis (internet search)
+              </h3>
+              {riskAnalysisLoading ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">Searching web for risk assessment...</p>
+              ) : riskAnalysisError ? (
+                <p className="text-sm text-red-600 dark:text-red-400">{riskAnalysisError}</p>
+              ) : riskAnalysis ? (
+                <>
+                  <div className="mb-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
+                    <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{riskAnalysis}</p>
+                  </div>
+                  {riskAnalysisSources.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">Sources</p>
+                      <ul className="space-y-1">
+                        {riskAnalysisSources.map((url, i) => (
+                          <li key={i}>
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-sky-600 hover:underline dark:text-sky-400"
+                            >
+                              {url}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={runRiskAnalysis}
+                  className="rounded bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
+                >
+                  Run Risk Analysis
+                </button>
+              )}
+            </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {chatOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="chat-title"
+          onClick={() => setChatOpen(false)}
+        >
+          <div
+            className="flex h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+              <h2 id="chat-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+                Research chat
+              </h2>
+              <button
+                type="button"
+                onClick={() => setChatOpen(false)}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {chatHistory.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Search across all guests or focus on a selected guest. Ask about risk factors, biography, recent appearances, etc.
+                </p>
+              ) : (
+                chatHistory.map((h, i) => (
+                  <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900">
+                    <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {h.guestName ? `Guest: ${h.guestName}` : "All guests"} · {h.query}
+                    </p>
+                    <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{h.summary}</p>
+                    {h.sources.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {h.sources.slice(0, 5).map((url, j) => (
+                          <li key={j}>
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 hover:underline dark:text-sky-400">
+                              {url}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="border-t border-gray-200 p-4 dark:border-gray-700">
+              <div className="mb-3 flex flex-wrap items-center gap-4">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="chatScope"
+                    checked={chatScope === "all"}
+                    onChange={() => setChatScope("all")}
+                    className="h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  Search all guests
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="chatScope"
+                    checked={chatScope === "selected"}
+                    onChange={() => setChatScope("selected")}
+                    className="h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  Focus on specific guest
+                </label>
+                {chatScope === "selected" && (
+                  <select
+                    value={chatSelectedGuest ?? ""}
+                    onChange={(e) => setChatSelectedGuest(e.target.value || null)}
+                    className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Select guest...</option>
+                    {filteredContacts.map((c) => (
+                      <option key={c.guest_name} value={c.guest_name}>{c.guest_name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && runChatResearch()}
+                  placeholder="e.g. Who is X? Any risk factors?"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={runChatResearch}
+                  disabled={chatLoading || !chatInput.trim() || (chatScope === "selected" && !chatSelectedGuest)}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  {chatLoading ? "Searching..." : "Search"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

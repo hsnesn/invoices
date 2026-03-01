@@ -142,3 +142,26 @@ export async function PATCH(
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { profile } = await requireAuth();
+    if (profile.role !== "admin" && profile.role !== "operations") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await context.params;
+    const supabase = createAdminClient();
+
+    const { error } = await supabase.from("office_requests").delete().eq("id", id);
+
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}

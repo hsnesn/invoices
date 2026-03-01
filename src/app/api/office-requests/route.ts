@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
+import { sendOfficeRequestNewToOperationsEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -187,6 +188,36 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    const { data: authUser } = await supabase.auth.admin.getUserById(session.user.id);
+    const requesterEmail = (authUser?.user?.email ?? "").trim();
+    const requesterName = ((profile.full_name ?? authUser?.user?.user_metadata?.full_name ?? requesterEmail) || "Requester").trim();
+    const operationsEmail = process.env.OPERATIONS_ROOM_EMAIL ?? "london.operations@trtworld.com";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const link = `${appUrl}/office-requests`;
+
+    if (requesterEmail && requesterEmail.includes("@")) {
+      let vendorName: string | null = null;
+      if (vendorId) {
+        const { data: v } = await supabase.from("vendors").select("name").eq("id", vendorId).single();
+        vendorName = (v as { name?: string } | null)?.name ?? null;
+      }
+      await sendOfficeRequestNewToOperationsEmail({
+        to: operationsEmail,
+        replyTo: requesterEmail,
+        fromName: requesterName,
+        title,
+        description: description || null,
+        category,
+        priority,
+        costEstimate: costEstimate ?? null,
+        vendorName,
+        requesterName,
+        requesterEmail,
+        link,
+      }).catch(() => {});
+    }
+
     return NextResponse.json(data);
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;

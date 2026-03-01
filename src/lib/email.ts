@@ -1062,6 +1062,69 @@ export async function sendOfficeRequestCompletedEmail(params: {
   });
 }
 
+/** New office request → Operations room. Reply-To = requester, From display name = requester. */
+const CATEGORY_LABELS: Record<string, string> = {
+  furniture: "Furniture",
+  it_equipment: "IT Equipment",
+  office_supplies: "Office Supplies",
+  maintenance: "Maintenance",
+  software: "Software",
+  training: "Training",
+  other: "Other",
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  low: "Low",
+  normal: "Normal",
+  high: "High",
+  urgent: "Urgent",
+};
+
+export async function sendOfficeRequestNewToOperationsEmail(params: {
+  to: string;
+  replyTo: string;
+  fromName: string;
+  title: string;
+  description?: string | null;
+  category: string;
+  priority: string;
+  costEstimate?: number | null;
+  vendorName?: string | null;
+  requesterName: string;
+  requesterEmail: string;
+  link: string;
+}) {
+  const categoryLabel = CATEGORY_LABELS[params.category] ?? params.category;
+  const priorityLabel = PRIORITY_LABELS[params.priority] ?? params.priority;
+  const costStr = params.costEstimate != null ? `£${Number(params.costEstimate).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+
+  const rows = [
+    ["Requester", `${params.requesterName} (<a href="mailto:${params.requesterEmail}">${params.requesterEmail}</a>)`],
+    ["Title", params.title],
+    ["Category", categoryLabel],
+    ["Priority", priorityLabel],
+    ["Cost estimate", costStr],
+    ...(params.vendorName ? [["Vendor", params.vendorName]] : []),
+    ["Description", params.description?.trim() || "—"],
+  ];
+  const trs = rows.map(([label, val]) => `<tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">${label}</td><td style="padding:8px 12px;color:#1e293b">${val}</td></tr>`).join("");
+
+  return sendEmail({
+    to: params.to,
+    replyTo: params.replyTo,
+    fromName: params.fromName,
+    subject: `New request: ${params.title} — ${params.requesterName}`,
+    html: await wrapWithLogo("New Office Request", `
+      <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">A new office request has been submitted and requires your attention.</p>
+      <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">${trs}</table>
+      </div>
+      <p style="margin:0 0 12px;font-size:12px;color:#94a3b8">Reply to this email to contact the requester directly.</p>
+      ${btn(params.link, "View & Approve Request", "#2563eb")}
+    `),
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Reminder due (office reminders: fire extinguisher, etc.)            */
 /* ------------------------------------------------------------------ */

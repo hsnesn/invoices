@@ -23,6 +23,7 @@ export const ALL_PAGES = [
   { key: "reports", label: "Reports" },
   { key: "audit_log", label: "Audit Log" },
   { key: "guest_contacts", label: "Guest Contacts" },
+  { key: "guest_risk_research", label: "Guest Risk & Research (AI)" },
   { key: "messages", label: "Messages" },
   { key: "user_management", label: "User Management" },
   { key: "office_requests", label: "Office Requests" },

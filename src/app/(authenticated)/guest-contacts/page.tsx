@@ -399,6 +399,10 @@ export default async function GuestContactsPage({
         similarNames={similarNames}
         isAdmin={profile.role === "admin"}
         canExport={canExport}
+        canUseRiskResearch={
+          profile.role === "admin" ||
+          (Array.isArray(profile.allowed_pages) && profile.allowed_pages.includes("guest_risk_research"))
+        }
       />
     </div>
   );

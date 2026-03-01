@@ -3,7 +3,7 @@
  */
 import { sendEmail, sendEmailWithAttachment } from "./email";
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "TRT World UK Payment System";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "TRT UK Operations Platform";
 
 function wrap(body: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px">

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       .order("date");
 
     const monthLabel = new Date(y, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
-    const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "TRT World UK Payment System";
+    const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "TRT UK Operations Platform";
 
     let ical = [
       "BEGIN:VCALENDAR",
