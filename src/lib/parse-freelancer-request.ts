@@ -75,13 +75,12 @@ export async function parseFreelancerRequest(
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, timeout: 15000 });
   const rolesList = availableRoles.length > 0 ? availableRoles.join(", ") : "Output, Director, Camera, Output Producer, etc.";
   const currentYear = new Date().getFullYear();
 
   const res = await client.chat.completions.create({
     model: "gpt-4o-mini",
-    timeout: 15000,
     messages: [
       {
         role: "system",

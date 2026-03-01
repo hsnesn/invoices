@@ -11,7 +11,7 @@ type DepartmentItem = { id: string; name: string };
 type ProgramItem = { id: string; name: string; department_id: string };
 type ByUserItem = { userId: string; name: string; email: string; role: string; dates: string[] };
 type ReqItem = { date: string; role: string; count_needed: number };
-type AssignItem = { id: string; user_id: string; date: string; role: string | null; status: string; notes?: string | null };
+type AssignItem = { id: string; user_id: string; date: string; role: string | null; status: string; notes?: string | null; full_name?: string | null };
 type PreferenceUser = { user_id: string; full_name: string; assignment_count: number };
 type RecurringItem = { id: string; day_of_week: number; role: string; count_needed: number; dayLabel?: string };
 
@@ -1360,7 +1360,7 @@ export function ContractorAvailabilityClient() {
                   {assignEditable.map((a) => (
                     <tr key={a.id} className="border-b border-gray-100 dark:border-gray-800">
                       <td className="py-2 px-3 text-gray-900 dark:text-white">
-                        {assignNameMap[a.user_id] ?? a.user_id.slice(0, 8)}
+                        {a.full_name ?? assignNameMap[a.user_id] ?? a.user_id.slice(0, 8)}
                       </td>
                       <td className="py-2 px-3 text-gray-600 dark:text-gray-400">
                         {new Date(a.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" })}

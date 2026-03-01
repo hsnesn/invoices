@@ -75,10 +75,21 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name");
+    const nameMap = new Map<string, string>();
+    for (const p of profiles ?? []) {
+      nameMap.set((p as { id: string }).id, (p as { full_name: string | null }).full_name ?? "Unknown");
+    }
+
+    const assignmentsWithNames = (data ?? []).map((a: { id: string; user_id: string; date: string; role: string | null; status: string; department_id?: string; program_id?: string }) => ({
+      ...a,
+      full_name: nameMap.get(a.user_id) ?? null,
+    }));
+
     const monthLabel = new Date(year, m - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
     const canApprove = canManage(profile.role) ? await getCanApprove(supabase, profile) : false;
     const canRunAiSuggest = profile.role === "admin" || profile.role === "operations";
-    return NextResponse.json({ assignments: data ?? [], monthLabel, canApprove, canRunAiSuggest });
+    return NextResponse.json({ assignments: assignmentsWithNames, monthLabel, canApprove, canRunAiSuggest });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
