@@ -22,7 +22,7 @@ export async function POST(
     const supabase = createAdminClient();
     const { data: invoice } = await supabase
       .from("invoices")
-      .select("storage_path, submitter_user_id")
+      .select("storage_path, submitter_user_id, invoice_type")
       .eq("id", invoiceId)
       .single();
 
@@ -39,10 +39,12 @@ export async function POST(
       return data;
     })();
 
+    const invType = (invoice as { invoice_type?: string }).invoice_type;
     const canAccess =
       invoice.submitter_user_id === session.user.id ||
       profile?.role === "admin" ||
-      profile?.role === "manager";
+      profile?.role === "manager" ||
+      (invType === "other" && (profile?.role === "finance" || profile?.role === "operations"));
 
     if (!canAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -740,33 +740,44 @@ export async function sendOtherInvoicePaidToLondonFinance(params: {
   invoiceId: string;
   invoiceNumber?: string | null;
   beneficiaryName?: string | null;
+  companyName?: string | null;
+  dueDate?: string | null;
   amount?: string | null;
   currency?: string | null;
   paidDate?: string | null;
   paymentReference?: string | null;
   attachment: { filename: string; content: Buffer };
+  lang?: "en" | "tr";
 }): Promise<{ success: boolean; error?: string }> {
   const invNum = params.invoiceNumber ? `#${params.invoiceNumber}` : null;
   const beneficiary = (params.beneficiaryName ?? "").trim();
-  const paidSummary =
-    beneficiary && invNum
-      ? `${escapeHtml(beneficiary)}'s invoice ${invNum} has been paid.`
-      : beneficiary
-        ? `${escapeHtml(beneficiary)}'s invoice has been paid.`
-        : invNum
-          ? `Invoice ${invNum} has been paid.`
-          : "An invoice has been paid.";
-  const subject = `Other Invoice Paid — ${invNum ?? params.invoiceId.slice(0, 8)}${beneficiary ? ` — ${beneficiary}` : ""}`;
+  const isTr = params.lang === "tr";
+  const paidSummary = isTr
+    ? (beneficiary && invNum ? `${escapeHtml(beneficiary)}'nin ${invNum} numaralı faturası ödendi.` : beneficiary ? `${escapeHtml(beneficiary)}'nin faturası ödendi.` : invNum ? `${invNum} numaralı fatura ödendi.` : "Bir fatura ödendi.")
+    : (beneficiary && invNum ? `${escapeHtml(beneficiary)}'s invoice ${invNum} has been paid.` : beneficiary ? `${escapeHtml(beneficiary)}'s invoice has been paid.` : invNum ? `Invoice ${invNum} has been paid.` : "An invoice has been paid.");
+  const attachNote = isTr ? "Ekte fatura dosyasını bulabilirsiniz." : "Please find the invoice attached for your records.";
+  const subject = isTr
+    ? `Fatura Ödendi — ${invNum ?? params.invoiceId.slice(0, 8)}${beneficiary ? ` — ${beneficiary}` : ""}`
+    : `Other Invoice Paid — ${invNum ?? params.invoiceId.slice(0, 8)}${beneficiary ? ` — ${beneficiary}` : ""}`;
   const amountStr = params.amount && params.currency ? `${params.amount} ${params.currency}` : "—";
-  const html = await wrapWithLogo("Other Invoice Paid", `
-    <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">${paidSummary} Please find the invoice attached for your records.</p>
+  const lblInv = isTr ? "Fatura" : "Invoice";
+  const lblBen = isTr ? "Alacaklı" : "Beneficiary";
+  const lblAmt = isTr ? "Tutar" : "Amount";
+  const lblPaid = isTr ? "Ödeme tarihi" : "Paid date";
+  const lblRef = isTr ? "Ödeme ref" : "Payment ref";
+  const lblCo = isTr ? "Şirket" : "Company";
+  const lblDue = isTr ? "Vade" : "Due date";
+  const html = await wrapWithLogo(isTr ? "Fatura Ödendi" : "Other Invoice Paid", `
+    <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">${paidSummary} ${attachNote}</p>
     <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">Invoice</td><td style="padding:8px 12px;color:#1e293b">${invNum ?? params.invoiceId.slice(0, 8)}</td></tr>
-        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Beneficiary</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.beneficiaryName ?? "—")}</td></tr>
-        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Amount</td><td style="padding:8px 12px;color:#1e293b">${amountStr}</td></tr>
-        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Paid date</td><td style="padding:8px 12px;color:#1e293b">${params.paidDate ?? "—"}</td></tr>
-        ${params.paymentReference ? `<tr><td style="padding:8px 12px;font-weight:600;color:#475569">Payment ref</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.paymentReference)}</td></tr>` : ""}
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">${lblInv}</td><td style="padding:8px 12px;color:#1e293b">${invNum ?? params.invoiceId.slice(0, 8)}</td></tr>
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">${lblBen}</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.beneficiaryName ?? "—")}</td></tr>
+        ${params.companyName ? `<tr><td style="padding:8px 12px;font-weight:600;color:#475569">${lblCo}</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.companyName)}</td></tr>` : ""}
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">${lblAmt}</td><td style="padding:8px 12px;color:#1e293b">${amountStr}</td></tr>
+        ${params.dueDate ? `<tr><td style="padding:8px 12px;font-weight:600;color:#475569">${lblDue}</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.dueDate)}</td></tr>` : ""}
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">${lblPaid}</td><td style="padding:8px 12px;color:#1e293b">${params.paidDate ?? "—"}</td></tr>
+        ${params.paymentReference ? `<tr><td style="padding:8px 12px;font-weight:600;color:#475569">${lblRef}</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.paymentReference)}</td></tr>` : ""}
       </table>
     </div>
     <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Attachment: ${escapeHtml(params.attachment.filename)}</p>

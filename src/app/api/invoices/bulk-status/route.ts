@@ -223,16 +223,19 @@ export async function POST(request: NextRequest) {
                     const company = await (await import("@/lib/company-settings")).getCompanySettingsAsync();
                     const to = company.email_finance?.trim() || "london.finance@trtworld.com";
                     const filename = storagePath.split("/").pop() ?? `invoice-${invoiceId}.pdf`;
-                    const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number, beneficiary_name, gross_amount, extracted_currency").eq("invoice_id", invoiceId).single();
-                    const extracted = ext as { invoice_number?: string; beneficiary_name?: string; gross_amount?: number; extracted_currency?: string } | null;
+                    const { data: ext } = await supabase.from("invoice_extracted_fields").select("invoice_number, beneficiary_name, gross_amount, extracted_currency, raw_json").eq("invoice_id", invoiceId).single();
+                    const extracted = ext as { invoice_number?: string; beneficiary_name?: string; gross_amount?: number; extracted_currency?: string; raw_json?: { company_name?: string; due_date?: string } } | null;
                     const cur = (extracted?.extracted_currency ?? "GBP") as string;
                     const amt = extracted?.gross_amount;
                     const amountStr = amt != null ? `${cur === "USD" ? "$" : cur === "EUR" ? "€" : "£"}${Number(amt).toLocaleString("en-GB", { minimumFractionDigits: 2 })}` : null;
+                    const raw = extracted?.raw_json;
                     await sendOtherInvoicePaidToLondonFinance({
                       to,
                       invoiceId,
                       invoiceNumber: extracted?.invoice_number ?? undefined,
                       beneficiaryName: extracted?.beneficiary_name ?? undefined,
+                      companyName: raw?.company_name ?? undefined,
+                      dueDate: raw?.due_date ?? undefined,
                       amount: amountStr ?? undefined,
                       currency: cur,
                       paidDate,

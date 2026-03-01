@@ -833,11 +833,15 @@ export async function POST(
             const amt = extracted?.gross_amount;
             const cur = (extracted?.extracted_currency ?? "GBP") as string;
             const amountStr = amt != null ? `${cur === "USD" ? "$" : cur === "EUR" ? "€" : "£"}${Number(amt).toLocaleString("en-GB", { minimumFractionDigits: 2 })}` : null;
+            const { data: extRaw } = await supabase.from("invoice_extracted_fields").select("raw_json").eq("invoice_id", invoiceId).single();
+            const raw = (extRaw as { raw_json?: { company_name?: string; due_date?: string } } | null)?.raw_json;
             const sendResult = await sendOtherInvoicePaidToLondonFinance({
               to,
               invoiceId,
               invoiceNumber: extracted?.invoice_number ?? undefined,
               beneficiaryName: extracted?.beneficiary_name ?? undefined,
+              companyName: raw?.company_name ?? undefined,
+              dueDate: raw?.due_date ?? undefined,
               amount: amountStr ?? undefined,
               currency: cur,
               paidDate: paidDateVal,

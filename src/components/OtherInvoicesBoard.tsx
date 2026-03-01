@@ -114,16 +114,21 @@ const ALL_COLUMNS = [
 const DEFAULT_VISIBLE = ["status", "amount", "currency", "beneficiary", "sortCode", "accountNumber", "invNumber", "submittedBy", "files", "companyName", "invDate", "dueDate", "purpose", "actions"];
 const COL_STORAGE_KEY = "other_visible_columns";
 
+const UK_ACCOUNT_REGEX = /^\d{8}$/;
+const IBAN_REGEX = /^[A-Z]{2}\d{2}[A-Z0-9]{4,30}$/i;
+
 function EditOtherInvoiceModal({
   row,
   onSave,
   onClose,
   saving,
+  onReExtract,
 }: {
   row: DisplayRow;
   onSave: (draft: Record<string, string | number | null>) => Promise<void>;
   onClose: () => void;
   saving: boolean;
+  onReExtract?: (invoiceId: string) => Promise<void>;
 }) {
   const [beneficiary, setBeneficiary] = useState(row.beneficiary === "—" ? "" : row.beneficiary);
   const [sortCode, setSortCode] = useState(row.sortCode === "—" ? "" : row.sortCode);
@@ -135,9 +140,24 @@ function EditOtherInvoiceModal({
   const [invDate, setInvDate] = useState(row.invDate === "—" ? "" : row.invDate);
   const [dueDate, setDueDate] = useState(row.dueDate === "—" ? "" : row.dueDate);
   const [purpose, setPurpose] = useState(row.purpose === "—" ? "" : row.purpose);
+  const [reExtracting, setReExtracting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+    const sc = sortCode.replace(/\s/g, "").replace(/-/g, "");
+    if (sc && sc.length !== 6) errs.sortCode = "UK sort code: 6 digits (XX-XX-XX)";
+    else if (sc && !/^\d{6}$/.test(sc)) errs.sortCode = "UK sort code: digits only";
+    const ac = accountNumber.replace(/\s/g, "");
+    if (ac && ac.length >= 15 && !IBAN_REGEX.test(ac)) errs.accountNumber = "Invalid IBAN format";
+    else if (ac && ac.length < 15 && !UK_ACCOUNT_REGEX.test(ac)) errs.accountNumber = "UK account: 8 digits";
+    setValidationErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     await onSave({
       beneficiary_name: beneficiary.trim() || null,
       sort_code: sortCode.trim() || null,
@@ -173,11 +193,13 @@ function EditOtherInvoiceModal({
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Sort Code</label>
-              <input value={sortCode} onChange={(e) => setSortCode(e.target.value)} placeholder="00-00-00" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <input value={sortCode} onChange={(e) => { setSortCode(e.target.value); setValidationErrors((prev) => ({ ...prev, sortCode: "" })); }} placeholder="00-00-00" className={`mt-1 w-full rounded-lg px-3 py-2 text-sm font-mono dark:bg-gray-800 dark:text-white ${validationErrors.sortCode ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+              {validationErrors.sortCode && <p className="mt-0.5 text-xs text-red-600">{validationErrors.sortCode}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Account Number</label>
-              <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              <input value={accountNumber} onChange={(e) => { setAccountNumber(e.target.value); setValidationErrors((prev) => ({ ...prev, accountNumber: "" })); }} className={`mt-1 w-full rounded-lg px-3 py-2 text-sm font-mono dark:bg-gray-800 dark:text-white ${validationErrors.accountNumber ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+              {validationErrors.accountNumber && <p className="mt-0.5 text-xs text-red-600">{validationErrors.accountNumber}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Invoice Number</label>
@@ -209,13 +231,75 @@ function EditOtherInvoiceModal({
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Purpose</label>
             <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
           </div>
-          <div className="flex justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-            <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</button>
-            <button type="submit" disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
-              {saving ? "Saving..." : "Save"}
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
+            <div>
+              {onReExtract && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setReExtracting(true);
+                    try {
+                      await onReExtract(row.id);
+                      onClose();
+                    } catch {
+                      // toast handled by parent
+                    } finally {
+                      setReExtracting(false);
+                    }
+                  }}
+                  disabled={reExtracting || saving}
+                  className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40 disabled:opacity-50"
+                >
+                  {reExtracting ? "Re-extracting..." : "Re-extract from file"}
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</button>
+              <button type="submit" disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function BulkMarkPaidModal({
+  count,
+  onConfirm,
+  onClose,
+  loading,
+}: {
+  count: number;
+  onConfirm: (paymentRef: string, paidDate: string) => void;
+  onClose: () => void;
+  loading: boolean;
+}) {
+  const [paymentRef, setPaymentRef] = useState("");
+  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 10));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900 p-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Mark {count} invoice(s) as paid</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Payment reference (optional)</label>
+            <input value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder="e.g. CHQ-12345" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Paid date</label>
+            <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</button>
+          <button type="button" onClick={() => onConfirm(paymentRef.trim(), paidDate)} disabled={loading} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+            {loading ? "Processing..." : "Mark as paid"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -316,6 +400,12 @@ export function OtherInvoicesBoard({
   const [detailLoading, setDetailLoading] = useState(false);
   const [timelineData, setTimelineData] = useState<{ id: string; event_type: string; created_at: string; actor_name?: string; from_status?: string; to_status?: string; payload?: unknown }[]>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<OtherGroupKey>>(new Set());
+  const [showBulkMarkPaidModal, setShowBulkMarkPaidModal] = useState(false);
+  const [currencyFilter, setCurrencyFilter] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const toggleGroup = useCallback((key: OtherGroupKey) => {
     setCollapsedGroups((prev) => {
@@ -326,43 +416,57 @@ export function OtherInvoicesBoard({
     });
   }, []);
 
-  const hasFilter = !!(search || statusFilter || submittedByFilter || dateFrom || dateTo);
+  const hasFilter = !!(search || statusFilter || submittedByFilter || dateFrom || dateTo || currencyFilter || amountMin || amountMax);
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("");
     setSubmittedByFilter("");
     setDateFrom("");
     setDateTo("");
+    setCurrencyFilter("");
+    setAmountMin("");
+    setAmountMax("");
   };
 
-  const filteredRows = useMemo(
-    () =>
-      rows.filter((r) => {
-        if (statusFilter) {
-          if (statusFilter === "archived") {
-            if (r.status !== "archived") return false;
-          } else if (r.group !== statusFilter) return false;
-        }
-        if (submittedByFilter && r.submittedBy !== submittedByFilter) return false;
-        if (dateFrom && r.createdAt < dateFrom) return false;
-        if (dateTo && r.createdAt > dateTo + "T23:59:59") return false;
-        if (search) {
-          const q = search.toLowerCase();
-          const hay = [
-            r.beneficiary,
-            r.companyName,
-            r.submittedBy,
-            r.invNumber,
-            r.purpose,
-            r.amount,
-            r.currency,
-          ].join(" ").toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
-      }),
-    [rows, search, statusFilter, submittedByFilter, dateFrom, dateTo]
-  );
+  const filteredRows = useMemo(() => {
+    let list = rows.filter((r) => {
+      if (statusFilter) {
+        if (statusFilter === "archived") {
+          if (r.status !== "archived") return false;
+        } else if (r.group !== statusFilter) return false;
+      }
+      if (submittedByFilter && r.submittedBy !== submittedByFilter) return false;
+      if (dateFrom && r.createdAt < dateFrom) return false;
+      if (dateTo && r.createdAt > dateTo + "T23:59:59") return false;
+      if (currencyFilter && r.currency !== currencyFilter) return false;
+      if (amountMin && r.amountNum < Number(amountMin)) return false;
+      if (amountMax && r.amountNum > Number(amountMax)) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const hay = [
+          r.beneficiary,
+          r.companyName,
+          r.submittedBy,
+          r.invNumber,
+          r.purpose,
+          r.amount,
+          r.currency,
+        ].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "amount") cmp = a.amountNum - b.amountNum;
+      else if (sortBy === "beneficiary") cmp = (a.beneficiary || "").localeCompare(b.beneficiary || "");
+      else if (sortBy === "dueDate") cmp = (a.dueDate || "").localeCompare(b.dueDate || "");
+      else if (sortBy === "invNumber") cmp = (a.invNumber || "").localeCompare(b.invNumber || "");
+      else cmp = (a.createdAt || "").localeCompare(b.createdAt || "");
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [rows, search, statusFilter, submittedByFilter, dateFrom, dateTo, currencyFilter, amountMin, amountMax, sortBy, sortOrder]);
 
   const groupedRows = useMemo(() => {
     const map = new Map<OtherGroupKey, DisplayRow[]>();
@@ -394,6 +498,11 @@ export function OtherInvoicesBoard({
 
   const uniqueSubmittedBy = useMemo(
     () => Array.from(new Set(rows.map((r) => r.submittedBy).filter((b) => b !== "—"))).sort(),
+    [rows]
+  );
+
+  const uniqueCurrencies = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.currency).filter((c) => c && c !== "—"))).sort(),
     [rows]
   );
 
@@ -503,12 +612,13 @@ export function OtherInvoicesBoard({
     [refresh]
   );
 
-  const bulkMarkPaid = useCallback(async () => {
+  const bulkMarkPaid = useCallback(async (paymentRef?: string, paidDate?: string) => {
     const ids = Array.from(selectedIds).filter((id) => {
       const r = rows.find((x) => x.id === id);
       return r?.status === "ready_for_payment";
     });
     if (ids.length === 0) return;
+    setShowBulkMarkPaidModal(false);
     setActionLoadingId("bulk");
     try {
       const res = await fetch("/api/invoices/bulk-status", {
@@ -517,7 +627,8 @@ export function OtherInvoicesBoard({
         body: JSON.stringify({
           invoice_ids: ids,
           to_status: "paid",
-          paid_date: new Date().toISOString().slice(0, 10),
+          paid_date: paidDate || new Date().toISOString().slice(0, 10),
+          payment_reference: paymentRef || undefined,
         }),
       });
       const d = (await res.json().catch(() => ({}))) as { success?: number; failed?: { id: string; error: string }[] };
@@ -916,7 +1027,7 @@ export function OtherInvoicesBoard({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search beneficiary, company, invoice no..."
+              placeholder="Search beneficiary, company, purpose, invoice no..."
               className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             />
           </div>
@@ -940,6 +1051,24 @@ export function OtherInvoicesBoard({
               <option key={b} value={b}>{b}</option>
             ))}
           </select>
+          <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="">All Currencies</option>
+            {uniqueCurrencies.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <input type="number" value={amountMin} onChange={(e) => setAmountMin(e.target.value)} placeholder="Min amount" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm w-24 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+          <input type="number" value={amountMax} onChange={(e) => setAmountMax(e.target.value)} placeholder="Max amount" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm w-24 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <option value="createdAt">Date</option>
+            <option value="amount">Amount</option>
+            <option value="beneficiary">Beneficiary</option>
+            <option value="dueDate">Due date</option>
+            <option value="invNumber">Invoice no</option>
+          </select>
+          <button onClick={() => setSortOrder((o) => (o === "asc" ? "desc" : "asc"))} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" title={sortOrder === "asc" ? "Ascending" : "Descending"}>
+            {sortOrder === "asc" ? "↑" : "↓"}
+          </button>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" title="From" />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" title="To" />
           {hasFilter && (
@@ -971,7 +1100,7 @@ export function OtherInvoicesBoard({
           </span>
           {selectedReady.length > 0 && canMarkPaid && (
             <button
-              onClick={() => void bulkMarkPaid()}
+              onClick={() => setShowBulkMarkPaidModal(true)}
               disabled={actionLoadingId === "bulk"}
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
@@ -1230,6 +1359,16 @@ export function OtherInvoicesBoard({
         )}
       </div>
 
+      {/* Bulk Mark Paid modal */}
+      {showBulkMarkPaidModal && (
+        <BulkMarkPaidModal
+          count={selectedReady.length}
+          onConfirm={(paymentRef, paidDate) => void bulkMarkPaid(paymentRef, paidDate)}
+          onClose={() => setShowBulkMarkPaidModal(false)}
+          loading={actionLoadingId === "bulk"}
+        />
+      )}
+
       {/* Edit modal */}
       {editModalRow && (
         <EditOtherInvoiceModal
@@ -1237,6 +1376,16 @@ export function OtherInvoicesBoard({
           onSave={onSaveEdit}
           onClose={() => setEditModalRow(null)}
           saving={actionLoadingId === editModalRow.id}
+          onReExtract={canEdit ? async (invoiceId) => {
+            const res = await fetch(`/api/invoices/${invoiceId}/extract`, { method: "POST" });
+            const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+            if (res.ok && data.success) {
+              toast.success("Re-extraction complete. Refreshing...");
+              refresh();
+            } else {
+              toast.error(data.error ?? "Re-extraction failed");
+            }
+          } : undefined}
         />
       )}
 

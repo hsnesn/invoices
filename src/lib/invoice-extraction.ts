@@ -419,6 +419,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     vat_amount?: number | null;
     gross_amount?: number | null;
     currency?: string | null;
+    service_description?: string | null;
   } = {};
   let extractionError: string | null = null;
 
@@ -438,9 +439,10 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP. If € appears, return EUR.` + CERTAIN_SUFFIX,
     guest_phone: `Extract ONLY the contact phone number - where the invoice sender can be reached. Look for "Phone", "Tel", "Mobile". UK: +44 or 0xx. EXCLUDE: bank account numbers, sort codes, VAT numbers, fax numbers.` + CERTAIN_SUFFIX,
     guest_email: `Extract ONLY the contact email - where the invoice sender can be reached. Format: name@domain.com. EXCLUDE: TRT World or internal company emails.` + CERTAIN_SUFFIX,
+    service_description: `Extract a SHORT description/purpose of the invoice - what the payment is for. Look for: "Description", "Services", "Purpose", "Payment for", "Details", line items, or a brief summary of goods/services. Return 1-2 sentences max. EXCLUDE: bank details, addresses, legal boilerplate. If nothing clear, return empty.` + CERTAIN_SUFFIX,
   };
 
-  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "due_date", "currency", "sort_code", "guest_phone", "guest_email"];
+  const AI_ONLY_FIELDS = ["gross_amount", "invoice_number", "invoice_date", "due_date", "currency", "sort_code", "guest_phone", "guest_email", "service_description"];
 
   async function extractSingleField(
     fieldKey: string,
@@ -692,7 +694,14 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   }
 
   const { data: inv } = await supabase.from("invoices").select("invoice_type").eq("id", invoiceId).single();
-  if ((inv as { invoice_type?: string } | null)?.invoice_type === "freelancer") {
+  const invType = (inv as { invoice_type?: string } | null)?.invoice_type;
+  if (invType === "other" && parsed.service_description && typeof parsed.service_description === "string") {
+    const desc = (parsed.service_description as string).trim().slice(0, 2000);
+    if (desc) {
+      await supabase.from("invoices").update({ service_description: desc, updated_at: new Date().toISOString() }).eq("id", invoiceId);
+    }
+  }
+  if (invType === "freelancer") {
     let flCompanyName = companyName ?? (parsed.beneficiary_name && !looksLikePersonName(parsed.beneficiary_name) ? parsed.beneficiary_name : null) ?? null;
     if (flCompanyName) {
       flCompanyName = stripInternalRefs(flCompanyName) ?? stripAddressFromName(flCompanyName) ?? null;
