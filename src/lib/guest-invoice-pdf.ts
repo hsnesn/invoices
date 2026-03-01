@@ -60,7 +60,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   const cw = pw - 2 * mx;
   const sym = currencySymbol(data.currency);
 
-  const accentRgb: [number, number, number] = data.bandGreen ? [16, 185, 129] : [30, 64, 120];
+  const accentRgb: [number, number, number] = data.bandGreen ? [0, 51, 34] : [30, 64, 120];
   let y = 20;
 
   // Top: INV NO (left) | DATE (right) — larger, accent color

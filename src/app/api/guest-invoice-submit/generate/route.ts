@@ -271,10 +271,15 @@ export async function POST(request: NextRequest) {
       raw_json: { source: "guest_generated", guest_name: g.guest_name },
     });
 
-    await supabase
+    const { error: usedErr } = await supabase
       .from("guest_invoice_submit_tokens")
       .update({ used_at: new Date().toISOString() })
-      .eq("id", t.id);
+      .eq("token", token);
+
+    if (usedErr) {
+      console.error("[Guest invoice] Failed to mark token as used:", usedErr);
+      return NextResponse.json({ error: "Failed to complete submission. Please contact the producer." }, { status: 500 });
+    }
 
     await supabase
       .from("producer_guests")
@@ -296,23 +301,15 @@ export async function POST(request: NextRequest) {
 
     const enabled = await isEmailStageEnabled("submission");
     if (enabled && g.email) {
-      const [sendSubmitter, sendDeptEp] = await Promise.all([
-        isRecipientEnabled("submission", "submitter"),
-        isRecipientEnabled("submission", "dept_ep"),
-      ]);
-      const managerEmails: string[] = [];
-      if (sendDeptEp && managerUserId) {
-        const filtered = await getFilteredEmailsForUserIds([managerUserId]);
-        if (filtered.length > 0) managerEmails.push(filtered[0]);
-      }
+      const sendSubmitter = await isRecipientEnabled("submission", "submitter");
       const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([submitterUserId]) : [];
       const submitterEmail = submitterEmails[0];
-      if (submitterEmail || managerEmails.length > 0) {
+      if (submitterEmail) {
         const deptName = deptId ? ((await supabase.from("departments").select("name").eq("id", deptId).single()).data?.name ?? "—") : "—";
         const guestDetails = buildGuestEmailDetails(serviceDesc, deptName, progName, { invoice_number: invNo, gross_amount: totalAmount });
         await sendSubmissionEmail({
-          submitterEmail: submitterEmail ?? "",
-          managerEmails,
+          submitterEmail,
+          managerEmails: [],
           invoiceId,
           invoiceNumber: invNo,
           guestName: g.guest_name,

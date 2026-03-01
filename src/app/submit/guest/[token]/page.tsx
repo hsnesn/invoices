@@ -89,7 +89,7 @@ export default function GuestInvoiceSubmitPage() {
             .filter((e) => e.label.trim() && e.amount.trim() && !Number.isNaN(parseFloat(e.amount)))
             .map((e) => ({ label: e.label.trim(), amount: parseFloat(e.amount) }))
         : [];
-      const useFormData = receiptFiles.length > 0;
+      const useFormData = receiptFiles.length > 0 || validExpenses.length > 0;
       const body = useFormData
         ? (() => {
             const fd = new FormData();

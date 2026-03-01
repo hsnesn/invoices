@@ -158,18 +158,10 @@ export async function POST(request: NextRequest) {
 
     const enabled = await isEmailStageEnabled("submission");
     if (enabled) {
-      const [sendSubmitter, sendDeptEp] = await Promise.all([
-        isRecipientEnabled("submission", "submitter"),
-        isRecipientEnabled("submission", "dept_ep"),
-      ]);
-      const managerEmails: string[] = [];
-      if (sendDeptEp && managerUserId) {
-        const filtered = await getFilteredEmailsForUserIds([managerUserId]);
-        if (filtered.length > 0) managerEmails.push(filtered[0]);
-      }
+      const sendSubmitter = await isRecipientEnabled("submission", "submitter");
       const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([session.user.id]) : [];
       const submitterEmail = submitterEmails[0];
-      if (submitterEmail || managerEmails.length > 0) {
+      if (submitterEmail) {
         const guestName = parseGuestNameFromServiceDesc(service_description);
         const invoiceNumber = seedInvNumber;
         const deptName = safeDepartmentId
@@ -185,8 +177,8 @@ export async function POST(request: NextRequest) {
           { invoice_number: invoiceNumber || null, gross_amount: null }
         );
         await sendSubmissionEmail({
-          submitterEmail: submitterEmail ?? "",
-          managerEmails,
+          submitterEmail,
+          managerEmails: [],
           invoiceId,
           invoiceNumber: invoiceNumber || undefined,
           guestName,

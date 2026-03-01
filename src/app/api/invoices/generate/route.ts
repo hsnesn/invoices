@@ -271,22 +271,18 @@ export async function POST(request: NextRequest) {
     }
 
     const enabled = await isEmailStageEnabled("submission");
-    if (enabled && managerUserId) {
-      const [sendSubmitter, sendDeptEp] = await Promise.all([
-        isRecipientEnabled("submission", "submitter"),
-        isRecipientEnabled("submission", "dept_ep"),
-      ]);
-      const managerEmails = sendDeptEp ? await getFilteredEmailsForUserIds([managerUserId]) : [];
+    if (enabled) {
+      const sendSubmitter = await isRecipientEnabled("submission", "submitter");
       const submitterEmails = sendSubmitter ? await getFilteredEmailsForUserIds([session.user.id]) : [];
       const submitterEmail = submitterEmails[0];
-      if (submitterEmail || managerEmails.length > 0) {
+      if (submitterEmail) {
         const guestDetails = buildGuestEmailDetails(serviceDescWithDept, deptName, progName, {
           invoice_number: data.invNo.trim(),
           gross_amount: totalAmount,
         });
         await sendSubmissionEmail({
-          submitterEmail: submitterEmail ?? "",
-          managerEmails,
+          submitterEmail,
+          managerEmails: [],
           invoiceId,
           invoiceNumber: data.invNo.trim(),
           guestName: data.guestName.trim(),
