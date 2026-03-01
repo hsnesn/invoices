@@ -1559,9 +1559,26 @@ export function InvoicesBoard({
 
   useEffect(() => {
     setHydrated(true);
-    const stored = loadFromStorage<string[]>("invoice_visible_columns", [...DEFAULT_VISIBLE_COLUMNS]);
-    const normalized = DEFAULT_VISIBLE_COLUMNS.filter((k) => stored.includes(k));
-    setVisibleColumns(normalized.length > 0 ? normalized : [...DEFAULT_VISIBLE_COLUMNS]);
+    const validKeys = new Set(ALL_COLUMNS.map((c) => c.key));
+    const applyColumns = (arr: string[]) => {
+      const ordered = Array.isArray(arr) ? arr.filter((k) => validKeys.has(k)) : [];
+      return ordered.length > 0 ? ordered : [...DEFAULT_VISIBLE_COLUMNS];
+    };
+    void fetch("/api/profile", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data) => {
+        const fromProfile = (data as { invoice_visible_columns?: string[] | null })?.invoice_visible_columns ?? null;
+        if (Array.isArray(fromProfile) && fromProfile.length > 0) {
+          setVisibleColumns(applyColumns(fromProfile));
+          return;
+        }
+        const stored = loadFromStorage<string[]>("invoice_visible_columns", [...DEFAULT_VISIBLE_COLUMNS]);
+        setVisibleColumns(applyColumns(stored));
+      })
+      .catch(() => {
+        const stored = loadFromStorage<string[]>("invoice_visible_columns", [...DEFAULT_VISIBLE_COLUMNS]);
+        setVisibleColumns(applyColumns(stored));
+      });
     setSavedFilters(loadFromStorage<SavedFilter[]>("invoice_saved_filters", []));
     setRecentFilters(loadFromStorage<SavedFilter["filters"][]>(RECENT_FILTERS_KEY, []));
     const filterState = loadFilterState();
@@ -1582,6 +1599,25 @@ export function InvoicesBoard({
       if (filterState.sortDir != null) setSortDir(String(filterState.sortDir) as typeof sortDir);
     }
   }, [initialGroupFilter]);
+
+  // Persist column preferences to profile (per-user, syncs across devices)
+  const saveColumnsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!hydrated) return;
+    if (saveColumnsDebounceRef.current) clearTimeout(saveColumnsDebounceRef.current);
+    saveColumnsDebounceRef.current = setTimeout(() => {
+      saveColumnsDebounceRef.current = null;
+      fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ invoice_visible_columns: visibleColumns }),
+      }).catch(() => {});
+    }, 500);
+    return () => {
+      if (saveColumnsDebounceRef.current) clearTimeout(saveColumnsDebounceRef.current);
+    };
+  }, [hydrated, visibleColumns]);
 
   // Persist filter state to sessionStorage when filters change
   React.useEffect(() => {
@@ -2444,6 +2480,18 @@ export function InvoicesBoard({
     });
   }, []);
 
+  const moveColumnToIndex = useCallback((fromKey: string, toIndex: number) => {
+    setVisibleColumns((prev) => {
+      const fromIdx = prev.indexOf(fromKey);
+      if (fromIdx < 0) return prev;
+      const without = prev.filter((k) => k !== fromKey);
+      const toIdx = Math.max(0, Math.min(toIndex, without.length));
+      const next = [...without.slice(0, toIdx), fromKey, ...without.slice(toIdx)];
+      localStorage.setItem("invoice_visible_columns", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   // Row expand - load timeline, files & notes
   const [filesData, setFilesData] = useState<{ storage_path: string; file_name: string }[]>([]);
   const initialExpandDoneRef = useRef(false);
@@ -3034,17 +3082,30 @@ export function InvoicesBoard({
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="mb-2 text-xs font-semibold text-gray-500 uppercase dark:text-slate-400">Toggle Columns</p>
+                <p className="mb-1.5 text-[10px] text-gray-400 dark:text-slate-500">Drag to reorder</p>
                 {visibleColumns.filter((k) => k !== "checkbox").map((key, i) => {
                   const c = ALL_COLUMNS.find((col) => col.key === key);
                   if (!c) return null;
                   const label = c.label || c.key;
                   return (
-                    <div key={c.key} className="flex items-center gap-1 py-0.5 text-xs text-gray-700 dark:text-slate-200 group">
-                      <input type="checkbox" checked id={`col-${c.key}`} onChange={() => toggleColumn(c.key)} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600" onClick={(e) => e.stopPropagation()} />
-                      <div className="flex flex-col opacity-70 group-hover:opacity-100">
-                        <button type="button" onClick={(e) => { e.stopPropagation(); moveColumn(c.key, "up"); }} disabled={i === 0} aria-label={`Move ${label} up`} className="p-0.5 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-slate-700 rounded">▲</button>
-                        <button type="button" onClick={(e) => { e.stopPropagation(); moveColumn(c.key, "down"); }} disabled={i === visibleColumns.filter((k) => k !== "checkbox").length - 1} aria-label={`Move ${label} down`} className="p-0.5 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-slate-700 rounded">▼</button>
-                      </div>
+                    <div
+                      key={c.key}
+                      draggable
+                      onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.key); e.dataTransfer.effectAllowed = "move"; (e.target as HTMLElement).dataset.dragKey = c.key; }}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; (e.currentTarget as HTMLElement).classList.add("bg-sky-100", "dark:bg-sky-900/40"); }}
+                      onDragLeave={(e) => { (e.currentTarget as HTMLElement).classList.remove("bg-sky-100", "dark:bg-sky-900/40"); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).classList.remove("bg-sky-100", "dark:bg-sky-900/40");
+                        const fromKey = e.dataTransfer.getData("text/plain");
+                        if (fromKey && fromKey !== c.key) moveColumnToIndex(fromKey, i);
+                      }}
+                      className="flex items-center gap-1.5 py-1 px-1.5 -mx-1.5 rounded text-xs text-gray-700 dark:text-slate-200 group cursor-grab active:cursor-grabbing"
+                    >
+                      <span className="text-gray-400 dark:text-slate-500 cursor-grab flex shrink-0" aria-hidden title="Drag to reorder">
+                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16"><path d="M5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM5 7a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM5 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
+                      </span>
+                      <input type="checkbox" checked id={`col-${c.key}`} onChange={() => toggleColumn(c.key)} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 shrink-0" onClick={(e) => e.stopPropagation()} />
                       <label htmlFor={`col-${c.key}`} className="flex-1 cursor-pointer min-w-0 truncate">{label}</label>
                     </div>
                   );

@@ -23,6 +23,7 @@ export async function GET() {
     const avatarUrl = (profile as { avatar_url?: string | null }).avatar_url ?? null;
 
     const preferredTheme = (profile as { preferred_theme?: string | null }).preferred_theme ?? null;
+    const invoiceVisibleColumns = (profile as { invoice_visible_columns?: string[] | null }).invoice_visible_columns ?? null;
 
     return NextResponse.json({
       id: profile.id,
@@ -35,6 +36,7 @@ export async function GET() {
       is_active: profile.is_active,
       receive_invoice_emails: receiveInvoiceEmails,
       preferred_theme: preferredTheme === "light" || preferredTheme === "dark" ? preferredTheme : null,
+      invoice_visible_columns: Array.isArray(invoiceVisibleColumns) ? invoiceVisibleColumns : null,
       created_at: profile.created_at,
       updated_at: profile.updated_at,
     });
@@ -47,7 +49,7 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   try {
     const { session, profile } = await requireAuth();
-    const body = (await request.json()) as { full_name?: string; receive_invoice_emails?: boolean; preferred_theme?: "light" | "dark" | null };
+    const body = (await request.json()) as { full_name?: string; receive_invoice_emails?: boolean; preferred_theme?: "light" | "dark" | null; invoice_visible_columns?: string[] | null };
 
     const supabase = createAdminClient();
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -66,6 +68,10 @@ export async function PATCH(request: NextRequest) {
 
     if (body.preferred_theme !== undefined) {
       updates.preferred_theme = body.preferred_theme === "light" || body.preferred_theme === "dark" ? body.preferred_theme : null;
+    }
+
+    if (body.invoice_visible_columns !== undefined) {
+      updates.invoice_visible_columns = Array.isArray(body.invoice_visible_columns) && body.invoice_visible_columns.length > 0 ? body.invoice_visible_columns : null;
     }
 
     if (Object.keys(updates).length <= 1) {

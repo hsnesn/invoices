@@ -134,10 +134,10 @@ export function SendInvoiceLinkModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="send-invoice-link-title">
       <div className="w-full max-w-md rounded-xl border-2 border-emerald-600 bg-white p-6 shadow-xl dark:border-emerald-500 dark:bg-gray-800 my-4" onClick={(e) => e.stopPropagation()}>
         <div className="-mx-6 -mt-6 mb-4 rounded-t-xl bg-emerald-600 px-6 py-3 dark:bg-emerald-700">
-          <h2 className="text-lg font-semibold text-white">Send invoice submit link</h2>
+          <h2 id="send-invoice-link-title" className="text-lg font-semibold text-white">Send invoice submit link</h2>
         </div>
         <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
           Fill in the details below. The guest will receive an email with a link to upload their invoice online. The link is valid for 7 days.

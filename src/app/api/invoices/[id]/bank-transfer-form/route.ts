@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
 import { generateBankTransferForm, ACCOUNT_BY_CURRENCY } from "@/lib/bank-transfer-form";
 import { createAuditEvent } from "@/lib/audit";
+import { sendBankTransferFormEmail } from "@/lib/email";
 
 const BUCKET = "invoices";
 const STORAGE_PREFIX = "bank-transfer";
@@ -209,6 +210,19 @@ export async function GET(
         timestamp: new Date().toISOString(),
       },
     });
+
+    // Send form by email to finance as soon as it is generated
+    const emailResult = await sendBankTransferFormEmail({
+      docxBuffer,
+      beneficiaryName,
+      amount: amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      currency: validCurrency,
+      invoiceNumber: parsedInvoiceNumber,
+      invoiceId,
+    });
+    if (!emailResult.success) {
+      console.warn("[bank-transfer-form] Email send failed:", emailResult.error);
+    }
 
     return new NextResponse(new Uint8Array(docxBuffer), {
       headers: {

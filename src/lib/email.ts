@@ -727,6 +727,47 @@ export async function sendSalaryPaymentConfirmationEmail(params: {
 /* ------------------------------------------------------------------ */
 
 const LONDON_OPS_EMAIL = "london.operations@trtworld.com";
+const BANK_TRANSFER_FORM_EMAIL = process.env.BANK_TRANSFER_FORM_EMAIL ?? "london.finance@trtworld.com";
+
+/** International bank transfer form (Word docx) — sent to finance when generated. */
+export async function sendBankTransferFormEmail(params: {
+  docxBuffer: Buffer;
+  beneficiaryName: string;
+  amount: string;
+  currency: string;
+  invoiceNumber?: string | null;
+  invoiceId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const subject = params.invoiceNumber
+    ? `Bank Transfer Form — Invoice ${params.invoiceNumber} (${params.beneficiaryName})`
+    : `Bank Transfer Form — ${params.beneficiaryName} — ${params.amount} ${params.currency}`;
+  const html = await wrapWithLogo("International Bank Transfer Form", `
+    <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The international bank transfer form has been generated and is attached.</p>
+    <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569;width:30%">Beneficiary</td><td style="padding:8px 12px;color:#1e293b">${escapeHtml(params.beneficiaryName)}</td></tr>
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Amount</td><td style="padding:8px 12px;color:#1e293b">${params.amount} ${params.currency}</td></tr>
+        <tr><td style="padding:8px 12px;font-weight:600;color:#475569">Invoice</td><td style="padding:8px 12px;color:#1e293b">${params.invoiceNumber ? `#${params.invoiceNumber}` : params.invoiceId}</td></tr>
+      </table>
+    </div>
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Türkiye İş Bankası London Branch transfer form. Attachment: bank-transfer-form.docx</p>
+  `);
+  const res = await sendEmailWithAttachment({
+    to: BANK_TRANSFER_FORM_EMAIL,
+    subject,
+    html,
+    attachments: [{ filename: `bank-transfer-form-${params.invoiceNumber ?? params.invoiceId}.docx`, content: params.docxBuffer }],
+  });
+  return { success: res.success ?? false, error: res.error as string | undefined };
+}
+
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export async function sendAvailabilityClearedEmail(params: {
   to: string;
