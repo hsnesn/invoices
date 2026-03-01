@@ -12,6 +12,7 @@ import { SalariesSetupSection } from "@/components/SalariesSetupSection";
 import { GuestContactsSetupSection } from "@/components/GuestContactsSetupSection";
 import { LogosSetupSection } from "@/components/LogosSetupSection";
 import { ContractorAvailabilityRolesSection } from "@/components/ContractorAvailabilityRolesSection";
+import { ContractorPreferencePoolSection } from "@/components/ContractorPreferencePoolSection";
 import { DeletePermissionsSection } from "@/components/DeletePermissionsSection";
 import { VendorsSetupSection } from "@/components/VendorsSetupSection";
 import { AnnouncementsSetupSection } from "@/components/AnnouncementsSetupSection";
@@ -75,7 +76,12 @@ export default function AdminSetupPage() {
       {activeTab === "guest" && <GuestInvoiceSetup />}
       {activeTab === "freelancer" && <FreelancerSetup />}
       {activeTab === "guest_contacts" && <GuestContactsSetupSection />}
-      {activeTab === "contractor_availability" && <ContractorAvailabilityRolesSection />}
+      {activeTab === "contractor_availability" && (
+        <div className="space-y-6">
+          <ContractorAvailabilityRolesSection />
+          <ContractorPreferencePoolSection />
+        </div>
+      )}
       {activeTab === "permissions" && <DeletePermissionsSection />}
       {activeTab === "logos" && <LogosSetupSection />}
       {activeTab === "email" && <EmailSetupSection />}
