@@ -20,7 +20,7 @@ export function SendInvoiceLinkModal({
   initialPhone?: string;
   programs: string[];
   onClose: () => void;
-  onSent: () => void;
+  onSent: (message?: string) => void;
 }) {
   const [guestName, setGuestName] = useState(initialGuestName);
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -31,6 +31,15 @@ export function SendInvoiceLinkModal({
   const [recordingTopic, setRecordingTopic] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentCurrency, setPaymentCurrency] = useState("GBP");
+  const [generateInvoice, setGenerateInvoice] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [accountName, setAccountName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [sortCode, setSortCode] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAddress, setBankAddress] = useState("");
+  const [paypal, setPaypal] = useState("");
   const [sending, setSending] = useState(false);
   const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white";
 
@@ -61,6 +70,15 @@ export function SendInvoiceLinkModal({
       toast.error("Recording topic is required");
       return;
     }
+    const titleVal = title.trim();
+    if (!titleVal || titleVal.length < 2) {
+      toast.error("Title is required");
+      return;
+    }
+    if (generateInvoice && (!accountName.trim() || !accountNumber.trim() || !sortCode.trim() || !invoiceNumber.trim())) {
+      toast.error("Invoice number and bank details are required when generating invoice");
+      return;
+    }
     setSending(true);
     try {
       const res = await fetch("/api/guest-invoice-submit/send-link", {
@@ -69,19 +87,28 @@ export function SendInvoiceLinkModal({
         body: JSON.stringify({
           guest_name: name,
           email: em,
-          title: title.trim() || undefined,
+          title: titleVal,
           phone: phone.trim() || undefined,
           program_name: prog,
           recording_date: date,
           recording_topic: topic,
           payment_amount: parseFloat(paymentAmount) || 0,
           payment_currency: paymentCurrency,
+          generate_invoice_for_guest: generateInvoice,
+          invoice_number: generateInvoice ? invoiceNumber.trim() : undefined,
+          invoice_date: generateInvoice ? invoiceDate : undefined,
+          account_name: generateInvoice ? accountName.trim() : undefined,
+          account_number: generateInvoice ? accountNumber.trim() : undefined,
+          sort_code: generateInvoice ? sortCode.trim() : undefined,
+          bank_name: generateInvoice ? bankName.trim() : undefined,
+          bank_address: generateInvoice ? bankAddress.trim() : undefined,
+          paypal: generateInvoice ? paypal.trim() : undefined,
         }),
         credentials: "same-origin",
       });
       const data = await res.json();
       if (res.ok) {
-        onSent();
+        onSent(data.message);
       } else {
         toast.error(data.error ?? "Failed to send link");
       }
@@ -94,8 +121,10 @@ export function SendInvoiceLinkModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800 my-4" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Send invoice submit link</h2>
+      <div className="w-full max-w-md rounded-xl border-2 border-emerald-600 bg-white p-6 shadow-xl dark:border-emerald-500 dark:bg-gray-800 my-4" onClick={(e) => e.stopPropagation()}>
+        <div className="-mx-6 -mt-6 mb-4 rounded-t-xl bg-emerald-600 px-6 py-3 dark:bg-emerald-700">
+          <h2 className="text-lg font-semibold text-white">Send invoice submit link</h2>
+        </div>
         <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
           Fill in the details below. The guest will receive an email with a link to upload their invoice online. The link is valid for 7 days.
         </p>
@@ -109,8 +138,8 @@ export function SendInvoiceLinkModal({
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputCls} placeholder="guest@example.com" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">Title</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="e.g. Professor, Analyst" />
+            <label className="mb-1 block text-sm font-medium">Title *</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className={inputCls} placeholder="e.g. Professor, Analyst" />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Phone</label>
@@ -147,8 +176,66 @@ export function SendInvoiceLinkModal({
               </select>
             </div>
           </div>
+          <div>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={generateInvoice}
+                onChange={(e) => {
+                  const gen = e.target.checked;
+                  setGenerateInvoice(gen);
+                  if (gen && !invoiceNumber) {
+                    fetch("/api/invoices/next-invoice-number", { credentials: "same-origin" })
+                      .then((r) => r.json())
+                      .then((d) => d?.next_invoice_number && setInvoiceNumber(d.next_invoice_number))
+                      .catch(() => {});
+                  }
+                }}
+                className="h-4 w-4 rounded text-emerald-600"
+              />
+              <span className="text-sm font-medium">Generate invoice on behalf of guest</span>
+            </label>
+          </div>
+          {generateInvoice && (
+            <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-800 dark:bg-emerald-950/20">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Invoice number *</label>
+                  <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className={inputCls} placeholder="e.g. INV-2025-001" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Invoice date</label>
+                  <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Account name *</label>
+                <input type="text" value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Account number *</label>
+                <input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Sort code *</label>
+                <input type="text" value={sortCode} onChange={(e) => setSortCode(e.target.value)} className={inputCls} placeholder="e.g. 12-34-56" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Bank name</label>
+                <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Bank address</label>
+                <input type="text" value={bankAddress} onChange={(e) => setBankAddress(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">PayPal</label>
+                <input type="text" value={paypal} onChange={(e) => setPaypal(e.target.value)} className={inputCls} placeholder="Optional" />
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 pt-2">
-            <button type="submit" disabled={sending} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
+            <button type="submit" disabled={sending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {sending ? "Sending..." : "Send link"}
             </button>
             <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">

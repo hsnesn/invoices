@@ -2350,7 +2350,7 @@ export function GuestContactsClient({
           initialPhone={sendInvoiceLinkModal.phone}
           programs={programs}
           onClose={() => setSendInvoiceLinkModal(null)}
-          onSent={() => { setSendInvoiceLinkModal(null); toast.success("Invoice submit link sent."); }}
+          onSent={(msg) => { setSendInvoiceLinkModal(null); toast.success(msg ?? "Invoice submit link sent."); }}
         />
       )}
 

@@ -1,13 +1,18 @@
 /**
  * Send invoice submit link to a guest (standalone, not from mark-accepted).
  * Saves guest to main contact list (guest_contacts), creates producer_guest linked to program,
- * and sends email. When invoice arrives, it matches to the producer_guest.
+ * and sends email. Optionally generates invoice on behalf of guest if they don't have one ready.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendPostRecordingPaidRequestInvoice } from "@/lib/post-recording-emails";
+import { sendPostRecordingPaidRequestInvoice, sendPostRecordingWithInvoice } from "@/lib/post-recording-emails";
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
+import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/guest-invoice-pdf";
+import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
+
+const BUCKET = "invoices";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +33,17 @@ export async function POST(request: NextRequest) {
     const recordingDate = (body.recording_date as string)?.trim();
     const recordingTopic = (body.recording_topic as string)?.trim();
     const paymentAmount = typeof body.payment_amount === "number" ? body.payment_amount : parseFloat(body.payment_amount) || 0;
-    const paymentCurrency = (body.payment_currency as string)?.trim() || "GBP";
+    const paymentCurrency = ((body.payment_currency as string)?.trim() || "GBP") as "GBP" | "EUR" | "USD";
+    const generateInvoice = !!body.generate_invoice_for_guest;
 
     if (!guestName || guestName.length < 2) {
       return NextResponse.json({ error: "Guest name is required" }, { status: 400 });
     }
     if (!email || !email.includes("@")) {
       return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
+    }
+    if (!title || title.length < 2) {
+      return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
     if (!programName || programName.length < 2) {
       return NextResponse.json({ error: "Program name is required" }, { status: 400 });
@@ -44,6 +53,15 @@ export async function POST(request: NextRequest) {
     }
     if (!recordingTopic || recordingTopic.length < 2) {
       return NextResponse.json({ error: "Recording topic is required" }, { status: 400 });
+    }
+    if (generateInvoice) {
+      const acc = (body.account_name as string)?.trim();
+      const accNum = (body.account_number as string)?.trim();
+      const sortCode = (body.sort_code as string)?.trim();
+      const invNo = (body.invoice_number as string)?.trim();
+      if (!acc || !accNum || !sortCode || !invNo) {
+        return NextResponse.json({ error: "Invoice number and bank details are required when generating invoice" }, { status: 400 });
+      }
     }
 
     const supabase = createAdminClient();
@@ -68,6 +86,7 @@ export async function POST(request: NextRequest) {
 
     const gcUpdate: Record<string, unknown> = {
       email,
+      title,
       primary_program: programName,
       topic: recordingTopic,
       last_invited_at: now,
@@ -75,11 +94,10 @@ export async function POST(request: NextRequest) {
       source: "send_invoice_link",
     };
     if (phone) gcUpdate.phone = phone;
-    if (title) gcUpdate.title = title;
     if (existingGc?.id) {
       await supabase.from("guest_contacts").update(gcUpdate).eq("id", existingGc.id);
     } else {
-      await supabase.from("guest_contacts").insert({ guest_name: guestNameNorm, phone: phone || undefined, title: title || undefined, ...gcUpdate });
+      await supabase.from("guest_contacts").insert({ guest_name: guestNameNorm, phone: phone || undefined, ...gcUpdate });
     }
 
     const { data: gcRow } = await supabase
@@ -95,7 +113,7 @@ export async function POST(request: NextRequest) {
         guest_contact_id: gcRow?.id ?? null,
         guest_name: guestName,
         email,
-        title: title || undefined,
+        title,
         program_name: programName,
         recording_date: recordingDate,
         recording_topic: recordingTopic,
@@ -110,6 +128,137 @@ export async function POST(request: NextRequest) {
 
     if (insertErr || !guest) {
       return NextResponse.json({ error: "Failed to create guest record: " + (insertErr?.message ?? "Unknown") }, { status: 500 });
+    }
+
+    let invoiceId: string | null = null;
+
+    if (generateInvoice) {
+      const invNo = (body.invoice_number as string)?.trim()!;
+      const invoiceDate = (body.invoice_date as string)?.trim() || new Date().toISOString().slice(0, 10);
+      const accountName = (body.account_name as string)?.trim()!;
+      const accountNumber = (body.account_number as string)?.trim()!;
+      const sortCode = (body.sort_code as string)?.trim()!;
+      const bankName = (body.bank_name as string)?.trim() || undefined;
+      const bankAddress = (body.bank_address as string)?.trim() || undefined;
+      const paypal = (body.paypal as string)?.trim() || undefined;
+
+      const { data: programs } = await supabase.from("programs").select("id, name, department_id");
+      const prog = (programs ?? []).find((p) => (p.name ?? "").trim().toLowerCase() === programName.toLowerCase());
+      const programId = prog?.id && UUID_RE.test(prog.id) ? prog.id : null;
+      const departmentId = prog?.department_id && UUID_RE.test(String(prog.department_id)) ? prog.department_id : null;
+
+      if (!departmentId || !programId) {
+        return NextResponse.json({ error: "Could not resolve program. Please ensure the program exists." }, { status: 400 });
+      }
+
+      const managerUserId = await pickManagerForGuestInvoice(supabase, departmentId, programId);
+      const { data: dept } = await supabase.from("departments").select("name").eq("id", departmentId).single();
+      const deptName = dept?.name ?? "";
+      const progName = prog?.name ?? programName;
+
+      const appearances: GuestInvoiceAppearance[] = [{
+        programmeName: progName,
+        topic: recordingTopic,
+        date: recordingDate,
+        amount: Math.max(0, paymentAmount),
+      }];
+
+      const pdfData = {
+        invNo,
+        invoiceDate,
+        currency: paymentCurrency,
+        guestName,
+        guestEmail: email,
+        appearances,
+        expenses: [],
+        totalAmount: Math.max(0, paymentAmount),
+        paypal,
+        accountName,
+        bankName,
+        accountNumber,
+        sortCode,
+        bankAddress,
+      };
+
+      const pdfBuffer = generateGuestInvoicePdf(pdfData);
+      invoiceId = crypto.randomUUID();
+      const safeGuestName = guestName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-").slice(0, 40) || "invoice";
+      const pdfPath = `${session.user.id}/${invoiceId}-send-link-invoice.pdf`;
+
+      const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(pdfPath, Buffer.from(pdfBuffer), {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+      if (uploadErr) {
+        return NextResponse.json({ error: "PDF upload failed: " + uploadErr.message }, { status: 500 });
+      }
+
+      const serviceDesc = [
+        `Guest Name: ${guestName}`,
+        `Title: ${title}`,
+        `Guest Email: ${email}`,
+        `Producer: ${producerName}`,
+        `Topic: ${recordingTopic}`,
+        `Department Name: ${deptName}`,
+        `Programme Name: ${progName}`,
+        `Invoice Date: ${invoiceDate}`,
+        `TX Date: ${recordingDate}`,
+        `Payment Type: paid_guest`,
+        `Source: Send invoice link (producer-generated)`,
+      ].join("\n");
+
+      const { error: invError } = await supabase.from("invoices").insert({
+        id: invoiceId,
+        submitter_user_id: session.user.id,
+        producer_user_id: session.user.id,
+        department_id: departmentId,
+        program_id: programId,
+        service_description: serviceDesc,
+        service_date_from: recordingDate,
+        service_date_to: recordingDate,
+        currency: paymentCurrency,
+        storage_path: pdfPath,
+        invoice_type: "guest",
+        generated_invoice_data: { appearances },
+      });
+      if (invError) {
+        await supabase.storage.from(BUCKET).remove([pdfPath]);
+        return NextResponse.json({ error: "Invoice creation failed: " + invError.message }, { status: 500 });
+      }
+
+      await supabase.from("invoice_workflows").insert({
+        invoice_id: invoiceId,
+        status: "pending_manager",
+        manager_user_id: managerUserId,
+        pending_manager_since: new Date().toISOString().slice(0, 10),
+      });
+      await supabase.from("invoice_extracted_fields").insert({
+        invoice_id: invoiceId,
+        invoice_number: invNo,
+        extracted_currency: paymentCurrency,
+        needs_review: true,
+        manager_confirmed: false,
+        raw_json: { source_file_name: `Invoice_${invNo}.pdf` },
+      });
+
+      await supabase
+        .from("producer_guests")
+        .update({ matched_invoice_id: invoiceId, matched_at: now })
+        .eq("id", guest.id);
+
+      await sendPostRecordingWithInvoice({
+        to: email,
+        guestName,
+        programName,
+        invoiceNumber: invNo,
+        pdfBuffer,
+        producerName,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Invoice generated and sent to guest.",
+      });
     }
 
     let submitLink: string | undefined;

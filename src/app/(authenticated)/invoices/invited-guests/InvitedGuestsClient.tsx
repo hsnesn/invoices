@@ -1717,9 +1717,9 @@ ${selectedProducer.full_name}`}
           initialTitle={sendInvoiceLinkModal.title}
           programs={programs.map((p) => p.name)}
           onClose={() => setSendInvoiceLinkModal(null)}
-          onSent={() => {
+          onSent={(msg) => {
             setSendInvoiceLinkModal(null);
-            toast.success("Invoice submit link sent.");
+            toast.success(msg ?? "Invoice submit link sent.");
             loadGuests();
           }}
         />
