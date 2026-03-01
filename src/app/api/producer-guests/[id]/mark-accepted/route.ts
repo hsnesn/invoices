@@ -12,6 +12,7 @@ import {
   sendPostRecordingNoPayment,
 } from "@/lib/post-recording-emails";
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
+import { checkGuestInvoiceLinkLimit, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/guest-invoice-pdf";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { createAuditEvent } from "@/lib/audit";
@@ -291,6 +292,13 @@ export async function POST(
           });
         }
       } else {
+        const limitCheck = await checkGuestInvoiceLinkLimit(supabase, guest.producer_user_id);
+        if (!limitCheck.ok) {
+          return NextResponse.json(
+            { error: `Daily limit of 5 invoice links reached. Try again tomorrow.` },
+            { status: 429 }
+          );
+        }
         let submitLink: string | undefined;
         try {
           submitLink = await getOrCreateGuestSubmitLink(supabase, id);
@@ -308,6 +316,7 @@ export async function POST(
           producerName,
           submitLink,
         });
+        await recordGuestInvoiceLinkSend(supabase, guest.producer_user_id);
       }
     } else {
       await sendPostRecordingNoPayment({

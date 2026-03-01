@@ -10,6 +10,7 @@ import {
   sendPostRecordingNoPayment,
 } from "@/lib/post-recording-emails";
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
+import { checkGuestInvoiceLinkLimit, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
 
 export async function POST(
   request: NextRequest,
@@ -56,6 +57,15 @@ export async function POST(
       const amountStr = `${currency === "GBP" ? "£" : currency === "EUR" ? "€" : "$"}${amount.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
       const invId = (guest as { matched_invoice_id?: string | null }).matched_invoice_id;
+      if (!invId) {
+        const limitCheck = await checkGuestInvoiceLinkLimit(supabase, guest.producer_user_id);
+        if (!limitCheck.ok) {
+          return NextResponse.json(
+            { error: `Daily limit of 5 invoice links reached for this producer. Try again tomorrow.` },
+            { status: 429 }
+          );
+        }
+      }
       if (invId) {
         const { data: inv } = await supabase
           .from("invoices")
@@ -98,6 +108,9 @@ export async function POST(
         producerName,
         submitLink,
       });
+      if (!invId) {
+        await recordGuestInvoiceLinkSend(supabase, guest.producer_user_id);
+      }
     } else {
       await sendPostRecordingNoPayment({
         to: guestEmail,

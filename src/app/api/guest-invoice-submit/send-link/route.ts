@@ -10,6 +10,7 @@ import { sendPostRecordingPaidRequestInvoice, sendPostRecordingWithInvoice } fro
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance } from "@/lib/guest-invoice-pdf";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
+import { checkGuestInvoiceLinkLimit, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
 
 const BUCKET = "invoices";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -65,6 +66,17 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+
+    if (!generateInvoice) {
+      const limitCheck = await checkGuestInvoiceLinkLimit(supabase, session.user.id);
+      if (!limitCheck.ok) {
+        return NextResponse.json(
+          { error: `You have reached the daily limit of 5 invoice links. You can send more tomorrow.` },
+          { status: 429 }
+        );
+      }
+    }
+
     const amountStr = `${paymentCurrency === "GBP" ? "£" : paymentCurrency === "EUR" ? "€" : "$"}${Math.max(0, paymentAmount).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
     const { data: producerProfile } = await supabase
@@ -281,6 +293,10 @@ export async function POST(request: NextRequest) {
       producerName,
       submitLink,
     });
+
+    if (!generateInvoice) {
+      await recordGuestInvoiceLinkSend(supabase, session.user.id);
+    }
 
     return NextResponse.json({
       success: true,

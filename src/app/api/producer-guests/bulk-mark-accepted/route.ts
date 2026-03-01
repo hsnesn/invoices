@@ -11,6 +11,7 @@ import {
 } from "@/lib/post-recording-emails";
 import { getOrCreateGuestSubmitLink } from "@/lib/guest-submit-token";
 import { createAuditEvent } from "@/lib/audit";
+import { canSendGuestInvoiceLinks, recordGuestInvoiceLinkSend } from "@/lib/guest-invoice-link-limit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,6 +50,23 @@ export async function POST(request: NextRequest) {
     const recordingDate = body.recording_date?.trim() || new Date().toISOString().slice(0, 10);
     const recordingTopic = body.recording_topic?.trim() || "the programme";
     const programName = body.program_name?.trim() || "our programme";
+
+    if (body.payment_received) {
+      const linksPerProducer = new Map<string, number>();
+      for (const g of allowed) {
+        const pid = g.producer_user_id;
+        linksPerProducer.set(pid, (linksPerProducer.get(pid) ?? 0) + 1);
+      }
+      for (const [producerId, count] of Array.from(linksPerProducer.entries())) {
+        const ok = await canSendGuestInvoiceLinks(supabase, producerId, count);
+        if (!ok) {
+          return NextResponse.json(
+            { error: `Daily limit of 5 invoice links reached for a producer. Try again tomorrow.` },
+            { status: 429 }
+          );
+        }
+      }
+    }
 
     const updates = {
       accepted: true,
@@ -124,6 +142,7 @@ export async function POST(request: NextRequest) {
             producerName,
             submitLink,
           });
+          await recordGuestInvoiceLinkSend(supabase, g.producer_user_id);
         } else {
           await sendPostRecordingNoPayment({
             to: guestEmail!,
