@@ -81,6 +81,8 @@ export function RequestChatPanel() {
 
     const opts = { method: "POST" as const, headers: { "Content-Type": "application/json" }, credentials: "same-origin" as const };
 
+    const TIMEOUT_MS = 45000;
+
     try {
       if (looksLikeCreateRequest(text)) {
         if (!dept) {
@@ -90,10 +92,14 @@ export function RequestChatPanel() {
           ]);
           return;
         }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
         const res = await fetch("/api/contractor-availability/requirements/bulk-request", {
           ...opts,
           body: JSON.stringify({ text, department_id: dept }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
           const month = data.month as string | undefined;
@@ -113,10 +119,14 @@ export function RequestChatPanel() {
         return;
       }
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
       const res = await fetch("/api/contractor-availability/chat", {
         ...opts,
         body: JSON.stringify({ messages: [{ role: "user", content: text }], department_id: dept || undefined }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       let data: { content?: string; links?: { label: string; url: string }[]; error?: string } = {};
       try {
@@ -134,9 +144,19 @@ export function RequestChatPanel() {
         setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error ?? "Request failed."}` }]);
       }
     } catch (err) {
-      const msg = toUserFriendlyError(err);
-      const hint = (msg.toLowerCase().includes("connection") || msg.toLowerCase().includes("fetch")) ? " If this persists, try the Requirements tab → Freelancer request instead." : "";
-      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}${hint}` }]);
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      const msg = isAbort
+        ? "Request timed out. The server may be slow (Vercel Hobby: 10s limit)."
+        : toUserFriendlyError(err);
+      const hint = " Use the Requirements tab instead: select department and program, type your request in the Freelancer request box, then click Submit & notify London Ops.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Error: ${msg}${hint}`,
+          links: [{ label: "Go to Requirements tab", url: "/request" }],
+        },
+      ]);
     } finally {
       setLoading(false);
     }

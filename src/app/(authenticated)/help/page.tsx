@@ -50,6 +50,7 @@ export default async function HelpPage() {
           <li><a href="#intro" className="hover:text-sky-600 dark:hover:text-sky-400">Introduction</a></li>
           <li><a href="#roles" className="hover:text-sky-600 dark:hover:text-sky-400">User roles</a></li>
           <li><a href="#dashboard" className="hover:text-sky-600 dark:hover:text-sky-400">Dashboard</a></li>
+          <li><a href="#dashboard-customize" className="hover:text-sky-600 dark:hover:text-sky-400">Dashboard customization</a></li>
           <li><a href="#keyboard-shortcuts" className="hover:text-sky-600 dark:hover:text-sky-400">Keyboard shortcuts</a></li>
           <li><a href="#profile" className="hover:text-sky-600 dark:hover:text-sky-400">Profile</a></li>
           <li><a href="#guest-invoices" className="hover:text-sky-600 dark:hover:text-sky-400">Guest Invoices</a></li>
@@ -63,7 +64,6 @@ export default async function HelpPage() {
           <li><a href="#office-requests" className="hover:text-sky-600 dark:hover:text-sky-400">Office Requests</a></li>
           <li><a href="#projects" className="hover:text-sky-600 dark:hover:text-sky-400">Projects</a></li>
           <li><a href="#vendors" className="hover:text-sky-600 dark:hover:text-sky-400">Vendors & Suppliers</a></li>
-          <li><a href="#guest-contacts" className="hover:text-sky-600 dark:hover:text-sky-400">Guest Contacts</a></li>
           <li><a href="#messages" className="hover:text-sky-600 dark:hover:text-sky-400">Messages</a></li>
           <li><a href="#reports" className="hover:text-sky-600 dark:hover:text-sky-400">Reports</a></li>
           <li><a href="#setup" className="hover:text-sky-600 dark:hover:text-sky-400">Setup</a></li>
@@ -120,12 +120,25 @@ export default async function HelpPage() {
           ]} />
           <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Dashboard alerts</h3>
           <p className="mt-2">
-            The Dashboard may show proactive alerts at the top: <strong>Recurring invoices due soon</strong> (rent, subscriptions from Setup), <strong>Reminders due</strong> (e.g. fire extinguisher inspection), <strong>Projects at risk</strong> (deadline approaching). Click an alert to go to the relevant section.
+            The Dashboard may show proactive alerts at the top: <strong>Recurring invoices due soon</strong> (rent, subscriptions from Setup), <strong>Reminders due</strong> (e.g. fire extinguisher inspection), <strong>Projects with deadline soon</strong>. Click an alert to go to the relevant section.
           </p>
           <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Announcements</h3>
           <p className="mt-2">
             Admin can post system-wide announcements. They appear on the Dashboard. Read them for important updates.
           </p>
+          <h3 id="dashboard-customize" className="mt-6 text-base font-semibold text-gray-900 dark:text-white">Dashboard customization</h3>
+          <p className="mt-2">
+            Click <strong>Customize</strong> on the Dashboard to enter edit mode. You can personalise what you see:
+          </p>
+          <StepList steps={[
+            "Click Customize. The layout switches to edit mode.",
+            "Show/hide sections: Alerts, Pending Actions, Your Guests, Metric Cards, Charts, Quick Overview.",
+            "Hide individual metrics (Guest Pending, Guest Paid, Contractor Pending, etc.) from the metric cards.",
+            "Hide page cards you do not use.",
+            "Drag and drop to reorder metric cards and page cards.",
+            "Click Done when finished. Your layout is saved.",
+            "Reset layout to restore the default arrangement.",
+          ]} />
         </section>
 
         {/* Keyboard shortcuts */}
@@ -134,8 +147,9 @@ export default async function HelpPage() {
           <p className="mt-2">
             Press <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:border-gray-600 dark:bg-gray-800">?</kbd> or <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:border-gray-600 dark:bg-gray-800">Shift+/</kbd> to show the shortcuts panel. Or click the footer link.
           </p>
+          <p className="mt-2">The search modal (⌘K / Ctrl+K) searches across invoices, people, and pages. Type to find and jump to a section quickly.</p>
           <ul className="mt-4 space-y-2 text-sm">
-            <li><strong>⌘K / Ctrl+K</strong> — Search (invoices, people)</li>
+            <li><strong>⌘K / Ctrl+K</strong> — Search (invoices, people, pages)</li>
             <li><strong>g then d</strong> — Go to Dashboard</li>
             <li><strong>g then i</strong> — Go to Guest Invoices</li>
             <li><strong>g then c</strong> — Go to Contractor Invoices</li>
@@ -357,7 +371,9 @@ export default async function HelpPage() {
           ]} />
           <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">11.1 Payslip upload and export</h3>
           <p className="mt-2">Upload payslips (PDF) for each salary record. Download or view payslips from the list. Admin can export salary data for reporting.</p>
-          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">11.2 Audit trail</h3>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">11.2 Needs Review status</h3>
+          <p className="mt-2">Salaries can be in three groups: <strong>Pending</strong>, <strong>Needs Review</strong>, <strong>Paid</strong>. Admin can move a salary to Needs Review when there is an issue (e.g. missing data, discrepancy). Items in Needs Review must be resolved before marking as paid.</p>
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">11.3 Audit trail</h3>
           <p className="mt-2">Salary changes are logged. View the audit trail for a record to see who changed what and when.</p>
         </section>
 
@@ -399,6 +415,7 @@ export default async function HelpPage() {
           ]} />
 
           <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">12.4 Assignments (admin/operations)</h3>
+          <p className="mt-2">The Assignments link in the nav shows a badge when there are contractor assignments pending your review. Click it to go to My Availability → Assignments tab.</p>
           <StepList steps={[
             "Go to My Availability → Assignments tab.",
             "Select Department, Programme, and Month.",
@@ -542,21 +559,6 @@ export default async function HelpPage() {
           ]} />
         </section>
 
-        {/* Guest Contacts */}
-        <section id="guest-contacts" className="scroll-mt-24">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">17. Guest Contacts</h2>
-          <p className="mt-2">
-            List of guest names with phone and email extracted from invoices. Admin and admin-selected users only.
-          </p>
-          <StepList steps={[
-            "Go to Guest Contacts from the Dashboard (if you have access).",
-            "View the list. Search and filter by name, department, programme, tags.",
-            "Add or edit contacts. Add tags and categories for organisation.",
-            "Merge duplicate contacts when the same person appears twice.",
-            "Export contacts. Admin configures visibility and export in Setup → Guest Contacts.",
-          ]} />
-        </section>
-
         {/* Messages */}
         <section id="messages" className="scroll-mt-24">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">18. Messages</h2>
@@ -598,7 +600,6 @@ export default async function HelpPage() {
           <ul className="mt-2 list-inside list-disc space-y-1">
             <li><strong>Guest Invoices</strong> — Departments, programmes, department managers, programme overrides, approval delegation, SLA settings, producer colors, admin & finance assignment.</li>
             <li><strong>Contractor Invoices</strong> — Contractor templates, departments, Operations Room members, service descriptions, booked by, additional cost reasons, Istanbul team options.</li>
-            <li><strong>Guest Contacts</strong> — Visibility and export settings for the guest contacts list.</li>
             <li><strong>My Availability</strong> — Contractor Availability Roles (roles shown in the form), Contractor Preference Pool (who appears in My Preference List dropdown), who can approve assignments.</li>
             <li><strong>Delete Permissions</strong> — Which roles can delete invoices.</li>
             <li><strong>Logos</strong> — Upload and manage logos for generated invoices.</li>
@@ -649,6 +650,13 @@ export default async function HelpPage() {
             "Add notes. Change status (if you have permission).",
             "The timeline shows every status change and who did it. Useful for auditing.",
           ]} />
+          <h3 className="mt-6 text-base font-semibold text-gray-900 dark:text-white">23.1 AI extraction and manager confirmation</h3>
+          <p className="mt-2">
+            AI extracts beneficiary, amount, invoice number and bank details from the PDF. If the AI is uncertain, extracted fields show <strong>(needs review)</strong>. You can click <strong>Re-run AI extraction</strong> to re-extract from the file.
+          </p>
+          <p className="mt-2">
+            When approving a guest invoice, managers must tick <strong>&quot;I confirm bank details are correct&quot;</strong> before the Approve button is enabled. If extraction was flagged as needs_review, the manager should verify the bank details first. Click <strong>Confirm</strong> to record that you have checked them, or approve directly after ticking the box.
+          </p>
         </section>
 
         {/* Common operations */}
@@ -705,6 +713,22 @@ export default async function HelpPage() {
             <div>
               <dt className="font-semibold text-gray-900 dark:text-white">Where do I start? What is the Dashboard?</dt>
               <dd className="mt-1">After you log in, you see the Dashboard. It has cards for each section (Guest Invoices, Contractor Invoices, etc.). Click a card to go there. The metric cards at the top show how many items are pending — click &quot;View →&quot; to go straight to them.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900 dark:text-white">How do I customize the Dashboard?</dt>
+              <dd className="mt-1">Click Customize on the Dashboard. You can show/hide sections (Alerts, Metric Cards, etc.), hide individual metrics, hide page cards, and drag to reorder. Click Done when finished. Use Reset layout to restore defaults.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900 dark:text-white">What is the Assignments badge?</dt>
+              <dd className="mt-1">The Assignments link in the nav shows a badge when there are contractor assignments pending your review (admin/operations/manager). Click it to go to My Availability → Assignments tab.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900 dark:text-white">What does &quot;needs review&quot; mean on an invoice?</dt>
+              <dd className="mt-1">AI extraction flagged some fields as uncertain (e.g. amount, bank details). A human should verify them. Managers must tick &quot;I confirm bank details are correct&quot; before approving. You can also click Re-run AI extraction to re-extract from the PDF.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900 dark:text-white">What is Salaries &quot;Needs Review&quot;?</dt>
+              <dd className="mt-1">Admin can move a salary to Needs Review when there is an issue (missing data, discrepancy). Items in Needs Review must be resolved before marking as paid.</dd>
             </div>
             <div>
               <dt className="font-semibold text-gray-900 dark:text-white">I don&apos;t see the Submit button. Why?</dt>
@@ -869,6 +893,8 @@ export default async function HelpPage() {
             <dd>Status for old or closed invoices. Archived invoices are kept but not in active workflows.</dd>
             <dt className="font-semibold text-gray-900 dark:text-white">Duplicate</dt>
             <dd>Invoice that looks similar to another (same beneficiary, amount). System may highlight it in yellow.</dd>
+            <dt className="font-semibold text-gray-900 dark:text-white">Needs review</dt>
+            <dd>Flag on extracted invoice or salary data when the AI is uncertain. A human should verify before approving or marking paid.</dd>
             <dt className="font-semibold text-gray-900 dark:text-white">OTP</dt>
             <dd>One-time password. Used in two-factor authentication (MFA).</dd>
             <dt className="font-semibold text-gray-900 dark:text-white">Slots short view</dt>
