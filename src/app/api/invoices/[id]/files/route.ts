@@ -20,20 +20,28 @@ export async function GET(
     });
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+    const { data: inv } = await supabase.from("invoices").select("storage_path").eq("id", invoiceId).single();
     const { data: files } = await supabase
       .from("invoice_files")
       .select("id, storage_path, file_name, sort_order")
       .eq("invoice_id", invoiceId)
       .order("sort_order", { ascending: true });
 
+    const mainPath = inv?.storage_path ?? null;
+    const mainName = mainPath ? mainPath.split("/").pop() ?? "invoice.pdf" : null;
+
     if (files && files.length > 0) {
-      return NextResponse.json(files.map((f) => ({ storage_path: f.storage_path, file_name: f.file_name })));
+      const hasMain = mainPath && files.some((f) => f.storage_path === mainPath);
+      const list = files.map((f) => ({ storage_path: f.storage_path, file_name: f.file_name }));
+      // Ensure main invoice (Invoice File) is first when it exists but was missing from invoice_files
+      if (mainPath && !hasMain) {
+        return NextResponse.json([{ storage_path: mainPath, file_name: mainName ?? "invoice.pdf" }, ...list]);
+      }
+      return NextResponse.json(list);
     }
 
-    const { data: inv } = await supabase.from("invoices").select("storage_path").eq("id", invoiceId).single();
-    if (inv?.storage_path) {
-      const name = inv.storage_path.split("/").pop() ?? inv.storage_path;
-      return NextResponse.json([{ storage_path: inv.storage_path, file_name: name }]);
+    if (mainPath) {
+      return NextResponse.json([{ storage_path: mainPath, file_name: mainName ?? "invoice.pdf" }]);
     }
 
     return NextResponse.json([]);

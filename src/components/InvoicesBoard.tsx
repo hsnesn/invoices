@@ -1700,12 +1700,20 @@ export function InvoicesBoard({
       const hasMissingInfo = missingFields.length > 0 || ext?.needs_review === true;
 
       const invFiles = (inv as { invoice_files?: { storage_path: string; file_name: string; sort_order: number }[] | null }).invoice_files;
+      const sortedFiles = invFiles && invFiles.length > 0
+        ? [...invFiles].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((f) => ({ storage_path: f.storage_path, file_name: f.file_name }))
+        : [];
+      // Always include main invoice (Invoice File) first; bank form (Int Transfer) from invoice_files
+      const mainPath = inv.storage_path;
+      const mainInFiles = mainPath && sortedFiles.some((f) => f.storage_path === mainPath);
       const files: { storage_path: string; file_name: string }[] =
-        invFiles && invFiles.length > 0
-          ? [...invFiles].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((f) => ({ storage_path: f.storage_path, file_name: f.file_name }))
-          : inv.storage_path
-            ? [{ storage_path: inv.storage_path, file_name: inv.storage_path.split("/").pop() ?? "invoice.pdf" }]
-            : [];
+        mainPath && !mainInFiles
+          ? [{ storage_path: mainPath, file_name: mainPath.split("/").pop() ?? "invoice.pdf" }, ...sortedFiles]
+          : sortedFiles.length > 0
+            ? sortedFiles
+            : mainPath
+              ? [{ storage_path: mainPath, file_name: mainPath.split("/").pop() ?? "invoice.pdf" }]
+              : [];
 
       const isGuestCreated =
         (inv.storage_path?.startsWith("guest-submit/") ?? false) ||

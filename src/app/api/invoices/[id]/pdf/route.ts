@@ -17,18 +17,19 @@ export async function GET(
     const supabaseAdmin = createAdminClient();
     let storagePath: string | null = pathParam;
 
-    if (!storagePath) {
-      const { data: files } = await supabaseAdmin
-        .from("invoice_files")
-        .select("storage_path")
-        .eq("invoice_id", invoiceId)
-        .order("sort_order", { ascending: true })
-        .limit(1);
-      if (files?.[0]) storagePath = files[0].storage_path;
-    }
+    // When no path: Invoice File = main invoice (invoices.storage_path). Only fall back to invoice_files if no main.
     if (!storagePath) {
       const { data: invoice } = await supabaseAdmin.from("invoices").select("storage_path").eq("id", invoiceId).single();
       storagePath = invoice?.storage_path ?? null;
+      if (!storagePath) {
+        const { data: files } = await supabaseAdmin
+          .from("invoice_files")
+          .select("storage_path")
+          .eq("invoice_id", invoiceId)
+          .order("sort_order", { ascending: true })
+          .limit(1);
+        if (files?.[0]) storagePath = files[0].storage_path;
+      }
     }
 
     if (!storagePath) {

@@ -1120,6 +1120,30 @@ export function InvitedGuestsClient({
                         >
                           Invite again
                         </button>
+                        {!first.id.startsWith("inv-") && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!confirm(`Remove "${first.guest_name}" from invited guests? They will remain in the contact list.`)) return;
+                              fetch(`/api/producer-guests/${first.id}`, { method: "DELETE", credentials: "same-origin" })
+                                .then(async (r) => {
+                                  const data = await r.json();
+                                  if (r.ok) {
+                                    toast.success("Removed from invited guests");
+                                    loadGuests();
+                                  } else {
+                                    toast.error((data as { error?: string }).error ?? "Failed to remove");
+                                  }
+                                })
+                                .catch(() => toast.error("Failed to remove"));
+                            }}
+                            className="text-red-600 hover:underline text-xs ml-2"
+                            title="Remove from invited guests (contact list unchanged)"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1329,6 +1353,30 @@ export function InvitedGuestsClient({
                             >
                               Invite again
                             </button>
+                            {!g.id.startsWith("inv-") && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Remove "${g.guest_name}" from invited guests? They will remain in the contact list.`)) return;
+                                  fetch(`/api/producer-guests/${g.id}`, { method: "DELETE", credentials: "same-origin" })
+                                    .then(async (r) => {
+                                      const data = await r.json();
+                                      if (r.ok) {
+                                        toast.success("Removed from invited guests");
+                                        loadGuests();
+                                      } else {
+                                        toast.error((data as { error?: string }).error ?? "Failed to remove");
+                                      }
+                                    })
+                                    .catch(() => toast.error("Failed to remove"));
+                                }}
+                                className="text-red-600 hover:underline text-xs ml-2"
+                                title="Remove from invited guests (contact list unchanged)"
+                              >
+                                Remove
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

@@ -27,9 +27,8 @@ function addPlaceholders(xml) {
   result = result.replace(/<w:t>EUR<\/w:t>/g, "<w:t>{currency}</w:t>");
   result = result.replace(/<w:t>GBP<\/w:t>/g, "<w:t>{currency}</w:t>");
 
-  // 4. Add placeholders in empty table cells
-  // Pattern: empty w:r (no w:t) - add our placeholder
-  // We need to add placeholders in order. The empty cells appear in sequence.
+  // 4. Add placeholders in empty table cells (value cells in Section B)
+  // Empty value cells have <w:p><w:pPr>...</w:pPr></w:p> with no w:r
   const placeholders = [
     "beneficiary_name",
     "iban",
@@ -43,17 +42,21 @@ function addPlaceholders(xml) {
     "intermediary_swift",
   ];
 
+  const runFragment = `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>{PLACEHOLDER}</w:t></w:r>`;
   let count = 0;
-  result = result.replace(
-    /<w:r>(\s*<w:rPr>[\s\S]*?<\/w:rPr>\s*)<\/w:r>(?=\s*<\/w:p>\s*<\/w:tc>)/g,
-    (match) => {
-      if (count < placeholders.length) {
-        const ph = placeholders[count++];
-        return `<w:r>${match.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)[0]}<w:t>{${ph}}</w:t></w:r>`;
-      }
-      return match;
+  // Match empty paragraphs: <w:p ...><w:pPr>...</w:pPr></w:p> with no <w:r> between
+  // Only in Section B (after "Section B"): skip first 4 (Section A empty cells) then add our 10
+  const emptyParaRe = /(<w:p\s[^>]*>)\s*(<w:pPr>[\s\S]*?<\/w:pPr>)\s*<\/w:p>/g;
+  result = result.replace(emptyParaRe, (match, p1, p2) => {
+    if (count < placeholders.length) {
+      const ph = placeholders[count++];
+        return `${p1}${p2}${runFragment.replace("{PLACEHOLDER}", `{${ph}}`)}</w:p>`;
     }
-  );
+    return match;
+  });
+  if (count > 0) {
+    console.log(`  Added ${count} placeholders in empty cells`);
+  }
 
   return result;
 }
@@ -73,7 +76,8 @@ function processTemplate(currency) {
   const xml = docFile.asText();
   const modified = addPlaceholders(xml);
   zip.file("word/document.xml", modified);
-  fs.writeFileSync(srcPath, zip.generate({ type: "nodebuffer" }));
+  const buf = zip.generate({ type: "nodebuffer" });
+  fs.writeFileSync(srcPath, buf);
   console.log(`Updated ${currency}.docx`);
 }
 

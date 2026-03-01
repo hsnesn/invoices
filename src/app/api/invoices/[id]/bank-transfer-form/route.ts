@@ -77,6 +77,7 @@ export async function GET(
     const meta = parseServiceDescription(invoice.service_description);
     const invNumber = meta.invoice_number ?? meta["invoice number"] ?? invoiceId.slice(0, 8);
     const guestName = meta.guest_name ?? meta["guest name"] ?? (beneficiaryName || "Guest");
+    // Use form creation date (when the form is generated)
     const dateStr = new Date().toISOString().slice(0, 10);
     const safeGuestName = guestName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-").slice(0, 40) || "Guest";
     const formFileName = `${validCurrency}-TRTW-${safeGuestName}-${invNumber}-${dateStr}.docx`;
@@ -96,9 +97,36 @@ export async function GET(
 
     const docxBuffer = generateBankTransferForm(formData, validCurrency);
 
-    // Upload to storage and add to invoice_files
-    const storagePath = `${session.user.id}/${invoiceId}-bank-form-${Date.now()}.docx`;
+    // Ensure main invoice is in invoice_files first (Invoice File section); then add bank form (Int Transfer)
+    const { data: existingFiles } = await supabase
+      .from("invoice_files")
+      .select("storage_path, sort_order")
+      .eq("invoice_id", invoiceId)
+      .order("sort_order", { ascending: true });
 
+    const { data: invRow } = await supabase.from("invoices").select("storage_path").eq("id", invoiceId).single();
+    const mainStoragePath = invRow?.storage_path ?? null;
+
+    // Backfill main invoice to invoice_files if missing (so it appears in Invoice File section)
+    if (mainStoragePath) {
+      const mainAlreadyInFiles = existingFiles?.some((f) => f.storage_path === mainStoragePath);
+      if (!mainAlreadyInFiles) {
+        const mainFileName = mainStoragePath.split("/").pop() ?? "invoice.pdf";
+        const minOrder = existingFiles?.length
+          ? Math.min(...existingFiles.map((f) => f.sort_order ?? 0))
+          : 0;
+        const mainSortOrder = minOrder - 1; // So main invoice appears first
+        await supabase.from("invoice_files").insert({
+          invoice_id: invoiceId,
+          storage_path: mainStoragePath,
+          file_name: mainFileName,
+          sort_order: mainSortOrder,
+        });
+      }
+    }
+
+    // Upload bank form and add to invoice_files (Int Transfer)
+    const storagePath = `${session.user.id}/${invoiceId}-bank-form-${Date.now()}.docx`;
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
       .upload(storagePath, docxBuffer, { contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", upsert: false });
@@ -107,12 +135,12 @@ export async function GET(
       console.error("[bank-transfer-form] Storage upload failed:", uploadError.message);
     }
     if (!uploadError) {
-      const { data: existingFiles } = await supabase
+      const { data: afterFiles } = await supabase
         .from("invoice_files")
         .select("sort_order")
         .eq("invoice_id", invoiceId)
         .order("sort_order", { ascending: false });
-      const nextOrder = (existingFiles?.[0]?.sort_order ?? 0) + 1;
+      const nextOrder = (afterFiles?.[0]?.sort_order ?? 0) + 1;
 
       await supabase.from("invoice_files").insert({
         invoice_id: invoiceId,
