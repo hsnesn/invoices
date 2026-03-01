@@ -39,19 +39,22 @@ ${body}
 </div></div></body></html>`;
 }
 
-/** Salary payment confirmation: no TRT UK Operations Platform header/footer, TRT World UK Finance Team at bottom */
-function wrapSalaryPayment(body: string, logoUrl: string = DEFAULT_LOGO_URL) {
+const DEFAULT_FINANCE_EMAIL = "london.finance@trtworld.com";
+
+/** Salary payment confirmation: no header/footer, Finance Team at bottom. financeContactEmail from Setup when available. */
+function wrapSalaryPayment(body: string, logoUrl: string = DEFAULT_LOGO_URL, financeContactEmail: string = DEFAULT_FINANCE_EMAIL) {
+  const email = financeContactEmail?.trim() || DEFAULT_FINANCE_EMAIL;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
 <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-<div style="padding:16px 32px;text-align:center;border-bottom:1px solid #e2e8f0"><img src="${logoUrl}" alt="TRT" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
+<div style="padding:16px 32px;text-align:center;border-bottom:1px solid #e2e8f0"><img src="${logoUrl}" alt="Logo" width="64" height="auto" style="max-width:64px;height:auto;display:inline-block" /></div>
 <div style="padding:28px 32px">
 <h2 style="margin:0 0 16px;font-size:17px;color:#1e293b;font-weight:600">Salary Payment Confirmation</h2>
 ${body}
 </div>
 <div style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center">
-<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1e293b">TRT World UK Finance Team</p>
-<p style="margin:0;font-size:12px;color:#64748b;line-height:1.5">If you think there is an error, please contact <a href="mailto:london.finance@trtworld.com" style="color:#2563eb;text-decoration:none">london.finance@trtworld.com</a> immediately.</p>
+<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1e293b">Finance Team</p>
+<p style="margin:0;font-size:12px;color:#64748b;line-height:1.5">If you think there is an error, please contact <a href="mailto:${email}" style="color:#2563eb;text-decoration:none">${email}</a> immediately.</p>
 </div></div></body></html>`;
 }
 
@@ -693,13 +696,16 @@ export async function sendSalaryPaymentConfirmationEmail(params: {
 </div>`;
 
   const logoUrl = await getLogoUrl("logo_email");
+  const { getCompanySettingsAsync } = await import("@/lib/company-settings");
+  const company = await getCompanySettingsAsync();
   const html = wrapSalaryPayment(
     `
     <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">Your salary payment has been processed successfully.</p>
     ${detailsBlock}
     <p style="margin:0 0 16px;font-size:14px;color:#334155">Status: ${badge("Paid", "#d1fae5", "#065f46")}</p>
   `,
-    logoUrl
+    logoUrl,
+    company.email_finance
   );
 
   if (params.payslipBuffer && params.payslipBuffer.length > 0) {
@@ -733,12 +739,14 @@ const BANK_TRANSFER_FORM_EMAIL = process.env.BANK_TRANSFER_FORM_EMAIL ?? "london
 export async function sendBankTransferFormEmail(params: {
   docxBuffer: Buffer;
   attachmentFilename?: string;
+  recipientEmail?: string;
   beneficiaryName: string;
   amount: string;
   currency: string;
   invoiceNumber?: string | null;
   invoiceId: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const to = params.recipientEmail?.trim() || BANK_TRANSFER_FORM_EMAIL;
   const filename = params.attachmentFilename ?? `bank-transfer-form-${params.invoiceNumber ?? params.invoiceId}.docx`;
   const subject = params.invoiceNumber
     ? `Bank Transfer Form — Invoice ${params.invoiceNumber} (${params.beneficiaryName})`
@@ -755,7 +763,7 @@ export async function sendBankTransferFormEmail(params: {
     <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Türkiye İş Bankası London Branch transfer form. Attachment: ${escapeHtml(filename)}</p>
   `);
   const res = await sendEmailWithAttachment({
-    to: BANK_TRANSFER_FORM_EMAIL,
+    to,
     subject,
     html,
     attachments: [{ filename, content: params.docxBuffer }],

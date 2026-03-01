@@ -8,15 +8,9 @@ import Docxtemplater from "docxtemplater";
 import path from "path";
 import fs from "fs";
 
-const SIGNATURE_NAME = "Hasan ESEN";
-
-/** TRT ordering customer details. Account number varies by currency. */
-const ORDERING_CUSTOMER_BASE = {
-  name: "TRT WORLD (UK)",
-  address: "200 Grays Inn Road, London, WC1X 8XZ",
-};
-
-const ACCOUNT_BY_CURRENCY: Record<"USD" | "EUR" | "GBP", string> = {
+const DEFAULT_SIGNATURE = "Hasan ESEN";
+const DEFAULT_ORDERING = { name: "TRT WORLD (UK)", address: "200 Grays Inn Road, London, WC1X 8XZ" };
+const DEFAULT_ACCOUNTS: Record<"USD" | "EUR" | "GBP", string> = {
   USD: "0611-405810-002",
   EUR: "0611-405810-009",
   GBP: "0611-405810-001",
@@ -43,6 +37,11 @@ export type BankTransferFormData = {
   /** Legacy / compatibility */
   intermediaryBankName?: string;
   intermediarySwift?: string;
+  /** Overrides from Setup (optional). When not set, uses built-in defaults. */
+  _companyName?: string;
+  _companyAddress?: string;
+  _signatureName?: string;
+  _senderAccount?: string;
 };
 
 const TEMPLATE_PATH = path.join(process.cwd(), "src", "templates", "turkiye-is-bankasi-transfer-template.docx");
@@ -66,6 +65,10 @@ function loadTemplateBuffer(): Buffer {
 export function generateBankTransferForm(data: BankTransferFormData): Buffer {
   const templateBuffer = loadTemplateBuffer();
   const zip = new PizZip(templateBuffer);
+  const companyName = data._companyName?.trim() || DEFAULT_ORDERING.name;
+  const companyAddress = data._companyAddress?.trim() || DEFAULT_ORDERING.address;
+  const signature = data._signatureName?.trim() || DEFAULT_SIGNATURE;
+  const senderAccount = data._senderAccount ?? data.sender_account_number;
 
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
@@ -75,10 +78,10 @@ export function generateBankTransferForm(data: BankTransferFormData): Buffer {
 
   doc.render({
     date: data.date,
-    sender_account_number: data.sender_account_number,
-    ordering_customer_name: ORDERING_CUSTOMER_BASE.name,
-    ordering_customer_address: ORDERING_CUSTOMER_BASE.address,
-    ordering_customer_account: data.sender_account_number,
+    sender_account_number: senderAccount,
+    ordering_customer_name: companyName,
+    ordering_customer_address: companyAddress,
+    ordering_customer_account: senderAccount,
     beneficiary_name: data.beneficiary_name,
     beneficiary_address: data.beneficiary_address || "",
     iban: data.iban,
@@ -94,10 +97,11 @@ export function generateBankTransferForm(data: BankTransferFormData): Buffer {
     daytime_phone: data.daytime_phone ?? "",
     intermediary_bank_name: data.intermediaryBankName || "",
     intermediary_swift: data.intermediarySwift || "",
-    signature: SIGNATURE_NAME,
+    signature,
   });
 
   return Buffer.from(doc.getZip().generate({ type: "nodebuffer" }));
 }
 
-export { ACCOUNT_BY_CURRENCY };
+/** For backwards compatibility. Prefer passing account via data._senderAccount from company settings. */
+export const ACCOUNT_BY_CURRENCY = DEFAULT_ACCOUNTS;

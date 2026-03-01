@@ -17,6 +17,7 @@ import { DeletePermissionsSection } from "@/components/DeletePermissionsSection"
 import { VendorsSetupSection } from "@/components/VendorsSetupSection";
 import { AnnouncementsSetupSection } from "@/components/AnnouncementsSetupSection";
 import { RecurringInvoicesSetupSection } from "@/components/RecurringInvoicesSetupSection";
+import { CompanyContactsSetupSection } from "@/components/CompanyContactsSetupSection";
 
 interface Department {
   id: string;
@@ -32,6 +33,7 @@ interface Program {
 }
 
 const TABS = [
+  { key: "company", label: "Company & contacts", color: "bg-slate-500" },
   { key: "guest", label: "Guest Invoices", color: "bg-blue-500" },
   { key: "freelancer", label: "Contractor Invoices", color: "bg-teal-500" },
   { key: "guest_contacts", label: "Guest Contacts", color: "bg-violet-500" },
@@ -48,7 +50,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export default function AdminSetupPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>("guest");
+  const [activeTab, setActiveTab] = useState<TabKey>("company");
 
   return (
     <div className="space-y-6">
@@ -73,6 +75,7 @@ export default function AdminSetupPage() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === "company" && <CompanyContactsSetupSection />}
       {activeTab === "guest" && <GuestInvoiceSetup />}
       {activeTab === "freelancer" && <FreelancerSetup />}
       {activeTab === "guest_contacts" && <GuestContactsSetupSection />}
@@ -126,7 +129,6 @@ function GuestInvoiceSetup() {
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [editingProg, setEditingProg] = useState<Program | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "dept" | "prog"; id: string } | null>(null);
-  const [resetConfirm, setResetConfirm] = useState(false);
 
   const refresh = () => {
     fetch("/api/admin/departments")
@@ -358,39 +360,8 @@ function GuestInvoiceSetup() {
     }
   };
 
-  const resetList = async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/admin/setup/reset", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      setResetConfirm(false);
-      if (res.ok) {
-        refresh();
-        setMessage({ type: "success", text: "List reset to defaults." });
-      } else {
-        setMessage({ type: "error", text: (data as { error?: string }).error || "Reset failed." });
-      }
-    } catch {
-      setResetConfirm(false);
-      setMessage({ type: "error", text: "Connection error." });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={() => setResetConfirm(true)}
-          className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm text-amber-700 hover:bg-amber-500/20 dark:text-amber-200"
-        >
-          Reset to defaults
-        </button>
-      </div>
-
       {message && (
         <div className={`rounded-lg border p-3 text-sm ${
           message.type === "success"
@@ -547,19 +518,6 @@ function GuestInvoiceSetup() {
           To change roles, go to Admin → Users and edit each user&apos;s role.
         </p>
       </div>
-
-      {/* Reset Confirm Modal */}
-      {resetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
-            <p className="mb-4 text-gray-800 dark:text-gray-200">All departments and programs will be deleted and reset to defaults. Continue?</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setResetConfirm(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800">Cancel</button>
-              <button onClick={resetList} disabled={loading} className="rounded-lg bg-amber-600 px-4 py-2 text-white hover:bg-amber-500 disabled:opacity-50">Reset</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Delete Confirm Modal */}
       {deleteConfirm && (

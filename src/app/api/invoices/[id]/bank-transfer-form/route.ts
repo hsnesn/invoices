@@ -7,7 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
-import { generateBankTransferForm, ACCOUNT_BY_CURRENCY } from "@/lib/bank-transfer-form";
+import { generateBankTransferForm } from "@/lib/bank-transfer-form";
+import { getCompanySettingsAsync, getBankAccountByCurrency } from "@/lib/company-settings";
 import { createAuditEvent } from "@/lib/audit";
 import { sendBankTransferFormEmail } from "@/lib/email";
 
@@ -99,8 +100,9 @@ export async function GET(
         const invRow = inv as { bank_transfer_form_status?: string; bank_transfer_currency?: string; currency?: string } | null;
         const formStatus = (bankMeta as { bank_transfer_form_status?: string } | null)?.bank_transfer_form_status ?? "READY";
         const currencyFinal = (bankMeta as { bank_transfer_currency?: string } | null)?.bank_transfer_currency ?? invRow?.currency ?? invoice.currency ?? "";
+        const companySettings = await getCompanySettingsAsync();
         const senderAccount = currencyFinal && SUPPORTED_CURRENCIES.includes(currencyFinal as (typeof SUPPORTED_CURRENCIES)[number])
-          ? ACCOUNT_BY_CURRENCY[currencyFinal as (typeof SUPPORTED_CURRENCIES)[number]]
+          ? getBankAccountByCurrency(companySettings, currencyFinal as (typeof SUPPORTED_CURRENCIES)[number])
           : "";
 
         return new NextResponse(new Uint8Array(buf), {
@@ -142,7 +144,8 @@ export async function GET(
       );
     }
     const validCurrency = currencyFinal as (typeof SUPPORTED_CURRENCIES)[number];
-    const senderAccount = ACCOUNT_BY_CURRENCY[validCurrency];
+    const companySettings = await getCompanySettingsAsync();
+    const senderAccount = getBankAccountByCurrency(companySettings, validCurrency);
 
     const parsed = parseServiceDescription(invoice.service_description);
     const parsedInvoiceNumber = parsed.invoice_number ?? null;
@@ -169,6 +172,10 @@ export async function GET(
     const formData = {
       date: dateStr,
       sender_account_number: senderAccount,
+      _companyName: companySettings.company_name,
+      _companyAddress: companySettings.company_address,
+      _signatureName: companySettings.signature_name,
+      _senderAccount: senderAccount,
       beneficiary_name: beneficiaryName,
       iban,
       swift_bic: swiftBic,
@@ -238,6 +245,7 @@ export async function GET(
     const emailResult = await sendBankTransferFormEmail({
       docxBuffer,
       attachmentFilename: formFileName,
+      recipientEmail: companySettings.email_bank_transfer,
       beneficiaryName,
       amount: amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: validCurrency,
