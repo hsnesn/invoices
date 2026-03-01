@@ -16,6 +16,13 @@ function asString(value: unknown): string | null {
   return v.length ? v : null;
 }
 
+/** Returns a valid date string or null; never empty string (PostgreSQL date rejects ""). */
+function toDateOrNull(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const s = typeof value === "string" ? value.trim() : String(value).trim();
+  return s.length ? s : null;
+}
+
 function parseOldDescription(desc: string): Record<string, string> {
   const result: Record<string, string> = {};
   for (const line of desc.split("\n")) {
@@ -242,11 +249,13 @@ export async function PATCH(
         producerUserId = producerProfile?.id ?? null;
       }
 
+      const svcFrom = toDateOrNull(tx_date_1 ?? oldDesc["tx date"] ?? oldDesc["tx date 1"]) ?? (existing as { service_date_from?: string | null }).service_date_from ?? null;
+      const svcTo = toDateOrNull(tx_date_3 ?? tx_date_2 ?? tx_date_1 ?? oldDesc["3. tx date"] ?? oldDesc["2. tx date"] ?? oldDesc["tx date"]) ?? (existing as { service_date_to?: string | null }).service_date_to ?? null;
       const invoiceUpdate: Record<string, unknown> = {
         service_description,
         producer_user_id: producerUserId,
-        service_date_from: tx_date_1 ?? oldDesc["tx date"] ?? oldDesc["tx date 1"] ?? (existing as { service_date_from?: string | null }).service_date_from ?? null,
-        service_date_to: tx_date_3 ?? tx_date_2 ?? tx_date_1 ?? oldDesc["3. tx date"] ?? oldDesc["2. tx date"] ?? oldDesc["tx date"] ?? (existing as { service_date_to?: string | null }).service_date_to ?? null,
+        service_date_from: svcFrom,
+        service_date_to: svcTo,
       };
       if (body.department_id !== undefined) invoiceUpdate.department_id = body.department_id || null;
       if (body.program_id !== undefined) invoiceUpdate.program_id = body.program_id || null;
@@ -312,7 +321,7 @@ export async function PATCH(
       if (bankNameVal !== undefined) rawJson.bank_name = bankNameVal || null;
       if (bankAddrVal !== undefined) rawJson.bank_address = bankAddrVal || null;
       if (body.company_name !== undefined) rawJson.company_name = asString(body.company_name) || null;
-      if (body.due_date !== undefined) rawJson.due_date = asString(body.due_date) || null;
+      if (body.due_date !== undefined) rawJson.due_date = toDateOrNull(body.due_date as string) || null;
 
       const parseNum = (v: unknown): number | null => {
         if (v == null) return null;
@@ -344,7 +353,7 @@ export async function PATCH(
                     : null)
                 : cur.gross_amount,
             extracted_currency: asString(body.extracted_currency) ?? cur.extracted_currency ?? null,
-            invoice_date: asString(body.invoice_date) ?? (cur.invoice_date as string) ?? null,
+            invoice_date: toDateOrNull(body.invoice_date as string) ?? (cur.invoice_date as string) ?? null,
             net_amount: netVal ?? cur.net_amount ?? null,
             vat_amount: vatVal ?? cur.vat_amount ?? null,
             raw_json: Object.keys(rawJson).length > 0 ? rawJson : existingRaw,

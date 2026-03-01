@@ -27,11 +27,17 @@ function fmtAmount(amount: number | null | undefined, currency?: string | null):
   return `${sym}${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** Guest invoice template - lines starting with these labels are not meaningful purpose for "other" invoices. */
+const GUEST_TEMPLATE_LINE = /^\s*(Guest Name:|Guest Phone:|Guest Email:|Title:|Producer:|Topic:|Invoice Date:|TX Date:|2\. TX Date:|3\. TX Date:|Payment Type:|Department Name:|Programme Name:|Source:)\s*.*$/gm;
+
 function cleanPurpose(desc: string | null | undefined): string {
   if (!desc?.trim()) return "—";
   const s = desc.trim();
   if (s.toLowerCase().startsWith("other invoice:")) return "—";
-  return s;
+  // Strip guest invoice template format (Guest Name:, Title:, Producer:, etc.)
+  const stripped = s.replace(GUEST_TEMPLATE_LINE, "").replace(/\n+/g, "\n").trim();
+  if (!stripped) return "—";
+  return stripped;
 }
 
 type ApiRow = {
@@ -147,8 +153,8 @@ function EditOtherInvoiceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <h3 className="font-semibold text-gray-900 dark:text-white">Edit Other Invoice</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300">
@@ -771,8 +777,8 @@ export function OtherInvoicesBoard({
         if (draft.gross_amount != null) body.gross_amount = draft.gross_amount;
         if (draft.extracted_currency != null) body.extracted_currency = draft.extracted_currency;
         if (draft.company_name != null) body.company_name = draft.company_name;
-        if (draft.invoice_date != null) body.invoice_date = draft.invoice_date;
-        if (draft.due_date != null) body.due_date = draft.due_date;
+        if (draft.invoice_date !== undefined) body.invoice_date = draft.invoice_date;
+        if (draft.due_date !== undefined) body.due_date = draft.due_date;
         if (draft.service_description != null) body.service_description = draft.service_description;
         const res = await fetch(`/api/invoices/${editModalRow.id}`, {
           method: "PATCH",
