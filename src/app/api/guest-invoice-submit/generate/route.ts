@@ -166,10 +166,10 @@ export async function POST(request: NextRequest) {
     };
 
     // Prefer token override (producer's link data) over producer_guests when present
-    const programName = (t.program_name ?? g.program_name ?? "").trim() || g.program_name ?? "";
+    const programName = ((t.program_name ?? g.program_name ?? "").trim() || g.program_name) ?? "";
     const recordingDate = (t.recording_date ?? g.recording_date ?? "").trim() || g.recording_date || new Date().toISOString().slice(0, 10);
     const recordingTopic = (t.recording_topic ?? g.recording_topic ?? "").trim() || g.recording_topic || "the programme";
-    const guestTitle = (t.title ?? g.title ?? "").trim() || g.title ?? "";
+    const guestTitle = ((t.title ?? g.title ?? "").trim() || g.title) ?? "";
     const amount = Math.max(0, t.payment_amount ?? g.payment_amount ?? 0);
     const currency = ((t.payment_currency ?? g.payment_currency) as "GBP" | "EUR" | "USD") ?? "GBP";
 

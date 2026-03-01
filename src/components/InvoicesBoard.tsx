@@ -734,14 +734,17 @@ function InvoiceTable({
               />
             </th>
             )}
-            {ALL_COLUMNS.filter((c) => c.key !== "checkbox" && isCol(c.key)).map((c) => (
-              <th
-                key={c.key}
-                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200"
-              >
-                {c.label}
-              </th>
-            ))}
+            {visibleColumns.filter((k) => k !== "checkbox" && isCol(k)).map((key) => {
+              const c = ALL_COLUMNS.find((col) => col.key === key);
+              return c ? (
+                <th
+                  key={c.key}
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200"
+                >
+                  {c.label}
+                </th>
+              ) : null;
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-slate-50 dark:divide-slate-600 dark:bg-slate-800">
@@ -774,8 +777,11 @@ function InvoiceTable({
                 ) : null}
               </td>
               )}
-              {isCol("status") && (
-              <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+              {(() => {
+                const cells: Record<string, React.ReactNode> = {};
+                const add = (key: string, el: React.ReactNode) => { if (isCol(key)) cells[key] = el; };
+                add("status",
+              <td key="status" className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                 {r.status === "pending_manager" && canApprove ? (
                   <div className="flex items-center justify-center gap-1">
                     <button
@@ -872,9 +878,9 @@ function InvoiceTable({
                 </div>
               )}
               </td>
-              )}
-              {isCol("guest") && (
-              <td className="px-4 py-3 text-sm font-medium text-gray-900">
+              );
+                add("guest",
+              <td key="guest" className="px-4 py-3 text-sm font-medium text-gray-900">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className="cursor-pointer"
@@ -901,18 +907,19 @@ function InvoiceTable({
                   )}
                 </div>
               </td>
-              )}
-              {isCol("title") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.title}>{r.title}</td>}
-              {isCol("producer") && <td className="px-4 py-3 text-sm text-gray-700"><div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColorsMap[r.producer] ? "" : producerColor(r.producer)}`} style={producerColorsMap[r.producer] ? { backgroundColor: producerColorsMap[r.producer] } : undefined}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div></td>}
-              {isCol("paymentType") && <td className="px-4 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span></td>}
-              {isCol("department") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span></td>}
-              {isCol("programme") && <td className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={programmeBadgeStyle(r.programme)}>{r.programme}</span></td>}
-              {isCol("topic") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.topic}>{r.topic}</td>}
-              {isCol("tx1") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx1}</td>}
-              {isCol("tx2") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx2}</td>}
-              {isCol("tx3") && <td className="px-4 py-3 text-sm text-gray-600">{r.tx3}</td>}
-              {isCol("invoiceDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.invoiceDate}</td>}
-              {isCol("file") && <td
+              );
+                add("title", <td key="title" className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.title}>{r.title}</td>);
+                add("producer", <td key="producer" className="px-4 py-3 text-sm text-gray-700"><div className="group relative inline-flex items-center"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white cursor-pointer ${producerColorsMap[r.producer] ? "" : producerColor(r.producer)}`} style={producerColorsMap[r.producer] ? { backgroundColor: producerColorsMap[r.producer] } : undefined}>{r.producer.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span><span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">{r.producer}</span></div></td>);
+                add("paymentType", <td key="paymentType" className="px-4 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${paymentTypeBadge(r.paymentType)}`}>{r.paymentType.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span></td>);
+                add("department", <td key="department" className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={departmentBadgeStyle(r.department)}>{r.department}</span></td>);
+                add("programme", <td key="programme" className="px-4 py-3"><span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={programmeBadgeStyle(r.programme)}>{r.programme}</span></td>);
+                add("topic", <td key="topic" className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.topic}>{r.topic}</td>);
+                add("tx1", <td key="tx1" className="px-4 py-3 text-sm text-gray-600">{r.tx1}</td>);
+                add("tx2", <td key="tx2" className="px-4 py-3 text-sm text-gray-600">{r.tx2}</td>);
+                add("tx3", <td key="tx3" className="px-4 py-3 text-sm text-gray-600">{r.tx3}</td>);
+                add("invoiceDate", <td key="invoiceDate" className="px-4 py-3 text-sm text-gray-600">{r.invoiceDate}</td>);
+                add("file", <td
+                key="file"
                 className={`px-4 py-3 min-w-[140px] transition-colors ${fileDropTargetId === r.id ? "bg-amber-100 dark:bg-amber-900/30" : ""}`}
                 onClick={(e) => e.stopPropagation()}
                 onDragOver={(e) => {
@@ -981,10 +988,11 @@ function InvoiceTable({
                   </>
                 )}
                 </div>
-              </td>}
-              {isCol("accountName") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountName}>{r.accountName}</td>}
-              {isCol("amount") && (
-                <td className="px-4 py-3 text-sm text-gray-700">
+              </td>
+              );
+                add("accountName", <td key="accountName" className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountName}>{r.accountName}</td>);
+                add("amount",
+                <td key="amount" className="px-4 py-3 text-sm text-gray-700">
                   <span className="inline-flex items-center gap-1">
                     {r.amount}
                     {r.anomalyFlags?.length > 0 && (
@@ -998,17 +1006,17 @@ function InvoiceTable({
                     )}
                   </span>
                 </td>
-              )}
-              {isCol("currency") && <td className="px-4 py-3 text-sm text-gray-700">{r.currency}</td>}
-              {isCol("invNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.invNumber}>{r.invNumber}</td>}
-              {isCol("sortCode") && <td className="px-4 py-3 text-sm text-gray-700">{r.sortCode}</td>}
-              {isCol("accountNumber") && <td className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountNumber}>{r.accountNumber}</td>}
-              {isCol("iban") && <td className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.iban}>{r.iban}</td>}
-              {isCol("swiftBic") && <td className="max-w-[100px] truncate px-4 py-3 text-sm text-gray-700" title={r.swiftBic}>{r.swiftBic}</td>}
-              {isCol("bankName") && <td className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankName}>{r.bankName}</td>}
-              {isCol("bankAddress") && <td className="max-w-[160px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankAddress}>{r.bankAddress}</td>}
-              {isCol("intTransfer") && (
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                );
+                add("currency", <td key="currency" className="px-4 py-3 text-sm text-gray-700">{r.currency}</td>);
+                add("invNumber", <td key="invNumber" className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.invNumber}>{r.invNumber}</td>);
+                add("sortCode", <td key="sortCode" className="px-4 py-3 text-sm text-gray-700">{r.sortCode}</td>);
+                add("accountNumber", <td key="accountNumber" className="max-w-[120px] truncate px-4 py-3 text-sm text-gray-700" title={r.accountNumber}>{r.accountNumber}</td>);
+                add("iban", <td key="iban" className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.iban}>{r.iban}</td>);
+                add("swiftBic", <td key="swiftBic" className="max-w-[100px] truncate px-4 py-3 text-sm text-gray-700" title={r.swiftBic}>{r.swiftBic}</td>);
+                add("bankName", <td key="bankName" className="max-w-[140px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankName}>{r.bankName}</td>);
+                add("bankAddress", <td key="bankAddress" className="max-w-[160px] truncate px-4 py-3 text-sm text-gray-700" title={r.bankAddress}>{r.bankAddress}</td>);
+                add("intTransfer",
+                <td key="intTransfer" className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   {(() => {
                     const bankFormFile = r.files.find((f) => f.file_name.includes("-TRTW-") && f.file_name.toLowerCase().endsWith(".docx"));
                     const isInternational = r.iban !== "—" && r.swiftBic !== "—";
@@ -1039,11 +1047,11 @@ function InvoiceTable({
                     return <span className="text-gray-400">—</span>;
                   })()}
                 </td>
-              )}
-              {isCol("lineManager") && <td className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>}
-              {isCol("paymentDate") && <td className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>}
-              {isCol("tags") && (
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                );
+                add("lineManager", <td key="lineManager" className="px-4 py-3 text-sm text-gray-600">{r.lineManager}</td>);
+                add("paymentDate", <td key="paymentDate" className="px-4 py-3 text-sm text-gray-600">{r.paymentDate}</td>);
+                add("tags",
+                <td key="tags" className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex flex-wrap items-center gap-1">
                     {r.tags.map((tag) => (
                       <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
@@ -1082,8 +1090,8 @@ function InvoiceTable({
                     )}
                   </div>
                 </td>
-              )}
-              {isCol("actions") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                );
+                add("actions", <td key="actions" className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 {(() => {
                   const submitterCanEdit = isSubmitter && (r.status === "pending_manager" || r.status === "submitted");
                   const submitterCanResubmit = isSubmitter && r.status === "rejected" && currentRole !== "viewer";
@@ -1180,7 +1188,10 @@ function InvoiceTable({
                     </span>
                   );
                 })()}
-              </td>}
+              </td>
+              );
+                return visibleColumns.filter((k) => k !== "checkbox").map((k) => cells[k] ? <React.Fragment key={k}>{cells[k]}</React.Fragment> : null);
+              })()}
               </tr>
               {/* Expanded Detail Row */}
               {expandedRowId === r.id && (
@@ -2409,12 +2420,25 @@ export function InvoicesBoard({
     }
   }, []);
 
-  // Column visibility (order follows DEFAULT_VISIBLE_COLUMNS = ready_for_payment layout)
+  // Column visibility and order (persisted in localStorage)
   const toggleColumn = useCallback((key: string) => {
     setVisibleColumns((prev) => {
       const next = prev.includes(key)
         ? prev.filter((k) => k !== key)
         : DEFAULT_VISIBLE_COLUMNS.filter((k) => prev.includes(k) || k === key);
+      localStorage.setItem("invoice_visible_columns", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const moveColumn = useCallback((key: string, direction: "up" | "down") => {
+    setVisibleColumns((prev) => {
+      const idx = prev.indexOf(key);
+      if (idx < 0) return prev;
+      const nextIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (nextIdx < 0 || nextIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[nextIdx]] = [next[nextIdx], next[idx]];
       localStorage.setItem("invoice_visible_columns", JSON.stringify(next));
       return next;
     });
@@ -3010,9 +3034,24 @@ export function InvoicesBoard({
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="mb-2 text-xs font-semibold text-gray-500 uppercase dark:text-slate-400">Toggle Columns</p>
-                {ALL_COLUMNS.filter((c) => c.key !== "checkbox").map((c) => (
-                  <label key={c.key} className="flex items-center gap-2 py-0.5 text-xs text-gray-700 cursor-pointer hover:text-gray-900 dark:text-slate-200 dark:hover:text-white">
-                    <input type="checkbox" checked={visibleColumns.includes(c.key)} onChange={() => toggleColumn(c.key)} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600" onClick={(e) => e.stopPropagation()} />
+                {visibleColumns.filter((k) => k !== "checkbox").map((key, i) => {
+                  const c = ALL_COLUMNS.find((col) => col.key === key);
+                  if (!c) return null;
+                  const label = c.label || c.key;
+                  return (
+                    <div key={c.key} className="flex items-center gap-1 py-0.5 text-xs text-gray-700 dark:text-slate-200 group">
+                      <input type="checkbox" checked id={`col-${c.key}`} onChange={() => toggleColumn(c.key)} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600" onClick={(e) => e.stopPropagation()} />
+                      <div className="flex flex-col opacity-70 group-hover:opacity-100">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); moveColumn(c.key, "up"); }} disabled={i === 0} aria-label={`Move ${label} up`} className="p-0.5 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-slate-700 rounded">▲</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); moveColumn(c.key, "down"); }} disabled={i === visibleColumns.filter((k) => k !== "checkbox").length - 1} aria-label={`Move ${label} down`} className="p-0.5 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-slate-700 rounded">▼</button>
+                      </div>
+                      <label htmlFor={`col-${c.key}`} className="flex-1 cursor-pointer min-w-0 truncate">{label}</label>
+                    </div>
+                  );
+                })}
+                {ALL_COLUMNS.filter((c) => c.key !== "checkbox" && !visibleColumns.includes(c.key)).map((c) => (
+                  <label key={c.key} className="flex items-center gap-2 py-0.5 text-xs text-gray-500 cursor-pointer hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200">
+                    <input type="checkbox" checked={false} onChange={() => toggleColumn(c.key)} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600" onClick={(e) => e.stopPropagation()} />
                     {c.label || c.key}
                   </label>
                 ))}

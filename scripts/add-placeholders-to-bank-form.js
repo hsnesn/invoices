@@ -31,6 +31,7 @@ function addPlaceholders(xml) {
   // Empty value cells have <w:p><w:pPr>...</w:pPr></w:p> with no w:r
   const placeholders = [
     "beneficiary_name",
+    "beneficiary_address",
     "iban",
     "bank_sort_code",
     "swift_bic",
@@ -98,7 +99,7 @@ function main() {
     }
     processTemplate(c);
   }
-  console.log("Done. Placeholders: {date}, {beneficiary_name}, {iban}, {currency}, {bank_sort_code}, {swift_bic}, {bank_name}, {bank_address}, {amount}, {message}, {signature}, {intermediary_bank_name}, {intermediary_swift}");
+  console.log("Done. Placeholders: {date}, {beneficiary_name}, {beneficiary_address}, {iban}, {currency}, {bank_sort_code}, {swift_bic}, {bank_name}, {bank_address}, {amount}, {message}, {signature}, {intermediary_bank_name}, {intermediary_swift}");
 }
 
 main();

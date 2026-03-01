@@ -29,6 +29,7 @@ type ProducerGuest = {
   notes?: string | null;
   is_favorite?: boolean | null;
   created_at: string;
+  source?: "producer_guests" | "guest_invitations";
 };
 
 export function InvitedGuestsClient({
@@ -231,7 +232,7 @@ export function InvitedGuestsClient({
 
   // One-click re-invite: fetch last invitation when opening invite modal for existing guest
   useEffect(() => {
-    if (!inviteModal || inviteModal === "new" || inviteModal.id.startsWith("inv-")) return;
+    if (!inviteModal || inviteModal === "new" || inviteModal.source === "guest_invitations") return;
     const guestId = inviteModal.id;
     fetch(`/api/producer-guests/${guestId}/last-invitation`, { credentials: "same-origin" })
       .then((r) => r.json())
@@ -360,7 +361,7 @@ export function InvitedGuestsClient({
 
   const selectedGuests = filteredGuests.filter((g) => selectedIds.has(g.id));
   const selectedWithEmail = selectedGuests.filter((g) => g.email && g.email.includes("@"));
-  const selectedDeletable = selectedGuests.filter((g) => !g.id.startsWith("inv-"));
+  const selectedDeletable = selectedGuests;
 
   const handleSendInvite = async () => {
     if (!form.guest_name.trim()) {
@@ -388,7 +389,7 @@ export function InvitedGuestsClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          producer_guest_id: inviteModal && inviteModal !== "new" && !inviteModal.id.startsWith("inv-") ? inviteModal.id : undefined,
+          producer_guest_id: inviteModal && inviteModal !== "new" && inviteModal.source === "producer_guests" ? inviteModal.id : undefined,
           guest_name: form.guest_name.trim(),
           email: form.email.trim(),
           title: form.title.trim(),
@@ -444,7 +445,7 @@ export function InvitedGuestsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           guests: selectedWithEmail.map((g) => ({
-            producer_guest_id: g.id.startsWith("inv-") ? undefined : g.id,
+            producer_guest_id: g.source === "producer_guests" ? g.id : undefined,
             guest_name: g.guest_name,
             email: g.email!,
             title: g.title || "Guest",
@@ -503,7 +504,7 @@ export function InvitedGuestsClient({
 
   const handleBulkMarkAccepted = async () => {
     const idsToAccept = selectedGuests
-      .filter((g) => g.accepted !== true && g.email?.includes("@") && !g.id.startsWith("inv-"))
+      .filter((g) => g.accepted !== true && g.email?.includes("@") && g.source === "producer_guests")
       .map((g) => g.id);
     if (idsToAccept.length === 0) {
       toast.error("Select at least one invited guest (not yet accepted) with email");
@@ -630,7 +631,7 @@ export function InvitedGuestsClient({
     setSending(true);
     try {
       let guestId = acceptanceModal.id;
-      if (guestId.startsWith("inv-")) {
+      if (acceptanceModal.source === "guest_invitations") {
         const createRes = await fetch("/api/producer-guests", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -833,7 +834,7 @@ export function InvitedGuestsClient({
           </button>
           <button
             onClick={openBulkAcceptModal}
-            disabled={selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).length === 0}
+            disabled={selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@") && g.source === "producer_guests").length === 0}
             className={`${btnBase} ${btnEmerald} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             Bulk mark accepted
@@ -1150,30 +1151,28 @@ export function InvitedGuestsClient({
                         >
                           Invite again
                         </button>
-                        {!first.id.startsWith("inv-") && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!confirm(`Remove "${first.guest_name}" from invited guests? They will remain in the contact list.`)) return;
-                              fetch(`/api/producer-guests/${first.id}`, { method: "DELETE", credentials: "same-origin" })
-                                .then(async (r) => {
-                                  const data = await r.json();
-                                  if (r.ok) {
-                                    toast.success("Removed from invited guests");
-                                    loadGuests();
-                                  } else {
-                                    toast.error((data as { error?: string }).error ?? "Failed to remove");
-                                  }
-                                })
-                                .catch(() => toast.error("Failed to remove"));
-                            }}
-                            className="text-red-600 hover:underline text-xs ml-2"
-                            title="Remove from invited guests (contact list unchanged)"
-                          >
-                            Remove
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!confirm(`Remove "${first.guest_name}" from invited guests? They will remain in the contact list.`)) return;
+                            fetch(`/api/producer-guests/${first.id}`, { method: "DELETE", credentials: "same-origin" })
+                              .then(async (r) => {
+                                const data = await r.json();
+                                if (r.ok) {
+                                  toast.success("Removed from invited guests");
+                                  loadGuests();
+                                } else {
+                                  toast.error((data as { error?: string }).error ?? "Failed to remove");
+                                }
+                              })
+                              .catch(() => toast.error("Failed to remove"));
+                          }}
+                          className="text-red-600 hover:underline text-xs ml-2"
+                          title="Remove from invited guests (contact list unchanged)"
+                        >
+                          Remove
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1383,30 +1382,28 @@ export function InvitedGuestsClient({
                             >
                               Invite again
                             </button>
-                            {!g.id.startsWith("inv-") && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!confirm(`Remove "${g.guest_name}" from invited guests? They will remain in the contact list.`)) return;
-                                  fetch(`/api/producer-guests/${g.id}`, { method: "DELETE", credentials: "same-origin" })
-                                    .then(async (r) => {
-                                      const data = await r.json();
-                                      if (r.ok) {
-                                        toast.success("Removed from invited guests");
-                                        loadGuests();
-                                      } else {
-                                        toast.error((data as { error?: string }).error ?? "Failed to remove");
-                                      }
-                                    })
-                                    .catch(() => toast.error("Failed to remove"));
-                                }}
-                                className="text-red-600 hover:underline text-xs ml-2"
-                                title="Remove from invited guests (contact list unchanged)"
-                              >
-                                Remove
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!confirm(`Remove "${g.guest_name}" from invited guests? They will remain in the contact list.`)) return;
+                                fetch(`/api/producer-guests/${g.id}`, { method: "DELETE", credentials: "same-origin" })
+                                  .then(async (r) => {
+                                    const data = await r.json();
+                                    if (r.ok) {
+                                      toast.success("Removed from invited guests");
+                                      loadGuests();
+                                    } else {
+                                      toast.error((data as { error?: string }).error ?? "Failed to remove");
+                                    }
+                                  })
+                                  .catch(() => toast.error("Failed to remove"));
+                              }}
+                              className="text-red-600 hover:underline text-xs ml-2"
+                              title="Remove from invited guests (contact list unchanged)"
+                            >
+                              Remove
+                            </button>
                           </td>
                         </tr>
                       );
@@ -2213,7 +2210,7 @@ ${selectedProducer.full_name}`}
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Bulk mark accepted</h2>
             <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-              Marking {selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).length} guest(s) as accepted. Invoice generation is not available for bulk; use single flow for that.
+              Marking {selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@") && g.source === "producer_guests").length} guest(s) as accepted. Invoice generation is not available for bulk; use single flow for that.
             </p>
             <div className="mb-4 max-h-24 overflow-y-auto rounded border p-2 text-xs">
               {selectedGuests.filter((g) => g.accepted !== true && g.email?.includes("@")).map((g) => (

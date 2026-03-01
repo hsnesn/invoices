@@ -1,6 +1,6 @@
 /**
- * Update or delete producer guest.
- * Delete only removes from producer_guests; guest_contacts (contact list) is never touched.
+ * Update or delete producer guest / guest invitation.
+ * Delete only removes from producer_guests or guest_invitations; guest_contacts (contact list) is never touched.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -17,24 +17,31 @@ export async function DELETE(
     const { id } = await params;
     const supabase = createAdminClient();
 
-    // Only real producer_guests (uuid) can be deleted; synthetic inv-* rows are from guest_invitations
-    if (id.startsWith("inv-")) {
-      return NextResponse.json({ error: "Cannot delete invitation-only entries" }, { status: 400 });
-    }
-
     const isAdmin = profile.role === "admin";
+
+    // Try producer_guests first
     let query = supabase.from("producer_guests").select("id").eq("id", id);
-    if (!isAdmin) {
-      query = query.eq("producer_user_id", session.user.id);
-    }
-    const { data: existing, error: fetchErr } = await query.single();
-    if (fetchErr || !existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!isAdmin) query = query.eq("producer_user_id", session.user.id);
+    const { data: pgRow } = await query.single();
+    if (pgRow) {
+      const { error } = await supabase.from("producer_guests").delete().eq("id", id);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
     }
 
-    const { error } = await supabase.from("producer_guests").delete().eq("id", id);
-    if (error) throw error;
-    return NextResponse.json({ ok: true });
+    // Try guest_invitations (from Guest Contacts bulk email)
+    let invQuery = supabase.from("guest_invitations").select("id, producer_user_id").eq("id", id);
+    if (!isAdmin) {
+      invQuery = invQuery.or(`producer_user_id.eq.${session.user.id},producer_user_id.is.null`);
+    }
+    const { data: invRow } = await invQuery.single();
+    if (invRow) {
+      const { error } = await supabase.from("guest_invitations").delete().eq("id", id);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   } catch (e) {
     if ((e as { digest?: string })?.digest === "NEXT_REDIRECT") throw e;
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

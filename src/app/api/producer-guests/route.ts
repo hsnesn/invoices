@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     // Include guests from guest_invitations (invited via Guest Contacts bulk email) that are not in producer_guests
     let invQuery = supabase
       .from("guest_invitations")
-      .select("producer_user_id, guest_name, guest_email, program_name, sent_at")
+      .select("id, producer_user_id, guest_name, guest_email, program_name, sent_at")
       .order("sent_at", { ascending: false });
     if (!isAdmin) {
       invQuery = invQuery.or(`producer_user_id.eq.${session.user.id},producer_user_id.is.null`);
@@ -59,7 +59,8 @@ export async function GET(request: NextRequest) {
       if (pgKeys.has(key) || seenInvKeys.has(key)) continue;
       seenInvKeys.add(key);
       extraFromInv.push({
-        id: `inv-${(inv as { sent_at?: string }).sent_at}-${key}`,
+        id: (inv as { id: string }).id,
+        source: "guest_invitations" as const,
         producer_user_id: pid,
         guest_name: gname,
         email: gemail,
@@ -115,8 +116,10 @@ export async function GET(request: NextRequest) {
       const invs = invoiceGuestNames.get(key) ?? [];
       const invitedAt = r.invited_at ? new Date(r.invited_at).getTime() : 0;
       const match = invs.find((i) => new Date(i.created_at).getTime() >= invitedAt);
+      const source = (r as { source?: string }).source ?? "producer_guests";
       return {
         ...r,
+        source,
         producer_name: producerMap.get(r.producer_user_id) ?? "—",
         matched_invoice_id: r.matched_invoice_id ?? match?.id ?? null,
         matched_at: r.matched_at ?? (match ? match.created_at : null),
