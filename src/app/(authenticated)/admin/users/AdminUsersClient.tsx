@@ -191,6 +191,41 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
     setEditingPermissions(null);
   };
 
+  const copyFromUser = async (sourceUserId: string) => {
+    if (!editingPermissions) return;
+    const source = users.find((u) => u.id === sourceUserId);
+    if (!source) return;
+    const isEditingSelf = editingPermissions === currentUserId;
+    const payload: { user_id: string; allowed_pages: PageKey[]; role?: string } = {
+      user_id: editingPermissions,
+      allowed_pages: source.allowed_pages ?? ALL_PAGES.map((p) => p.key),
+    };
+    if (!isEditingSelf) payload.role = source.role;
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      setPermPages(payload.allowed_pages);
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === editingPermissions
+            ? { ...u, allowed_pages: payload.allowed_pages, ...(payload.role ? { role: payload.role } : {}) }
+            : u
+        )
+      );
+      toast.success(
+        isEditingSelf
+          ? "Page permissions copied. Role cannot be changed for yourself."
+          : "Role and page permissions copied."
+      );
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data?.error ?? "Failed to copy");
+    }
+  };
+
   const exportUsers = async () => {
     const XLSX = await import("xlsx");
     const rows = filteredUsers.map((u) => ({
@@ -565,6 +600,29 @@ export function AdminUsersClient({ currentUserId }: { currentUserId: string }) {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-3">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">Copy from user:</label>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (id) {
+                      copyFromUser(id);
+                      e.target.value = "";
+                    }
+                  }}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                >
+                  <option value="">Select user...</option>
+                  {users
+                    .filter((u) => u.id !== editingPermissions)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.full_name || u.email || u.id.slice(0, 8)} ({u.role})
+                      </option>
+                    ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {ALL_PAGES.map((page) => {
                   const checked = permPages.includes(page.key);
