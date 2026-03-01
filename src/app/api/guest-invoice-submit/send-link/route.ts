@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
 
     const guestNameNorm = guestName.trim().replace(/\s+/g, " ");
     const nameKey = guestNameNorm.toLowerCase();
+    const emailNorm = email.trim().toLowerCase();
     const now = new Date().toISOString();
 
     const { data: existingGc } = await supabase
@@ -118,28 +119,46 @@ export async function POST(request: NextRequest) {
       .eq("guest_name_key", nameKey)
       .maybeSingle();
 
-    const { data: guest, error: insertErr } = await supabase
+    const { data: existingGuests } = await supabase
       .from("producer_guests")
-      .insert({
-        producer_user_id: session.user.id,
-        guest_contact_id: gcRow?.id ?? null,
-        guest_name: guestName,
-        email,
-        title,
-        program_name: programName,
-        recording_date: recordingDate,
-        recording_topic: recordingTopic,
-        payment_received: true,
-        payment_amount: Math.max(0, paymentAmount),
-        payment_currency: paymentCurrency,
-        accepted: true,
-        invited_at: now,
-      })
-      .select("id")
-      .single();
+      .select("id, guest_name, email")
+      .eq("producer_user_id", session.user.id);
 
-    if (insertErr || !guest) {
-      return NextResponse.json({ error: "Failed to create guest record: " + (insertErr?.message ?? "Unknown") }, { status: 500 });
+    const existingGuest = (existingGuests ?? []).find(
+      (p) =>
+        (p.guest_name?.trim().toLowerCase() === nameKey) ||
+        (emailNorm && p.email?.trim().toLowerCase() === emailNorm)
+    );
+
+    let guestId: string;
+
+    if (existingGuest) {
+      guestId = existingGuest.id;
+    } else {
+      const { data: guest, error: insertErr } = await supabase
+        .from("producer_guests")
+        .insert({
+          producer_user_id: session.user.id,
+          guest_contact_id: gcRow?.id ?? null,
+          guest_name: guestName,
+          email,
+          title,
+          program_name: programName,
+          recording_date: recordingDate,
+          recording_topic: recordingTopic,
+          payment_received: true,
+          payment_amount: Math.max(0, paymentAmount),
+          payment_currency: paymentCurrency,
+          accepted: true,
+          invited_at: now,
+        })
+        .select("id")
+        .single();
+
+      if (insertErr || !guest) {
+        return NextResponse.json({ error: "Failed to create guest record: " + (insertErr?.message ?? "Unknown") }, { status: 500 });
+      }
+      guestId = guest.id;
     }
 
     let invoiceId: string | null = null;
@@ -257,8 +276,18 @@ export async function POST(request: NextRequest) {
 
       await supabase
         .from("producer_guests")
-        .update({ matched_invoice_id: invoiceId, matched_at: now })
-        .eq("id", guest.id);
+        .update({
+          matched_invoice_id: invoiceId,
+          matched_at: now,
+          ...(existingGuest && {
+            program_name: programName,
+            recording_date: recordingDate,
+            recording_topic: recordingTopic,
+            payment_amount: Math.max(0, paymentAmount),
+            payment_currency: paymentCurrency,
+          }),
+        })
+        .eq("id", guestId);
 
       await sendPostRecordingWithInvoice({
         to: email,
@@ -277,7 +306,15 @@ export async function POST(request: NextRequest) {
 
     let submitLink: string | undefined;
     try {
-      submitLink = await getOrCreateGuestSubmitLink(supabase, guest.id);
+      submitLink = existingGuest
+        ? await getOrCreateGuestSubmitLink(supabase, guestId, {
+            program_name: programName,
+            recording_date: recordingDate,
+            recording_topic: recordingTopic,
+            payment_amount: Math.max(0, paymentAmount),
+            payment_currency: paymentCurrency,
+          })
+        : await getOrCreateGuestSubmitLink(supabase, guestId);
     } catch {
       submitLink = undefined;
     }
