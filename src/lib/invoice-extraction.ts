@@ -902,8 +902,6 @@ Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "
     throw new Error("Failed to save extraction: " + upsertError.message);
   }
 
-  const { data: inv } = await supabase.from("invoices").select("invoice_type").eq("id", invoiceId).single();
-  const invType = (inv as { invoice_type?: string } | null)?.invoice_type;
   if (invType === "other" && parsed.service_description && typeof parsed.service_description === "string") {
     const desc = (parsed.service_description as string).trim().slice(0, 2000);
     if (desc) {
