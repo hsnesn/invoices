@@ -7,6 +7,8 @@ export function SendInvoiceLinkModal({
   initialGuestName,
   initialEmail,
   initialProgramName = "",
+  initialTitle = "",
+  initialPhone = "",
   programs: programNames,
   onClose,
   onSent,
@@ -14,12 +16,16 @@ export function SendInvoiceLinkModal({
   initialGuestName: string;
   initialEmail: string | null;
   initialProgramName?: string;
+  initialTitle?: string;
+  initialPhone?: string;
   programs: string[];
   onClose: () => void;
   onSent: () => void;
 }) {
   const [guestName, setGuestName] = useState(initialGuestName);
   const [email, setEmail] = useState(initialEmail ?? "");
+  const [title, setTitle] = useState(initialTitle);
+  const [phone, setPhone] = useState(initialPhone);
   const [programName, setProgramName] = useState(initialProgramName);
   const [recordingDate, setRecordingDate] = useState(new Date().toISOString().slice(0, 10));
   const [recordingTopic, setRecordingTopic] = useState("");
@@ -63,6 +69,8 @@ export function SendInvoiceLinkModal({
         body: JSON.stringify({
           guest_name: name,
           email: em,
+          title: title.trim() || undefined,
+          phone: phone.trim() || undefined,
           program_name: prog,
           recording_date: date,
           recording_topic: topic,
@@ -99,6 +107,14 @@ export function SendInvoiceLinkModal({
           <div>
             <label className="mb-1 block text-sm font-medium">Email *</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputCls} placeholder="guest@example.com" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Title</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="e.g. Professor, Analyst" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Phone</label>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} placeholder="+44 20 1234 5678" />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Program name *</label>

@@ -118,7 +118,7 @@ export function InvitedGuestsClient({
   const [quickAddModal, setQuickAddModal] = useState(false);
   const [quickAddPaste, setQuickAddPaste] = useState("");
   const [duplicateWarning, setDuplicateWarning] = useState(false);
-  const [sendInvoiceLinkModal, setSendInvoiceLinkModal] = useState<{ guest_name: string; email: string | null; program_name?: string } | null>(null);
+  const [sendInvoiceLinkModal, setSendInvoiceLinkModal] = useState<{ guest_name: string; email: string | null; program_name?: string; title?: string } | null>(null);
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
   const loadGuests = React.useCallback(() => {
@@ -806,7 +806,7 @@ export function InvitedGuestsClient({
           <button
             onClick={() => {
               const one = selectedIds.size === 1 ? guests.find((g) => g.id === Array.from(selectedIds)[0]) : null;
-              setSendInvoiceLinkModal(one ? { guest_name: one.guest_name, email: one.email, program_name: one.program_name ?? "" } : { guest_name: "", email: null });
+              setSendInvoiceLinkModal(one ? { guest_name: one.guest_name, email: one.email, program_name: one.program_name ?? "", title: one.title ?? undefined } : { guest_name: "", email: null });
             }}
             className={`${btnBase} ${btnSecondary}`}
           >
@@ -1046,7 +1046,7 @@ export function InvitedGuestsClient({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSendInvoiceLinkModal({ guest_name: first.guest_name, email: first.email, program_name: first.program_name ?? "" });
+                            setSendInvoiceLinkModal({ guest_name: first.guest_name, email: first.email, program_name: first.program_name ?? "", title: first.title ?? undefined });
                           }}
                           className="text-sky-600 hover:underline text-xs mr-2"
                         >
@@ -1253,7 +1253,7 @@ export function InvitedGuestsClient({
                               </button>
                             )}
                             <button
-                              onClick={() => setSendInvoiceLinkModal({ guest_name: g.guest_name, email: g.email, program_name: g.program_name ?? "" })}
+                              onClick={() => setSendInvoiceLinkModal({ guest_name: g.guest_name, email: g.email, program_name: g.program_name ?? "", title: g.title ?? undefined })}
                               className="text-sky-600 hover:underline text-xs"
                             >
                               Send link
@@ -1714,6 +1714,7 @@ ${selectedProducer.full_name}`}
           initialGuestName={sendInvoiceLinkModal.guest_name}
           initialEmail={sendInvoiceLinkModal.email}
           initialProgramName={sendInvoiceLinkModal.program_name ?? ""}
+          initialTitle={sendInvoiceLinkModal.title}
           programs={programs.map((p) => p.name)}
           onClose={() => setSendInvoiceLinkModal(null)}
           onSent={() => {

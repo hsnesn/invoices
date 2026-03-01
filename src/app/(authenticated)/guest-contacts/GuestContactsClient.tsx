@@ -199,7 +199,7 @@ export function GuestContactsClient({
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [bulkEmailModal, setBulkEmailModal] = useState(false);
-  const [sendInvoiceLinkModal, setSendInvoiceLinkModal] = useState<{ guest_name: string; email: string | null } | null>(null);
+  const [sendInvoiceLinkModal, setSendInvoiceLinkModal] = useState<{ guest_name: string; email: string | null; title?: string; phone?: string } | null>(null);
   const [columnsModal, setColumnsModal] = useState(false);
   const [mergeModal, setMergeModal] = useState<string[] | null>(null);
   const [merging, setMerging] = useState(false);
@@ -290,12 +290,17 @@ export function GuestContactsClient({
     });
   };
 
-  const getSendLinkPrefill = (): { guest_name: string; email: string | null } => {
+  const getSendLinkPrefill = (): { guest_name: string; email: string | null; title?: string; phone?: string } => {
     if (selectedGuests.size !== 1) return { guest_name: "", email: null };
     const name = Array.from(selectedGuests)[0];
     const c = filteredContacts.find((x) => x.guest_name === name);
     if (!c) return { guest_name: name, email: null };
-    return { guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email || null };
+    return {
+      guest_name: c.guest_name,
+      email: c.email || c.ai_contact_info?.email || null,
+      title: c.title ?? undefined,
+      phone: c.phone ?? undefined,
+    };
   };
 
   const runExtraction = async () => {
@@ -1762,7 +1767,7 @@ export function GuestContactsClient({
                       <div className="flex flex-wrap gap-1">
                         <button
                           type="button"
-                          onClick={() => setSendInvoiceLinkModal({ guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email || null })}
+                          onClick={() => setSendInvoiceLinkModal({ guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email || null, title: c.title ?? undefined, phone: c.phone ?? undefined })}
                           className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700"
                         >
                           Send link
@@ -1884,7 +1889,7 @@ export function GuestContactsClient({
                 </button>
                 {isAdmin && (
                   <>
-                    <button type="button" onClick={() => setSendInvoiceLinkModal({ guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email || null })} className="text-xs text-sky-600 dark:text-sky-400">Send link</button>
+                    <button type="button" onClick={() => setSendInvoiceLinkModal({ guest_name: c.guest_name, email: c.email || c.ai_contact_info?.email || null, title: c.title ?? undefined, phone: c.phone ?? undefined })} className="text-xs text-sky-600 dark:text-sky-400">Send link</button>
                     <button type="button" onClick={() => setEditContact(c)} className="text-xs text-gray-500">Edit</button>
                     {c.guest_contact_id && (
                       <button type="button" onClick={() => deleteContact(c.guest_contact_id!)} className="text-xs text-red-600">Remove</button>
@@ -2341,6 +2346,8 @@ export function GuestContactsClient({
         <SendInvoiceLinkModal
           initialGuestName={sendInvoiceLinkModal.guest_name}
           initialEmail={sendInvoiceLinkModal.email}
+          initialTitle={sendInvoiceLinkModal.title}
+          initialPhone={sendInvoiceLinkModal.phone}
           programs={programs}
           onClose={() => setSendInvoiceLinkModal(null)}
           onSent={() => { setSendInvoiceLinkModal(null); toast.success("Invoice submit link sent."); }}
