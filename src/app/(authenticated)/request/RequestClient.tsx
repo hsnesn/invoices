@@ -54,6 +54,8 @@ export function RequestClient() {
   const [selectedDepartment, setSelectedDepartment] = useState(() => searchParams.get("dept") || "");
   const [selectedProgram, setSelectedProgram] = useState(() => searchParams.get("program") || "");
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkRequestLoading, setBulkRequestLoading] = useState(false);
+  const [bulkRequestText, setBulkRequestText] = useState("");
   const [assignModal, setAssignModal] = useState<{ date: string; role: string; needed: number } | null>(null);
   const [quickAssignSaving, setQuickAssignSaving] = useState(false);
   const [templates, setTemplates] = useState<{ name: string; month: string; byDate: Record<string, Record<string, number>> }[]>([]);
@@ -406,6 +408,67 @@ export function RequestClient() {
       )}
 
       {canManage && hasRequiredFilters && (
+        <>
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">Freelancer request</h2>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Describe your needs in plain English. The system will add requirements to the calendar and email London Operations.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center mb-4">
+            <input
+              type="text"
+              value={bulkRequestText}
+              onChange={(e) => setBulkRequestText(e.target.value)}
+              placeholder="e.g. 4 outputs every weekday in March"
+              className="flex-1 min-w-[200px] rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 text-sm font-medium dark:border-gray-600 dark:bg-gray-800/80 dark:text-white dark:placeholder-gray-500"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!bulkRequestText.trim()) {
+                  setMessage({ type: "error", text: "Enter your request (e.g. 4 outputs every weekday in March)." });
+                  return;
+                }
+                if (!selectedDepartment) {
+                  setMessage({ type: "error", text: "Please select a department first." });
+                  return;
+                }
+                setBulkRequestLoading(true);
+                setMessage(null);
+                try {
+                  const res = await fetch("/api/contractor-availability/requirements/bulk-request", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      text: bulkRequestText.trim(),
+                      department_id: selectedDepartment,
+                      program_id: selectedProgram && selectedProgram !== "__all__" ? selectedProgram : undefined,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setMessage({ type: "success", text: data.message ?? `Created ${data.count} requirements. London Operations notified.` });
+                    setBulkRequestText("");
+                    setTimeout(() => setMessage(null), 5000);
+                    await refetchData();
+                  } else {
+                    setMessage({ type: "error", text: data.error ?? "Request failed." });
+                  }
+                } catch {
+                  setMessage({ type: "error", text: "Connection error." });
+                } finally {
+                  setBulkRequestLoading(false);
+                }
+              }}
+              disabled={bulkRequestLoading}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+            >
+              {bulkRequestLoading ? "Processing…" : "Submit & notify London Ops"}
+            </button>
+          </div>
+        </div>
         <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 min-w-0 overflow-hidden">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">Recurring rules</h2>
@@ -642,6 +705,7 @@ export function RequestClient() {
             </div>
           )}
         </div>
+        </>
       )}
 
       {hasRequiredFilters && (
