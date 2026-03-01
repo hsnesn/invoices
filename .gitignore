@@ -33,3 +33,6 @@ Thumbs.db
 
 # Local/accidental
 Fatura/
+
+# Backups
+backups/
