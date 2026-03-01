@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
 import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
+import { SendInvoiceLinkModal } from "@/components/SendInvoiceLinkModal";
 
 type ProducerGuest = {
   id: string;
@@ -117,6 +118,7 @@ export function InvitedGuestsClient({
   const [quickAddModal, setQuickAddModal] = useState(false);
   const [quickAddPaste, setQuickAddPaste] = useState("");
   const [duplicateWarning, setDuplicateWarning] = useState(false);
+  const [sendInvoiceLinkModal, setSendInvoiceLinkModal] = useState<{ guest_name: string; email: string | null; program_name?: string } | null>(null);
   const GENERAL_TOPIC_OPTIONS = ["News", "Foreign Policy", "Domestic Politics", "Security", "Economics", "Climate", "Culture", "Sports", "Technology", "Other"];
 
   const loadGuests = React.useCallback(() => {
@@ -594,7 +596,27 @@ export function InvitedGuestsClient({
     }
     setSending(true);
     try {
-      const res = await fetch(`/api/producer-guests/${acceptanceModal.id}/mark-accepted`, {
+      let guestId = acceptanceModal.id;
+      if (guestId.startsWith("inv-")) {
+        const createRes = await fetch("/api/producer-guests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            guest_name: acceptanceModal.guest_name,
+            email: acceptanceModal.email,
+            program_name: acceptanceForm.program_name || acceptanceModal.program_name,
+          }),
+          credentials: "same-origin",
+        });
+        const created = await createRes.json();
+        if (!createRes.ok || !created?.id) {
+          toast.error(created?.error ?? "Failed to create guest record");
+          setSending(false);
+          return;
+        }
+        guestId = created.id;
+      }
+      const res = await fetch(`/api/producer-guests/${guestId}/mark-accepted`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -780,6 +802,15 @@ export function InvitedGuestsClient({
           </button>
           <button onClick={() => setBulkImportModal(true)} className={`${btnBase} ${btnSecondary}`}>
             Bulk import CSV
+          </button>
+          <button
+            onClick={() => {
+              const one = selectedIds.size === 1 ? guests.find((g) => g.id === Array.from(selectedIds)[0]) : null;
+              setSendInvoiceLinkModal(one ? { guest_name: one.guest_name, email: one.email, program_name: one.program_name ?? "" } : { guest_name: "", email: null });
+            }}
+            className={`${btnBase} ${btnSecondary}`}
+          >
+            Send invoice link
           </button>
         </div>
       </div>
@@ -1015,6 +1046,15 @@ export function InvitedGuestsClient({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            setSendInvoiceLinkModal({ guest_name: first.guest_name, email: first.email, program_name: first.program_name ?? "" });
+                          }}
+                          className="text-sky-600 hover:underline text-xs mr-2"
+                        >
+                          Send link
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setInviteModal(first);
                             setForm({
                               guest_name: first.guest_name,
@@ -1212,6 +1252,12 @@ export function InvitedGuestsClient({
                                 Resend email
                               </button>
                             )}
+                            <button
+                              onClick={() => setSendInvoiceLinkModal({ guest_name: g.guest_name, email: g.email, program_name: g.program_name ?? "" })}
+                              className="text-sky-600 hover:underline text-xs"
+                            >
+                              Send link
+                            </button>
                             <button
                               onClick={() => {
                                 setInviteModal(g);
@@ -1661,6 +1707,21 @@ ${selectedProducer.full_name}`}
             </div>
           </div>
         </div>
+      )}
+
+      {sendInvoiceLinkModal !== null && (
+        <SendInvoiceLinkModal
+          initialGuestName={sendInvoiceLinkModal.guest_name}
+          initialEmail={sendInvoiceLinkModal.email}
+          initialProgramName={sendInvoiceLinkModal.program_name ?? ""}
+          programs={programs.map((p) => p.name)}
+          onClose={() => setSendInvoiceLinkModal(null)}
+          onSent={() => {
+            setSendInvoiceLinkModal(null);
+            toast.success("Invoice submit link sent.");
+            loadGuests();
+          }}
+        />
       )}
 
       {notesModal && (
