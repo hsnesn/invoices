@@ -191,6 +191,7 @@ function regexExtractFromText(text: string) {
   const accountNumber =
     lineValue([
       /(?:account\s*no\s*[:\-\s]+)(\d{8})\b/i,
+      /(?:account\s*no\s+)(\d{8})\b/i,
       /(?:account\s*(?:number|no|#)?)\s*[:\-.]?\s*([0-9 ]{6,20})/i,
       /(?:account\s*no\s*[:\-]\s*)(\d{8})\b/i,
       /(?:bank\s+detail|account\s+no|account\s+holder)[\s\S]*?(\d{8})\b/i,
@@ -203,6 +204,8 @@ function regexExtractFromText(text: string) {
     /(?:pay\s*(?:to|able\s*to)|payment\s*to)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
     /(?:remit\s*to|transfer\s*to)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
     /(?:fast\s*payment|bank\s*details)[\s\S]*?([A-Za-z0-9\s&.,'-]+(?:Accountants|Ltd|Limited|Inc|LLC|Plc)\.?)\s*(?:Natwest|Barclays|HSBC|Lloyds|Santander)\s*Bank/i,
+    /(?:account\s*name|payee\s*name)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+    /(?:payment\s*details|bank\s*transfer)[\s\S]*?([A-Za-z0-9\s&.,'-]+(?:Ltd|Limited|Accountants|Inc|LLC|Plc)\.?)\s*(?:\d{2}[- ]\d{2}[- ]\d{2}|Sort)/i,
   ]);
   const companyFromLabel = lineValue([
     /(?:company\s+name|business\s+name|trading\s+as)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
@@ -218,6 +221,8 @@ function regexExtractFromText(text: string) {
     /(?:total\s*balance|balance\s*total)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:^|\s)(?:total|gross|sum)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:balance\s*due|amount\s*due)\s*[:\-]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
+    /(?:amount\s*payable|payable\s*amount)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
+    /(?:total\s*for\s*payment|payment\s*total)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
   ];
   let grossRaw = lineValue(grossPatterns);
   if (!grossRaw) {
@@ -461,8 +466,12 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   const openai = getOpenAIClient();
   const text = await extractTextFromBuffer(fileBuffer, ext);
   const regexParsed = regexExtractFromText(text);
+  const invType = (invoice as { invoice_type?: string })?.invoice_type;
 
   const CERTAIN_SUFFIX = ` Return JSON: {"value": "..." or number, "certain": true/false}. Set "certain": true ONLY when you clearly see the value in the document and are confident. Set "certain": false or omit if unsure.`;
+
+  // Other invoices: use best model (gpt-4o by default)
+  const OTHER_INVOICE_MODEL = process.env.OTHER_INVOICE_EXTRACTION_MODEL || process.env.EXTRACTION_MODEL || "gpt-4o";
 
   const FIELD_PROMPTS_MAP: Record<string, string> = {
     beneficiary_name: `Extract ONLY the beneficiary/account holder name - the person or company who receives the payment. Look for: "Account holder name", "Payee name", "Beneficiary", "Name on account", "Payment to". This is the name that appears in the bank details section. EXCLUDE: addresses, cities, countries, invoice numbers, amounts. NEVER include "TRT" or "TRT World".`,
@@ -478,7 +487,6 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   };
   if (targetFields?.length && openai) {
     const { data: existing } = await supabase.from("invoice_extracted_fields").select("*").eq("invoice_id", invoiceId).single();
-    const invType = (invoice as { invoice_type?: string })?.invoice_type;
     const partialParsed: Record<string, string | number | null> = {};
     for (const key of targetFields) {
       if (!FIELD_PROMPTS_MAP[key]) continue;
@@ -540,6 +548,52 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   let extractionError: string | null = null;
 
   const hasText = text.trim().length > 30;
+
+  // Other invoices: single structured extraction (best model, full context, one API call)
+  let otherInvoiceAiParsed: Record<string, string | number | null> | null = null;
+  if (invType === "other" && openai && hasText) {
+    try {
+      const prompt = `Extract invoice data from this UK invoice/statement. Return JSON with these exact keys (use null for missing):
+- beneficiary_name: account holder / payee name (in bank details section)
+- company_name: company issuing the invoice (header/letterhead)
+- account_number: 8-digit UK account or IBAN
+- sort_code: UK sort code XX-XX-XX
+- invoice_number: invoice/statement number (not VAT/Company Reg)
+- invoice_date: YYYY-MM-DD
+- due_date: YYYY-MM-DD
+- gross_amount: total to pay (number, no currency)
+- net_amount: net amount (number)
+- vat_amount: VAT amount (number)
+- currency: GBP, EUR, USD, or TRY
+- service_description: short purpose (1-2 sentences)
+
+Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "Due By", "Grand Total", "Total Payable". EXCLUDE: TRT World, addresses, VAT numbers.`;
+      const completion = await openai.chat.completions.create({
+        model: OTHER_INVOICE_MODEL,
+        messages: [{ role: "user", content: `${prompt}\n\nDOCUMENT:\n${text}` }],
+        response_format: { type: "json_object" },
+      });
+      const raw = completion.choices[0]?.message?.content;
+      if (raw) {
+        const obj = JSON.parse(raw) as Record<string, unknown>;
+        const map: Record<string, string | number | null> = {};
+        for (const k of ["beneficiary_name", "company_name", "account_number", "sort_code", "invoice_number", "invoice_date", "due_date", "currency", "service_description"]) {
+          const v = obj[k];
+          if (v != null && typeof v === "string" && v.trim()) map[k] = v.trim();
+          else if (v != null && typeof v === "number") map[k] = v;
+        }
+        for (const k of ["gross_amount", "net_amount", "vat_amount"]) {
+          const v = obj[k];
+          if (typeof v === "number" && Number.isFinite(v)) map[k] = v;
+          else if (v != null && typeof v === "string") {
+            const n = parseNumberLike(v);
+            if (n != null) map[k] = n;
+          }
+        }
+        if (Object.keys(map).length >= 2) otherInvoiceAiParsed = map;
+      }
+    } catch { /* fall back to per-field extraction */ }
+  }
 
   const FIELD_PROMPTS: Record<string, string> = {
     beneficiary_name: `Extract ONLY the beneficiary/account holder name - the person or company who receives the payment. Look for: "Account holder name", "Payee name", "Beneficiary", "Name on account", "Payment to". This is the name that appears in the bank details section. EXCLUDE: addresses, cities, countries, invoice numbers, amounts. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
@@ -621,7 +675,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   const regexHas = (k: string) => {
     const v = (regexParsed as Record<string, unknown>)[k];
     if (k === "gross_amount") return typeof v === "number" && v > 0;
-    if (k === "invoice_number") return typeof v === "string" && v.trim().length >= 3;
+    if (k === "invoice_number") return typeof v === "string" && (v as string).trim().length >= 3;
     if (k === "invoice_date") return typeof v === "string" && (v as string).trim().length >= 8 && /^\d{4}-\d{2}-\d{2}$/.test((v as string).trim());
     if (k === "due_date") return typeof v === "string" && (v as string).trim().length >= 8;
     if (k === "sort_code") return typeof v === "string" && (normalizeSortCode(v as string) ?? "").length === 6;
@@ -640,15 +694,34 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   if (rp.guest_phone) (parsed as Record<string, unknown>).guest_phone = rp.guest_phone;
   if (rp.guest_email) (parsed as Record<string, unknown>).guest_email = rp.guest_email;
 
+  // Other invoices: merge single-call AI result (AI overrides regex when both have values)
+  if (otherInvoiceAiParsed) {
+    for (const [k, v] of Object.entries(otherInvoiceAiParsed)) {
+      if (v != null && v !== "") {
+        if (k === "gross_amount" || k === "net_amount" || k === "vat_amount") {
+          (parsed as Record<string, unknown>)[k] = typeof v === "number" ? v : parseNumberLike(String(v));
+        } else {
+          (parsed as Record<string, unknown>)[k] = v;
+        }
+      }
+    }
+    // Normalize sort_code from AI
+    if (parsed.sort_code && typeof parsed.sort_code === "string") {
+      parsed.sort_code = normalizeSortCode(parsed.sort_code) ?? parsed.sort_code;
+    }
+  }
+
   try {
     if (!openai) throw new Error("OPENAI_API_KEY missing");
 
     if (hasText) {
-      const fieldsToExtract = (templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS)).filter(
+      // Other invoices: skip per-field AI when single-call already ran
+      const skipPerFieldAi = invType === "other" && otherInvoiceAiParsed != null;
+      const fieldsToExtract = skipPerFieldAi ? [] : (templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS)).filter(
         (k) => !regexHas(k)
       );
       if (fieldsToExtract.length === 0) {
-        // Regex got everything, skip AI
+        // Regex or single-call got everything, skip per-field AI
       } else {
       const results = await Promise.all(
         fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
