@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       count: toInsert.length,
+      month: parsed.month,
       monthLabel,
       message: `Created ${toInsert.length} requirements for ${monthLabel}. London Operations has been notified.`,
     });

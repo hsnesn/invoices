@@ -39,17 +39,37 @@ function FormattedChatText({ text }: { text: string }) {
 
 export function RequestChatPanel() {
   const searchParams = useSearchParams();
-  const dept = searchParams.get("dept") || "";
+  const deptFromUrl = searchParams.get("dept") || "";
   const month = searchParams.get("month") || "";
 
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [selectedDept, setSelectedDept] = useState(deptFromUrl);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const dept = selectedDept || deptFromUrl;
+
+  useEffect(() => {
+    fetch("/api/departments")
+      .then((r) => r.json())
+      .then((d) => setDepartments(Array.isArray(d) ? d : []))
+      .catch(() => setDepartments([]));
+  }, []);
+
+  useEffect(() => {
+    if (deptFromUrl && !selectedDept) setSelectedDept(deptFromUrl);
+  }, [deptFromUrl, selectedDept]);
+
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const looksLikeCreateRequest = (t: string) => {
+    const lower = t.toLowerCase();
+    return /\b(need|want|require)\b/.test(lower) && /\b\d+\b/.test(t) && /\b(output|producer|every|day|weekday|march|april|may|june|july|august|september|october|november|december|january|february|month)\b/i.test(t);
+  };
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -59,20 +79,43 @@ export function RequestChatPanel() {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
 
+    const opts = { method: "POST" as const, headers: { "Content-Type": "application/json" }, credentials: "same-origin" as const };
+
     try {
-      const chatHistory = [...messages, { role: "user" as const, content: text }].map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      if (looksLikeCreateRequest(text)) {
+        if (!dept) {
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: "Please select a department above, then try again." },
+          ]);
+          return;
+        }
+        const res = await fetch("/api/contractor-availability/requirements/bulk-request", {
+          ...opts,
+          body: JSON.stringify({ text, department_id: dept }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const month = data.month as string | undefined;
+          const monthLabel = data.monthLabel as string | undefined;
+          const link = month ? `/request?month=${month}&dept=${dept}` : `/request?dept=${dept}`;
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: data.message ?? `Created ${data.count ?? 0} requirements. London Operations notified.`,
+              links: [{ label: `Open ${monthLabel ?? month ?? "Request"}`, url: link }],
+            },
+          ]);
+        } else {
+          setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error ?? "Request failed."}` }]);
+        }
+        return;
+      }
 
       const res = await fetch("/api/contractor-availability/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: chatHistory,
-          department_id: dept || undefined,
-        }),
-        credentials: "same-origin",
+        ...opts,
+        body: JSON.stringify({ messages: [{ role: "user", content: text }], department_id: dept || undefined }),
       });
 
       let data: { content?: string; links?: { label: string; url: string }[]; error?: string } = {};
@@ -85,27 +128,15 @@ export function RequestChatPanel() {
       if (res.ok) {
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            content: data.content ?? "No response.",
-            links: Array.isArray(data.links) ? data.links : [],
-          },
+          { role: "assistant", content: data.content ?? "No response.", links: Array.isArray(data.links) ? data.links : [] },
         ]);
       } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `Error: ${data.error ?? "Request failed."}` },
-        ]);
+        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error ?? "Request failed."}` }]);
       }
     } catch (err) {
       const msg = toUserFriendlyError(err);
-      const hint = msg.toLowerCase().includes("connection") || msg.toLowerCase().includes("fetch")
-        ? " If this persists, the server may be timing out (Vercel Hobby: 10s limit). Try the Requirements tab → Freelancer request instead."
-        : "";
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${msg}${hint}` },
-      ]);
+      const hint = (msg.toLowerCase().includes("connection") || msg.toLowerCase().includes("fetch")) ? " If this persists, try the Requirements tab → Freelancer request instead." : "";
+      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}${hint}` }]);
     } finally {
       setLoading(false);
     }
@@ -116,8 +147,21 @@ export function RequestChatPanel() {
       <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">Schedule chat</h2>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          Ask questions or create requirements (e.g. &quot;I need 4 outputs every day in March&quot;). Select department in Requirements tab first for create.
+          Ask questions or create requirements (e.g. &quot;I need 4 outputs every day in March&quot;).
         </p>
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Department (required for create)</label>
+          <select
+            value={selectedDept}
+            onChange={(e) => setSelectedDept(e.target.value)}
+            className="w-full max-w-xs rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          >
+            <option value="">Select department...</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[320px]">
@@ -193,11 +237,6 @@ export function RequestChatPanel() {
             Send
           </button>
         </div>
-        {(dept || month) && (
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            Using department and month from URL when relevant.
-          </p>
-        )}
       </div>
     </div>
   );
