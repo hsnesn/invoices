@@ -22,7 +22,7 @@ export type GuestSubmitData = {
 
 export type TokenResult =
   | { ok: true; data: GuestSubmitData }
-  | { ok: false; error: string; status: 400 | 404 | 410 | 500 };
+  | { ok: false; error: string; status: 400 | 404 | 410 | 500; expiresAt?: string; errorType?: "expired" | "used" };
 
 export async function getGuestSubmitTokenData(token: string): Promise<TokenResult> {
   try {
@@ -42,13 +42,14 @@ export async function getGuestSubmitTokenData(token: string): Promise<TokenResul
     }
 
     const usedAt = (tokenRow as { used_at?: string | null }).used_at;
+    const expiresAtStr = (tokenRow as { expires_at: string }).expires_at;
     if (usedAt) {
-      return { ok: false, error: "This link has already been used", status: 410 };
+      return { ok: false, error: "This link has already been used", status: 410, errorType: "used" };
     }
 
-    const expiresAt = new Date((tokenRow as { expires_at: string }).expires_at);
+    const expiresAt = new Date(expiresAtStr);
     if (expiresAt < new Date()) {
-      return { ok: false, error: "This link has expired", status: 410 };
+      return { ok: false, error: "This link has expired", status: 410, expiresAt: expiresAtStr, errorType: "expired" };
     }
 
     const guestId = (tokenRow as { producer_guest_id: string }).producer_guest_id;

@@ -12,6 +12,8 @@ ${body}
 </body></html>`;
 }
 
+const PAYMENT_TIMELINE = "Payment is typically made within 10–14 working days after invoice approval.";
+
 /** Guest receives payment: thank for program, request invoice with requirements. */
 export async function sendPostRecordingPaidRequestInvoice(params: {
   to: string;
@@ -26,8 +28,10 @@ export async function sendPostRecordingPaidRequestInvoice(params: {
 }) {
   const submitSection = params.submitLink
     ? `<p><strong>Submit your invoice online:</strong> <a href="${params.submitLink}" style="color:#2563eb;font-weight:600">Click here to upload your invoice</a>. This link is valid for 7 days.</p>
+<p>${PAYMENT_TIMELINE}</p>
 <p>Alternatively, you can reply to this email with your invoice attached. Your invoice must include:</p>`
-    : `<p>To process your payment as quickly as possible, please send us your invoice at your earliest convenience. Your invoice must include:</p>`;
+    : `<p>To process your payment as quickly as possible, please send us your invoice at your earliest convenience. ${PAYMENT_TIMELINE}</p>
+<p>Your invoice must include:</p>`;
   const body = `
 <p>Dear ${params.guestName},</p>
 <p>Thank you for participating in <strong>${params.programName}</strong>. We truly appreciate your valuable contribution and insights on ${params.recordingTopic}.</p>
@@ -38,9 +42,12 @@ ${submitSection}
   <li>Invoice number</li>
   <li>Date when the program was recorded (${params.recordingDate})</li>
   <li>Topic of the program (${params.recordingTopic})</li>
-  <li>Bank account details (account name, account number, sort code)</li>
+  <li>Bank account details: UK – account name, account number, sort code; International – account name, IBAN, SWIFT/BIC</li>
   <li>PayPal address (if you prefer PayPal payment)</li>
 </ul>
+${params.currency !== "GBP" ? `<div style="margin-top:12px;padding:12px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;color:#92400e;font-size:14px">
+  <strong>International payment:</strong> Include your IBAN and SWIFT/BIC (not UK sort code). PayPal is often faster for overseas payments.
+</div>` : ""}
 <p>We look forward to receiving it.</p>
 <p>Best regards,<br/>${params.producerName}</p>
 `;
@@ -59,12 +66,17 @@ export async function sendPostRecordingWithInvoice(params: {
   invoiceNumber: string;
   pdfBuffer: ArrayBuffer | Buffer | Uint8Array;
   producerName: string;
+  statusLink?: string;
 }) {
+  const statusSection = params.statusLink
+    ? `<p>You can check the status of your invoice at any time: <a href="${params.statusLink}" style="color:#2563eb;font-weight:600">Check invoice status</a>.</p>`
+    : "";
   const body = `
 <p>Dear ${params.guestName},</p>
 <p>Thank you for participating in <strong>${params.programName}</strong>. We truly appreciate your valuable contribution.</p>
 <p>Please find attached the invoice for your payment (Invoice #${params.invoiceNumber}).</p>
-<p>Payment will be made as soon as possible. Please keep this invoice for your records.</p>
+${statusSection}
+<p>${PAYMENT_TIMELINE} Please keep this invoice for your records.</p>
 <p>Best regards,<br/>${params.producerName}</p>
 `;
   const buf = params.pdfBuffer instanceof Uint8Array ? Buffer.from(params.pdfBuffer) : params.pdfBuffer;
@@ -131,6 +143,53 @@ export async function sendGuestRequestedNewLinkEmail(params: {
   return sendEmail({
     to: params.to,
     subject: `New link requested – ${params.guestName} – ${params.programName}`,
+    html: wrap(body),
+  });
+}
+
+/** Confirmation email to guest after they submit an invoice (upload or generate). */
+export async function sendGuestSubmissionConfirmation(params: {
+  to: string;
+  guestName: string;
+  programName: string;
+  invoiceNumber: string;
+  statusLink: string;
+  producerName: string;
+}) {
+  const body = `
+<p>Dear ${params.guestName},</p>
+<p>Thank you for submitting your invoice for <strong>${params.programName}</strong>.</p>
+<p><strong>Invoice reference:</strong> ${params.invoiceNumber}</p>
+<p>You can check the status of your invoice at any time: <a href="${params.statusLink}" style="color:#2563eb;font-weight:600">Check invoice status</a>.</p>
+<p>${PAYMENT_TIMELINE}</p>
+<p>If you have any questions, please contact ${params.producerName}.</p>
+<p>Best regards,<br/>${APP_NAME}</p>
+`;
+  return sendEmail({
+    to: params.to,
+    subject: `Invoice received – ${params.programName} – ${params.invoiceNumber}`,
+    html: wrap(body),
+  });
+}
+
+/** Reminder email to guest if they haven't submitted within a few days of receiving the link. */
+export async function sendGuestInvoiceReminderEmail(params: {
+  to: string;
+  guestName: string;
+  programName: string;
+  submitLink: string;
+  producerName: string;
+}) {
+  const body = `
+<p>Dear ${params.guestName},</p>
+<p>This is a friendly reminder to submit your invoice for <strong>${params.programName}</strong>.</p>
+<p><a href="${params.submitLink}" style="color:#2563eb;font-weight:600">Click here to submit your invoice</a>. This link is valid for 7 days from when it was sent.</p>
+<p>If you have already submitted, please disregard this email. If you need a new link, please contact ${params.producerName}.</p>
+<p>Best regards,<br/>${APP_NAME}</p>
+`;
+  return sendEmail({
+    to: params.to,
+    subject: `Reminder – Submit your invoice – ${params.programName}`,
     html: wrap(body),
   });
 }

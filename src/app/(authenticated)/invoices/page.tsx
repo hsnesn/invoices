@@ -58,6 +58,7 @@ export default async function InvoicesPage({
     .from("invoices")
     .select(`
       id,
+      invoice_type,
       storage_path,
       service_description,
       producer_user_id,

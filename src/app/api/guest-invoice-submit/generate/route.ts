@@ -13,7 +13,7 @@ import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { runGuestContactSearch } from "@/lib/guest-contact-search";
 import { generateGuestInvoicePdf, type GuestInvoiceAppearance, type GuestInvoiceExpense } from "@/lib/guest-invoice-pdf";
 import { mergeSupportingFilesIntoPdf } from "@/lib/pdf-merge";
-import { sendPostRecordingWithInvoice, sendInvoiceToProducer } from "@/lib/post-recording-emails";
+import { sendPostRecordingWithInvoice, sendInvoiceToProducer, sendGuestSubmissionConfirmation } from "@/lib/post-recording-emails";
 
 const BUCKET = "invoices";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -31,9 +31,12 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get("content-type") ?? "";
     const isFormData = contentType.includes("multipart/form-data");
     let token: string;
+    let bankType: "uk" | "international" = "uk";
     let accountName: string;
     let accountNumber: string;
     let sortCode: string;
+    let iban: string;
+    let swiftBic: string;
     let bankName: string | undefined;
     let bankAddress: string | undefined;
     let paypal: string | undefined;
@@ -44,9 +47,12 @@ export async function POST(request: NextRequest) {
     if (isFormData) {
       const formData = await request.formData();
       token = (formData.get("token") as string)?.trim() ?? "";
+      bankType = ((formData.get("bank_type") as string)?.trim() === "international" ? "international" : "uk") as "uk" | "international";
       accountName = (formData.get("account_name") as string)?.trim() ?? "";
       accountNumber = (formData.get("account_number") as string)?.trim() ?? "";
       sortCode = (formData.get("sort_code") as string)?.trim() ?? "";
+      iban = (formData.get("iban") as string)?.trim() ?? "";
+      swiftBic = (formData.get("swift_bic") as string)?.trim() ?? "";
       bankName = (formData.get("bank_name") as string)?.trim() || undefined;
       bankAddress = (formData.get("bank_address") as string)?.trim() || undefined;
       paypal = (formData.get("paypal") as string)?.trim() || undefined;
@@ -73,9 +79,12 @@ export async function POST(request: NextRequest) {
     } else {
       const body = await request.json();
       token = (body.token as string)?.trim() ?? "";
+      bankType = (body.bank_type as string)?.trim() === "international" ? "international" : "uk";
       accountName = (body.account_name as string)?.trim() ?? "";
       accountNumber = (body.account_number as string)?.trim() ?? "";
       sortCode = (body.sort_code as string)?.trim() ?? "";
+      iban = (body.iban as string)?.trim() ?? "";
+      swiftBic = (body.swift_bic as string)?.trim() ?? "";
       bankName = (body.bank_name as string)?.trim() || undefined;
       bankAddress = (body.bank_address as string)?.trim() || undefined;
       paypal = (body.paypal as string)?.trim() || undefined;
@@ -91,8 +100,17 @@ export async function POST(request: NextRequest) {
     if (!token || !UUID_RE.test(token)) {
       return NextResponse.json({ error: "Invalid link" }, { status: 400 });
     }
-    if (!accountName || !accountNumber || !sortCode) {
-      return NextResponse.json({ error: "Account name, account number and sort code are required" }, { status: 400 });
+    if (!accountName) {
+      return NextResponse.json({ error: "Account name is required" }, { status: 400 });
+    }
+    if (bankType === "uk") {
+      if (!accountNumber || !sortCode) {
+        return NextResponse.json({ error: "Account number and sort code are required for UK bank accounts" }, { status: 400 });
+      }
+    } else {
+      if (!iban || !swiftBic) {
+        return NextResponse.json({ error: "IBAN and SWIFT/BIC are required for international transfers" }, { status: 400 });
+      }
     }
 
     const supabase = createAdminClient();
@@ -202,8 +220,10 @@ export async function POST(request: NextRequest) {
       paypal,
       accountName,
       bankName,
-      accountNumber,
-      sortCode,
+      bankType,
+      ...(bankType === "uk"
+        ? { accountNumber, sortCode }
+        : { iban, swiftBic }),
       bankAddress,
       bandGreen: true,
     };
@@ -299,6 +319,16 @@ export async function POST(request: NextRequest) {
       payload: { source: "guest_generate_link", storage_path: pdfPath, producer_guest_id: t.producer_guest_id },
     });
 
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const statusToken = crypto.randomUUID();
+    await supabase.from("guest_invoice_status_tokens").insert({
+      invoice_id: invoiceId,
+      token: statusToken,
+      guest_email: g.email || null,
+      guest_name: g.guest_name,
+      program_name: progName,
+    });
+
     const enabled = await isEmailStageEnabled("submission");
     if (enabled && g.email) {
       const sendSubmitter = await isRecipientEnabled("submission", "submitter");
@@ -319,14 +349,16 @@ export async function POST(request: NextRequest) {
     }
 
     const pdfBuf = uploadBuf;
+    const statusLink = `${APP_URL}/submit/status/${statusToken}`;
     if (g.email) {
-      sendPostRecordingWithInvoice({
+      await sendPostRecordingWithInvoice({
         to: g.email,
         guestName: g.guest_name,
         programName: progName,
         invoiceNumber: invNo,
         pdfBuffer: pdfBuf,
         producerName,
+        statusLink,
       }).catch((err) => console.error("[Guest invoice] Send to guest failed:", err));
     }
     if (producerEmail) {
@@ -343,6 +375,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       invoice_id: invoiceId,
+      status_token: statusToken,
+      invoice_number: invNo,
       message: "Invoice generated successfully. Thank you!",
     });
   } catch (e) {

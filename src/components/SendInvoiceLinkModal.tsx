@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { BankDetailsFields, BANK_DETAILS_DEFAULT, validateBankDetails, type BankDetailsValues } from "@/components/BankDetailsFields";
 
 export function SendInvoiceLinkModal({
   initialGuestName,
@@ -34,12 +35,7 @@ export function SendInvoiceLinkModal({
   const [generateInvoice, setGenerateInvoice] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
-  const [accountName, setAccountName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [sortCode, setSortCode] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [bankAddress, setBankAddress] = useState("");
-  const [paypal, setPaypal] = useState("");
+  const [bankDetails, setBankDetails] = useState<BankDetailsValues>(BANK_DETAILS_DEFAULT);
   const [sending, setSending] = useState(false);
   const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white";
 
@@ -75,9 +71,16 @@ export function SendInvoiceLinkModal({
       toast.error("Title is required");
       return;
     }
-    if (generateInvoice && (!accountName.trim() || !accountNumber.trim() || !sortCode.trim() || !invoiceNumber.trim())) {
-      toast.error("Invoice number and bank details are required when generating invoice");
-      return;
+    if (generateInvoice) {
+      if (!invoiceNumber.trim()) {
+        toast.error("Invoice number is required when generating invoice");
+        return;
+      }
+      const bankErr = validateBankDetails(bankDetails);
+      if (bankErr) {
+        toast.error(bankErr);
+        return;
+      }
     }
     setSending(true);
     try {
@@ -97,12 +100,15 @@ export function SendInvoiceLinkModal({
           generate_invoice_for_guest: generateInvoice,
           invoice_number: generateInvoice ? invoiceNumber.trim() : undefined,
           invoice_date: generateInvoice ? invoiceDate : undefined,
-          account_name: generateInvoice ? accountName.trim() : undefined,
-          account_number: generateInvoice ? accountNumber.trim() : undefined,
-          sort_code: generateInvoice ? sortCode.trim() : undefined,
-          bank_name: generateInvoice ? bankName.trim() : undefined,
-          bank_address: generateInvoice ? bankAddress.trim() : undefined,
-          paypal: generateInvoice ? paypal.trim() : undefined,
+          account_name: generateInvoice ? bankDetails.accountName.trim() : undefined,
+          bank_name: generateInvoice ? bankDetails.bankName.trim() : undefined,
+          bank_address: generateInvoice ? bankDetails.bankAddress.trim() : undefined,
+          paypal: generateInvoice ? bankDetails.paypal.trim() : undefined,
+          bank_type: generateInvoice ? bankDetails.bankType : undefined,
+          account_number: generateInvoice && bankDetails.bankType === "uk" ? bankDetails.accountNumber.trim() : undefined,
+          sort_code: generateInvoice && bankDetails.bankType === "uk" ? bankDetails.sortCode.trim() : undefined,
+          iban: generateInvoice && bankDetails.bankType === "international" ? bankDetails.iban.trim() : undefined,
+          swift_bic: generateInvoice && bankDetails.bankType === "international" ? bankDetails.swiftBic.trim() : undefined,
         }),
         credentials: "same-origin",
       });
@@ -208,30 +214,12 @@ export function SendInvoiceLinkModal({
                   <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className={inputCls} />
                 </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Account name *</label>
-                <input type="text" value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Account number *</label>
-                <input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Sort code *</label>
-                <input type="text" value={sortCode} onChange={(e) => setSortCode(e.target.value)} className={inputCls} placeholder="e.g. 12-34-56" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Bank name</label>
-                <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Bank address</label>
-                <input type="text" value={bankAddress} onChange={(e) => setBankAddress(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">PayPal</label>
-                <input type="text" value={paypal} onChange={(e) => setPaypal(e.target.value)} className={inputCls} placeholder="Optional" />
-              </div>
+              <BankDetailsFields
+                values={bankDetails}
+                onChange={setBankDetails}
+                inputCls={inputCls}
+                showPaypalEncouragement={true}
+              />
             </div>
           )}
           <div className="flex gap-2 pt-2">

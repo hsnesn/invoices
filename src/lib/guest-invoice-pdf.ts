@@ -35,10 +35,14 @@ export type GuestInvoicePdfData = {
   paypal?: string;
   accountName: string;
   bankName?: string;
-  accountNumber: string;
-  sortCode: string;
+  accountNumber?: string;
+  sortCode?: string;
   bankAddress?: string;
-  /** When true, use dark green band instead of blue (guest-generated invoices) */
+  /** International transfer: IBAN and SWIFT/BIC */
+  bankType?: "uk" | "international";
+  iban?: string;
+  swiftBic?: string;
+  /** When true, use dark orange band and thin red bottom line (guest-created invoices) */
   bandGreen?: boolean;
 };
 
@@ -60,7 +64,7 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
   const cw = pw - 2 * mx;
   const sym = currencySymbol(data.currency);
 
-  const accentRgb: [number, number, number] = data.bandGreen ? [0, 51, 34] : [30, 64, 120];
+  const accentRgb: [number, number, number] = data.bandGreen ? [180, 83, 9] : [30, 64, 120];
   let y = 20;
 
   // Top: INV NO (left) | DATE (right) — larger, accent color
@@ -217,12 +221,28 @@ export function generateGuestInvoicePdf(data: GuestInvoicePdfData): ArrayBuffer 
     doc.text(`Bank Name:        ${data.bankName}`, mx, y);
     y += 5;
   }
-  doc.text(`Account Number:   ${data.accountNumber || ""}`, mx, y);
-  y += 5;
-  doc.text(`Sort Code:        ${data.sortCode || ""}`, mx, y);
-  y += 5;
+  if (data.bankType === "international" && data.iban) {
+    doc.text(`IBAN:             ${data.iban}`, mx, y);
+    y += 5;
+    if (data.swiftBic) {
+      doc.text(`SWIFT/BIC:        ${data.swiftBic}`, mx, y);
+      y += 5;
+    }
+  } else {
+    doc.text(`Account Number:   ${data.accountNumber || ""}`, mx, y);
+    y += 5;
+    doc.text(`Sort Code:        ${data.sortCode || ""}`, mx, y);
+    y += 5;
+  }
   if (data.bankAddress) {
     doc.text(`Bank Address:     ${data.bankAddress}`, mx, y);
+  }
+
+  if (data.bandGreen) {
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setDrawColor(200, 50, 50);
+    doc.setLineWidth(0.8);
+    doc.line(mx, pageHeight - 8, pw - mx, pageHeight - 8);
   }
 
   return doc.output("arraybuffer");

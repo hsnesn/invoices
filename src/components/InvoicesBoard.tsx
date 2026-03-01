@@ -93,6 +93,8 @@ type DisplayRow = {
   missingFields: string[];
   files: { storage_path: string; file_name: string }[];
   tags: string[];
+  isGuestCreated?: boolean;
+  isProducerCreated?: boolean;
 };
 
 type TimelineEvent = {
@@ -682,7 +684,7 @@ function InvoiceTable({
               const startEditOnDblClick = (e: React.MouseEvent) => { handleRowDblClick(); if (canEditRow) { e.stopPropagation(); e.preventDefault(); onStartEdit(r); } };
               return (
               <React.Fragment key={r.id}>
-              <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => handleRowClick(r)} onDoubleClick={startEditOnDblClick}>
+              <tr data-row-id={r.id} className={`${r.status === "rejected" ? "bg-rose-200 hover:bg-rose-300 dark:bg-rose-900/50 dark:hover:bg-rose-900/70" : isDuplicate ? "bg-amber-200 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/70" : r.isGuestCreated ? "bg-amber-50/70 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 border-l-4 border-l-amber-500 dark:border-l-amber-400" : r.isProducerCreated ? "bg-sky-50/60 hover:bg-sky-100/70 dark:bg-sky-950/25 dark:hover:bg-sky-900/35 border-l-4 border-l-sky-400 dark:border-l-sky-500" : "hover:bg-slate-100 dark:hover:bg-slate-700/80"} transition-colors duration-150 cursor-pointer`} onClick={() => handleRowClick(r)} onDoubleClick={startEditOnDblClick} title={r.isGuestCreated ? "Created by guest (upload or generate)" : r.isProducerCreated ? "Created by producer (Mark accepted, Send link, or Submit)" : undefined}>
               {isCol("checkbox") && canBulkSelect && (
               <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                 {canRowBulkSelect(r) ? (
@@ -784,7 +786,7 @@ function InvoiceTable({
               )}
               {isCol("guest") && (
               <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                <div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className="cursor-pointer"
                     onClick={(e) => { e.stopPropagation(); void openPdf(r.id); }}
@@ -793,6 +795,16 @@ function InvoiceTable({
                   >
                     {r.guest}
                   </span>
+                  {r.isGuestCreated && (
+                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-200 text-amber-800 dark:bg-amber-700/50 dark:text-amber-200 border border-amber-400/50 dark:border-amber-500/50" title="Created by guest (upload or generate)">
+                      Guest
+                    </span>
+                  )}
+                  {r.isProducerCreated && (
+                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-200 text-sky-800 dark:bg-sky-700/50 dark:text-sky-200 border border-sky-400/50 dark:border-sky-500/50" title="Created by producer (Mark accepted, Send link, or Submit)">
+                      Producer
+                    </span>
+                  )}
                   {r.status === "rejected" && r.rejectionReason && (
                     <div className="mt-1 rounded-lg bg-rose-50 border border-rose-200 px-2 py-1 text-xs text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300">
                       <span className="font-semibold">Rejection reason:</span> {r.rejectionReason}
@@ -1536,6 +1548,12 @@ export function InvoicesBoard({
             ? [{ storage_path: inv.storage_path, file_name: inv.storage_path.split("/").pop() ?? "invoice.pdf" }]
             : [];
 
+      const isGuestCreated =
+        (inv.storage_path?.startsWith("guest-submit/") ?? false) ||
+        files.some((f) => f.storage_path?.startsWith("guest-submit/"));
+      const invoiceType = (inv as { invoice_type?: string }).invoice_type ?? "guest";
+      const isProducerCreated = invoiceType === "guest" && !isGuestCreated;
+
       return {
         id: inv.id,
         submitterId: inv.submitter_user_id,
@@ -1570,6 +1588,8 @@ export function InvoicesBoard({
         missingFields,
         files,
         tags: (inv as { tags?: string[] | null }).tags ?? [],
+        isGuestCreated,
+        isProducerCreated,
       } satisfies DisplayRow;
     });
   }, [effectiveInvoices, departmentMap, programMap, profileMap]);

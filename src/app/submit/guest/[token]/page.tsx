@@ -11,7 +11,14 @@ export default async function GuestInvoiceSubmitPage({ params }: PageProps) {
   const result = await getGuestSubmitTokenData(token);
 
   if (!result.ok) {
-    return <GuestSubmitErrorClient token={token} error={result.error} />;
+    return (
+      <GuestSubmitErrorClient
+        token={token}
+        error={result.error}
+        expiresAt={"expiresAt" in result ? result.expiresAt : undefined}
+        errorType={"errorType" in result ? result.errorType : undefined}
+      />
+    );
   }
 
   const guestData = {

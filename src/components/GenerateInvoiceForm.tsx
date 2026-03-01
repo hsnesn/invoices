@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { BankDetailsFields, BANK_DETAILS_DEFAULT, validateBankDetails, type BankDetailsValues } from "@/components/BankDetailsFields";
 
 type DuplicateHit = {
   id: string;
@@ -37,6 +38,9 @@ type GuestTemplate = {
   sort_code: string | null;
   bank_address: string | null;
   paypal: string | null;
+  bank_type?: string | null;
+  iban?: string | null;
+  swift_bic?: string | null;
   department_id: string | null;
   program_id: string | null;
 };
@@ -63,12 +67,7 @@ export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
   const [programId, setProgramId] = useState("");
   const [appearances, setAppearances] = useState<Appearance[]>([{ programmeName: "", topic: "", date: today, amount: "" }]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [paypal, setPaypal] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [sortCode, setSortCode] = useState("");
-  const [bankAddress, setBankAddress] = useState("");
+  const [bankDetails, setBankDetails] = useState<BankDetailsValues>(BANK_DETAILS_DEFAULT);
   const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -150,12 +149,17 @@ export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
     setGuestAddress(t.guest_address ?? "");
     setGuestPhone(t.guest_phone ?? "");
     setGuestEmail(t.guest_email ?? "");
-    setAccountName(t.account_name ?? "");
-    setBankName(t.bank_name ?? "");
-    setAccountNumber(t.account_number ?? "");
-    setSortCode(t.sort_code ?? "");
-    setBankAddress(t.bank_address ?? "");
-    setPaypal(t.paypal ?? "");
+    setBankDetails({
+      bankType: t.bank_type === "international" ? "international" : "uk",
+      accountName: t.account_name ?? "",
+      bankName: t.bank_name ?? "",
+      accountNumber: t.account_number ?? "",
+      sortCode: t.sort_code ?? "",
+      bankAddress: t.bank_address ?? "",
+      iban: t.iban ?? "",
+      swiftBic: t.swift_bic ?? "",
+      paypal: t.paypal ?? "",
+    });
     if (t.department_id) setDepartmentId(t.department_id);
     if (t.program_id) setProgramId(t.program_id);
     setSaveTemplateName(t.name);
@@ -198,12 +202,15 @@ export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
           guest_address: guestAddress,
           guest_phone: guestPhone,
           guest_email: guestEmail,
-          account_name: accountName,
-          bank_name: bankName,
-          account_number: accountNumber,
-          sort_code: sortCode,
-          bank_address: bankAddress,
-          paypal,
+          account_name: bankDetails.accountName,
+          bank_name: bankDetails.bankName,
+          account_number: bankDetails.accountNumber,
+          sort_code: bankDetails.sortCode,
+          bank_address: bankDetails.bankAddress,
+          paypal: bankDetails.paypal,
+          bank_type: bankDetails.bankType,
+          iban: bankDetails.iban,
+          swift_bic: bankDetails.swiftBic,
           department_id: departmentId || undefined,
           program_id: programId || undefined,
         }),
@@ -243,12 +250,15 @@ export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
           guest_address: guestAddress,
           guest_phone: guestPhone,
           guest_email: guestEmail,
-          account_name: accountName,
-          bank_name: bankName,
-          account_number: accountNumber,
-          sort_code: sortCode,
-          bank_address: bankAddress,
-          paypal,
+          account_name: bankDetails.accountName,
+          bank_name: bankDetails.bankName,
+          account_number: bankDetails.accountNumber,
+          sort_code: bankDetails.sortCode,
+          bank_address: bankDetails.bankAddress,
+          paypal: bankDetails.paypal,
+          bank_type: bankDetails.bankType,
+          iban: bankDetails.iban,
+          swift_bic: bankDetails.swiftBic,
           department_id: departmentId || undefined,
           program_id: programId || undefined,
         }),
@@ -313,8 +323,9 @@ export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
     if (departmentHasPrograms && !programId) { setError("Programme name is required when a department with programmes is selected"); return; }
     const validAppearances = appearances.filter((a) => a.topic.trim() && a.date && parseFloat(a.amount) > 0);
     if (validAppearances.length === 0) { setError("At least one appearance with topic, date and amount is required"); return; }
-    if (!accountName.trim() || !accountNumber.trim() || !sortCode.trim()) {
-      setError("Account name, account number and sort code are required");
+    const bankErr = validateBankDetails(bankDetails);
+    if (bankErr) {
+      setError(bankErr);
       return;
     }
 
@@ -349,12 +360,14 @@ export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
           expenses: expenses
             .filter((e) => e.label.trim() && parseFloat(e.amount) > 0)
             .map((e) => ({ label: e.label.trim(), amount: parseFloat(e.amount) || 0 })),
-          paypal: paypal.trim() || undefined,
-          accountName: accountName.trim(),
-          bankName: bankName.trim() || undefined,
-          accountNumber: accountNumber.trim(),
-          sortCode: sortCode.trim(),
-          bankAddress: bankAddress.trim() || undefined,
+          paypal: bankDetails.paypal.trim() || undefined,
+          accountName: bankDetails.accountName.trim(),
+          bankName: bankDetails.bankName.trim() || undefined,
+          bankAddress: bankDetails.bankAddress.trim() || undefined,
+          bank_type: bankDetails.bankType,
+          ...(bankDetails.bankType === "uk"
+            ? { accountNumber: bankDetails.accountNumber.trim(), sortCode: bankDetails.sortCode.trim() }
+            : { iban: bankDetails.iban.trim(), swift_bic: bankDetails.swiftBic.trim() }),
           department_id: departmentId,
           program_id: programId || undefined,
           title: title.trim(),
@@ -615,13 +628,12 @@ export function GenerateInvoiceForm({ guestId }: { guestId?: string | null }) {
       <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-600">
         <h3 className="text-sm font-semibold text-slate-800">Payment</h3>
         <p className="mt-1 text-xs text-slate-500">We prefer PayPal if you have one.</p>
-        <div className="mt-3 space-y-2">
-          <input value={paypal} onChange={(e) => setPaypal(e.target.value)} placeholder="PayPal (email or account)" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
-          <input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Account Name *" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
-          <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Bank Name" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
-          <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="Account Number *" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
-          <input value={sortCode} onChange={(e) => setSortCode(e.target.value)} placeholder="Sort Code * (e.g. 09-01-27)" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
-          <input value={bankAddress} onChange={(e) => setBankAddress(e.target.value)} placeholder="Bank Address" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+        <div className="mt-3">
+          <BankDetailsFields
+            values={bankDetails}
+            onChange={setBankDetails}
+            inputCls="w-full rounded-lg border border-slate-300 px-4 py-3 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
         </div>
       </div>
 

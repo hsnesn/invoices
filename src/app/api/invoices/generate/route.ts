@@ -44,9 +44,12 @@ export async function POST(request: NextRequest) {
       paypal?: string;
       accountName: string;
       bankName?: string;
-      accountNumber: string;
-      sortCode: string;
+      accountNumber?: string;
+      sortCode?: string;
       bankAddress?: string;
+      bank_type?: "uk" | "international";
+      iban?: string;
+      swift_bic?: string;
       department_id: string;
       program_id: string;
       title: string;
@@ -59,8 +62,18 @@ export async function POST(request: NextRequest) {
     if (!data.invNo?.trim()) return NextResponse.json({ error: "INV NO is required" }, { status: 400 });
     if (!data.guestName?.trim()) return NextResponse.json({ error: "Guest name is required" }, { status: 400 });
     if (!data.appearances?.length) return NextResponse.json({ error: "At least one appearance is required" }, { status: 400 });
-    if (!data.accountName?.trim() || !data.accountNumber?.trim() || !data.sortCode?.trim()) {
-      return NextResponse.json({ error: "Account name, account number and sort code are required" }, { status: 400 });
+    if (!data.accountName?.trim()) {
+      return NextResponse.json({ error: "Account name is required" }, { status: 400 });
+    }
+    const bankType = data.bank_type === "international" ? "international" : "uk";
+    if (bankType === "uk") {
+      if (!data.accountNumber?.trim() || !data.sortCode?.trim()) {
+        return NextResponse.json({ error: "Account number and sort code are required for UK bank accounts" }, { status: 400 });
+      }
+    } else {
+      if (!data.iban?.trim() || !data.swift_bic?.trim()) {
+        return NextResponse.json({ error: "IBAN and SWIFT/BIC are required for international transfers" }, { status: 400 });
+      }
     }
     if (!safeDepartmentId) return NextResponse.json({ error: "Department is required" }, { status: 400 });
     if (!data.title?.trim() || !data.producer?.trim()) return NextResponse.json({ error: "Title and producer are required for list display" }, { status: 400 });
@@ -108,8 +121,10 @@ export async function POST(request: NextRequest) {
       paypal: data.paypal?.trim(),
       accountName: data.accountName.trim(),
       bankName: data.bankName?.trim(),
-      accountNumber: data.accountNumber.trim(),
-      sortCode: data.sortCode.trim(),
+      bankType: bankType as "uk" | "international",
+      ...(bankType === "uk"
+        ? { accountNumber: data.accountNumber!.trim(), sortCode: data.sortCode!.trim() }
+        : { iban: data.iban!.trim(), swiftBic: data.swift_bic!.trim() }),
       bankAddress: data.bankAddress?.trim(),
     };
 
@@ -212,13 +227,13 @@ export async function POST(request: NextRequest) {
         invoice_id: invoiceId,
         invoice_number: data.invNo.trim(),
         beneficiary_name: data.accountName.trim(),
-        account_number: data.accountNumber.trim(),
-        sort_code: data.sortCode.trim(),
+        account_number: bankType === "uk" ? data.accountNumber!.trim() : data.iban?.trim() ?? "",
+        sort_code: bankType === "uk" ? data.sortCode!.trim() : data.swift_bic?.trim() ?? "",
         gross_amount: totalAmount,
         extracted_currency: data.currency || "GBP",
         needs_review: false,
         manager_confirmed: false,
-        raw_json: { source: "generated" },
+        raw_json: { source: "generated", bank_type: bankType },
         updated_at: new Date().toISOString(),
       },
       { onConflict: "invoice_id" }

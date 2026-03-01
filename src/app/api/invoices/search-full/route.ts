@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       .from("invoices")
       .select(`
         id,
+        invoice_type,
         storage_path,
         service_description,
         currency,

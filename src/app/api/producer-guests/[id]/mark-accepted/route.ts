@@ -45,6 +45,9 @@ export async function POST(
       bank_name?: string;
       bank_address?: string;
       paypal?: string;
+      bank_type?: "uk" | "international";
+      iban?: string;
+      swift_bic?: string;
     };
 
     const isAdmin = profile.role === "admin";
@@ -112,14 +115,14 @@ export async function POST(
       const amountStr = `${currency === "GBP" ? "£" : currency === "EUR" ? "€" : "$"}${amount.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
       if (body.generate_invoice_for_guest) {
-        if (
-          !body.account_name?.trim() ||
-          !body.account_number?.trim() ||
-          !body.sort_code?.trim() ||
-          !body.invoice_number?.trim()
-        ) {
+        const bankType = body.bank_type === "international" ? "international" : "uk";
+        const ukValid = bankType === "uk" && body.account_name?.trim() && body.account_number?.trim() && body.sort_code?.trim();
+        const intlValid = bankType === "international" && body.account_name?.trim() && body.iban?.trim() && body.swift_bic?.trim();
+        if (!body.invoice_number?.trim() || (!ukValid && !intlValid)) {
           return NextResponse.json({
-            error: "Account name, account number, sort code and invoice number are required to generate invoice",
+            error: bankType === "international"
+              ? "Account name, IBAN, SWIFT/BIC and invoice number are required to generate invoice"
+              : "Account name, account number, sort code and invoice number are required to generate invoice",
           }, { status: 400 });
         }
 
@@ -161,9 +164,10 @@ export async function POST(
           paypal: body.paypal?.trim(),
           accountName: body.account_name!.trim(),
           bankName: body.bank_name?.trim(),
-          accountNumber: body.account_number!.trim(),
-          sortCode: body.sort_code!.trim(),
           bankAddress: body.bank_address?.trim(),
+          ...(bankType === "international"
+            ? { bankType: "international" as const, iban: body.iban!.trim(), swiftBic: body.swift_bic!.trim() }
+            : { accountNumber: body.account_number!.trim(), sortCode: body.sort_code!.trim() }),
         };
 
         const pdfBuffer = generateGuestInvoicePdf(pdfData);
@@ -234,18 +238,20 @@ export async function POST(
           pending_manager_since: today,
         });
 
+        const storedAccountNumber = bankType === "international" ? body.iban!.trim() : body.account_number!.trim();
+        const storedSortCode = bankType === "international" ? body.swift_bic!.trim() : body.sort_code!.trim();
         await supabase.from("invoice_extracted_fields").upsert(
           {
             invoice_id: invoiceId,
             invoice_number: body.invoice_number!.trim(),
             beneficiary_name: body.account_name!.trim(),
-            account_number: body.account_number!.trim(),
-            sort_code: body.sort_code!.trim(),
+            account_number: storedAccountNumber,
+            sort_code: storedSortCode,
             gross_amount: amount,
             extracted_currency: currency,
             needs_review: false,
             manager_confirmed: false,
-            raw_json: { source: "post_recording_producer_generated" },
+            raw_json: { source: "post_recording_producer_generated", bank_type: bankType },
             updated_at: new Date().toISOString(),
           },
           { onConflict: "invoice_id" }

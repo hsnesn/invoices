@@ -167,11 +167,27 @@ export async function POST(request: NextRequest) {
       const invNo = (body.invoice_number as string)?.trim()!;
       const invoiceDate = (body.invoice_date as string)?.trim() || new Date().toISOString().slice(0, 10);
       const accountName = (body.account_name as string)?.trim()!;
-      const accountNumber = (body.account_number as string)?.trim()!;
-      const sortCode = (body.sort_code as string)?.trim()!;
+      const bankType = (body.bank_type as string)?.trim() === "international" ? "international" : "uk";
+      const accountNumber = (body.account_number as string)?.trim();
+      const sortCode = (body.sort_code as string)?.trim();
+      const iban = (body.iban as string)?.trim();
+      const swiftBic = (body.swift_bic as string)?.trim();
       const bankName = (body.bank_name as string)?.trim() || undefined;
       const bankAddress = (body.bank_address as string)?.trim() || undefined;
       const paypal = (body.paypal as string)?.trim() || undefined;
+
+      if (!accountName) {
+        return NextResponse.json({ error: "Account name is required" }, { status: 400 });
+      }
+      if (bankType === "uk") {
+        if (!accountNumber || !sortCode) {
+          return NextResponse.json({ error: "Account number and sort code are required for UK bank accounts" }, { status: 400 });
+        }
+      } else {
+        if (!iban || !swiftBic) {
+          return NextResponse.json({ error: "IBAN and SWIFT/BIC are required for international transfers" }, { status: 400 });
+        }
+      }
 
       const { data: programs } = await supabase.from("programs").select("id, name, department_id");
       const prog = (programs ?? []).find((p) => (p.name ?? "").trim().toLowerCase() === programName.toLowerCase());
@@ -208,8 +224,8 @@ export async function POST(request: NextRequest) {
         paypal,
         accountName,
         bankName,
-        accountNumber,
-        sortCode,
+        bankType: bankType as "uk" | "international",
+        ...(bankType === "uk" ? { accountNumber: accountNumber!, sortCode: sortCode! } : { iban: iban!, swiftBic: swiftBic! }),
         bankAddress,
       };
 

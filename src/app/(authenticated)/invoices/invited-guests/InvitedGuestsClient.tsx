@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { getProgramDescription, PROGRAM_DESCRIPTIONS } from "@/lib/program-descriptions";
 import { buildInviteGreeting, type GreetingType } from "@/lib/invite-greeting";
 import { SendInvoiceLinkModal } from "@/components/SendInvoiceLinkModal";
+import { BankDetailsFields, BANK_DETAILS_DEFAULT, validateBankDetails, type BankDetailsValues } from "@/components/BankDetailsFields";
 
 type ProducerGuest = {
   id: string;
@@ -76,7 +77,11 @@ export function InvitedGuestsClient({
     bank_name: "",
     bank_address: "",
     paypal: "",
+    bank_type: "uk" as "uk" | "international",
+    iban: "",
+    swift_bic: "",
   });
+  const [acceptanceBankDetails, setAcceptanceBankDetails] = useState<BankDetailsValues>(BANK_DETAILS_DEFAULT);
 
   const [form, setForm] = useState({
     guest_name: "",
@@ -97,7 +102,7 @@ export function InvitedGuestsClient({
 
   const [showPreview, setShowPreview] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [invoiceTemplates, setInvoiceTemplates] = useState<{ id: string; name: string; guest_name: string | null; account_name: string | null; account_number: string | null; sort_code: string | null; bank_name: string | null; bank_address: string | null; paypal: string | null }[]>([]);
+  const [invoiceTemplates, setInvoiceTemplates] = useState<{ id: string; name: string; guest_name: string | null; account_name: string | null; account_number: string | null; sort_code: string | null; bank_name: string | null; bank_address: string | null; paypal: string | null; bank_type?: string | null; iban?: string | null; swift_bic?: string | null }[]>([]);
   const [bulkAcceptForm, setBulkAcceptForm] = useState({
     payment_received: true,
     payment_amount: 0,
@@ -607,8 +612,13 @@ export function InvitedGuestsClient({
       return;
     }
     if (acceptanceForm.generate_invoice) {
-      if (!acceptanceForm.invoice_number.trim() || !acceptanceForm.account_name.trim() || !acceptanceForm.account_number.trim() || !acceptanceForm.sort_code.trim()) {
-        toast.error("Invoice number and bank details are required to generate invoice");
+      if (!acceptanceForm.invoice_number.trim()) {
+        toast.error("Invoice number is required to generate invoice");
+        return;
+      }
+      const bankErr = validateBankDetails(acceptanceBankDetails);
+      if (bankErr) {
+        toast.error(bankErr);
         return;
       }
       if (invoiceNumberConflict) {
@@ -651,36 +661,47 @@ export function InvitedGuestsClient({
           generate_invoice_for_guest: acceptanceForm.generate_invoice,
           invoice_number: acceptanceForm.generate_invoice ? acceptanceForm.invoice_number : undefined,
           invoice_date: acceptanceForm.generate_invoice ? acceptanceForm.invoice_date : undefined,
-          account_name: acceptanceForm.generate_invoice ? acceptanceForm.account_name : undefined,
-          account_number: acceptanceForm.generate_invoice ? acceptanceForm.account_number : undefined,
-          sort_code: acceptanceForm.generate_invoice ? acceptanceForm.sort_code : undefined,
-          bank_name: acceptanceForm.generate_invoice ? acceptanceForm.bank_name : undefined,
-          bank_address: acceptanceForm.generate_invoice ? acceptanceForm.bank_address : undefined,
-          paypal: acceptanceForm.generate_invoice ? acceptanceForm.paypal : undefined,
+          account_name: acceptanceForm.generate_invoice ? acceptanceBankDetails.accountName : undefined,
+          bank_name: acceptanceForm.generate_invoice ? acceptanceBankDetails.bankName : undefined,
+          bank_address: acceptanceForm.generate_invoice ? acceptanceBankDetails.bankAddress : undefined,
+          paypal: acceptanceForm.generate_invoice ? acceptanceBankDetails.paypal : undefined,
+          bank_type: acceptanceForm.generate_invoice ? acceptanceBankDetails.bankType : undefined,
+          account_number: acceptanceForm.generate_invoice && acceptanceBankDetails.bankType === "uk" ? acceptanceBankDetails.accountNumber : undefined,
+          sort_code: acceptanceForm.generate_invoice && acceptanceBankDetails.bankType === "uk" ? acceptanceBankDetails.sortCode : undefined,
+          iban: acceptanceForm.generate_invoice && acceptanceBankDetails.bankType === "international" ? acceptanceBankDetails.iban : undefined,
+          swift_bic: acceptanceForm.generate_invoice && acceptanceBankDetails.bankType === "international" ? acceptanceBankDetails.swiftBic : undefined,
         }),
         credentials: "same-origin",
       });
       const data = await res.json();
       if (res.ok) {
-        if (acceptanceForm.save_as_template && acceptanceForm.account_name && acceptanceForm.account_number && acceptanceForm.sort_code && acceptanceModal) {
-          try {
-            await fetch("/api/guest-invoice-templates", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                name: `${acceptanceModal.guest_name} – ${acceptanceForm.program_name || "template"}`,
-                guest_name: acceptanceModal.guest_name,
-                account_name: acceptanceForm.account_name,
-                account_number: acceptanceForm.account_number,
-                sort_code: acceptanceForm.sort_code,
-                bank_name: acceptanceForm.bank_name,
-                bank_address: acceptanceForm.bank_address,
-                paypal: acceptanceForm.paypal,
-              }),
-              credentials: "same-origin",
-            });
-            toast.success("Guest marked as accepted. Bank details saved as template.");
-          } catch {
+        if (acceptanceForm.save_as_template && acceptanceBankDetails.accountName && acceptanceModal) {
+          const bankValid = !validateBankDetails(acceptanceBankDetails);
+          if (bankValid) {
+            try {
+              await fetch("/api/guest-invoice-templates", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: `${acceptanceModal.guest_name} – ${acceptanceForm.program_name || "template"}`,
+                  guest_name: acceptanceModal.guest_name,
+                  account_name: acceptanceBankDetails.accountName,
+                  account_number: acceptanceBankDetails.accountNumber,
+                  sort_code: acceptanceBankDetails.sortCode,
+                  bank_name: acceptanceBankDetails.bankName,
+                  bank_address: acceptanceBankDetails.bankAddress,
+                  paypal: acceptanceBankDetails.paypal,
+                  bank_type: acceptanceBankDetails.bankType,
+                  iban: acceptanceBankDetails.iban,
+                  swift_bic: acceptanceBankDetails.swiftBic,
+                }),
+                credentials: "same-origin",
+              });
+              toast.success("Guest marked as accepted. Bank details saved as template.");
+            } catch {
+              toast.success(data.message ?? "Guest marked as accepted");
+            }
+          } else {
             toast.success(data.message ?? "Guest marked as accepted");
           }
         } else {
@@ -1181,6 +1202,7 @@ export function InvitedGuestsClient({
                                 const v = e.target.value;
                                 if (v === "yes") {
                                   setAcceptanceModal(g);
+                                  setAcceptanceBankDetails(BANK_DETAILS_DEFAULT);
                                   const baseForm = {
                                     payment_received: true,
                                     payment_amount: 0,
@@ -1198,6 +1220,9 @@ export function InvitedGuestsClient({
                                     bank_name: "",
                                     bank_address: "",
                                     paypal: "",
+                                    bank_type: "uk" as const,
+                                    iban: "",
+                                    swift_bic: "",
                                   };
                                   setAcceptanceForm(baseForm);
                                   fetch(`/api/producer-guests/${g.id}/last-invitation`, { credentials: "same-origin" })
@@ -1937,15 +1962,17 @@ ${selectedProducer.full_name}`}
                             onChange={(e) => {
                               const t = invoiceTemplates.find((x) => x.id === e.target.value);
                               if (t) {
-                                setAcceptanceForm((p) => ({
-                                  ...p,
-                                  account_name: t.account_name ?? "",
-                                  account_number: t.account_number ?? "",
-                                  sort_code: t.sort_code ?? "",
-                                  bank_name: t.bank_name ?? "",
-                                  bank_address: t.bank_address ?? "",
+                                setAcceptanceBankDetails({
+                                  bankType: t.bank_type === "international" ? "international" : "uk",
+                                  accountName: t.account_name ?? "",
+                                  bankName: t.bank_name ?? "",
+                                  accountNumber: t.account_number ?? "",
+                                  sortCode: t.sort_code ?? "",
+                                  bankAddress: t.bank_address ?? "",
+                                  iban: t.iban ?? "",
+                                  swiftBic: t.swift_bic ?? "",
                                   paypal: t.paypal ?? "",
-                                }));
+                                });
                               }
                             }}
                           >
@@ -1995,62 +2022,11 @@ ${selectedProducer.full_name}`}
                           />
                         </div>
                       </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Account name *</label>
-                        <input
-                          type="text"
-                          value={acceptanceForm.account_name}
-                          onChange={(e) => setAcceptanceForm((p) => ({ ...p, account_name: e.target.value }))}
-                          className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Account number *</label>
-                        <input
-                          type="text"
-                          value={acceptanceForm.account_number}
-                          onChange={(e) => setAcceptanceForm((p) => ({ ...p, account_number: e.target.value }))}
-                          className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Sort code *</label>
-                        <input
-                          type="text"
-                          value={acceptanceForm.sort_code}
-                          onChange={(e) => setAcceptanceForm((p) => ({ ...p, sort_code: e.target.value }))}
-                          placeholder="e.g. 12-34-56"
-                          className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Bank name</label>
-                        <input
-                          type="text"
-                          value={acceptanceForm.bank_name}
-                          onChange={(e) => setAcceptanceForm((p) => ({ ...p, bank_name: e.target.value }))}
-                          className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Bank address</label>
-                        <input
-                          type="text"
-                          value={acceptanceForm.bank_address}
-                          onChange={(e) => setAcceptanceForm((p) => ({ ...p, bank_address: e.target.value }))}
-                          className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">PayPal (if applicable)</label>
-                        <input
-                          type="text"
-                          value={acceptanceForm.paypal}
-                          onChange={(e) => setAcceptanceForm((p) => ({ ...p, paypal: e.target.value }))}
-                          placeholder="PayPal email"
-                          className="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                      </div>
+                      <BankDetailsFields
+                        values={acceptanceBankDetails}
+                        onChange={setAcceptanceBankDetails}
+                        inputCls="rounded border border-gray-300 px-3 py-2 text-sm w-full dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      />
                       <label className="flex cursor-pointer items-center gap-2">
                         <input
                           type="checkbox"
@@ -2072,7 +2048,7 @@ ${selectedProducer.full_name}`}
               <button
                 type="button"
                 onClick={handleMarkAccepted}
-                disabled={sending || !acceptanceModal.email?.includes("@") || (acceptanceForm.payment_received && acceptanceForm.payment_amount <= 0) || (acceptanceForm.generate_invoice && (invoiceNumberConflict || !acceptanceForm.invoice_number.trim() || !acceptanceForm.account_name.trim() || !acceptanceForm.account_number.trim() || !acceptanceForm.sort_code.trim()))}
+                disabled={sending || !acceptanceModal.email?.includes("@") || (acceptanceForm.payment_received && acceptanceForm.payment_amount <= 0) || (acceptanceForm.generate_invoice && (invoiceNumberConflict || !acceptanceForm.invoice_number.trim() || !!validateBankDetails(acceptanceBankDetails)))}
                 className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 {sending ? "Processing..." : "Mark Accepted & Send"}

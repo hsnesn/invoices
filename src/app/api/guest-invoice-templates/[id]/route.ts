@@ -38,6 +38,9 @@ export async function PATCH(
       sort_code,
       bank_address,
       paypal,
+      bank_type,
+      iban,
+      swift_bic,
       department_id,
       program_id,
     } = body;
@@ -55,6 +58,9 @@ export async function PATCH(
     if (sort_code !== undefined) update.sort_code = sort_code?.trim() || null;
     if (bank_address !== undefined) update.bank_address = bank_address?.trim() || null;
     if (paypal !== undefined) update.paypal = paypal?.trim() || null;
+    if (bank_type !== undefined) update.bank_type = bank_type === "international" ? "international" : "uk";
+    if (iban !== undefined) update.iban = iban?.trim() || null;
+    if (swift_bic !== undefined) update.swift_bic = swift_bic?.trim() || null;
     if (department_id !== undefined) update.department_id = department_id || null;
     if (program_id !== undefined) update.program_id = program_id || null;
     const { data, error } = await supabase

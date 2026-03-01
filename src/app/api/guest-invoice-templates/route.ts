@@ -8,7 +8,7 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("guest_invoice_templates")
-      .select("id, name, title, guest_name, guest_address, guest_phone, guest_email, account_name, bank_name, account_number, sort_code, bank_address, paypal, department_id, program_id")
+      .select("id, name, title, guest_name, guest_address, guest_phone, guest_email, account_name, bank_name, account_number, sort_code, bank_address, paypal, bank_type, iban, swift_bic, department_id, program_id")
       .eq("creator_user_id", session.user.id)
       .order("updated_at", { ascending: false });
     if (error) throw error;
@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
       sort_code,
       bank_address,
       paypal,
+      bank_type,
+      iban,
+      swift_bic,
       department_id,
       program_id,
     } = body;
@@ -57,6 +60,9 @@ export async function POST(request: NextRequest) {
         sort_code: sort_code?.trim() || null,
         bank_address: bank_address?.trim() || null,
         paypal: paypal?.trim() || null,
+        bank_type: bank_type === "international" ? "international" : "uk",
+        iban: iban?.trim() || null,
+        swift_bic: swift_bic?.trim() || null,
         department_id: department_id || null,
         program_id: program_id || null,
         updated_at: new Date().toISOString(),

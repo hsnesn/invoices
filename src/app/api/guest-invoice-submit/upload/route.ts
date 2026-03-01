@@ -11,6 +11,8 @@ import { createAuditEvent } from "@/lib/audit";
 import { runInvoiceExtraction } from "@/lib/invoice-extraction";
 import { pickManagerForGuestInvoice } from "@/lib/manager-assignment";
 import { runGuestContactSearch } from "@/lib/guest-contact-search";
+import { sendGuestSubmissionConfirmation } from "@/lib/post-recording-emails";
+import { batchGetUserEmails } from "@/lib/email-settings";
 
 const BUCKET = "invoices";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     const { data: guest, error: guestErr } = await supabase
       .from("producer_guests")
-      .select("id, guest_name, program_name, recording_date, recording_topic, producer_user_id")
+      .select("id, guest_name, email, program_name, recording_date, recording_topic, producer_user_id")
       .eq("id", t.producer_guest_id)
       .single();
 
@@ -99,7 +101,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Guest not found" }, { status: 404 });
     }
 
-    const g = guest as { guest_name: string; program_name: string | null; recording_date: string | null; recording_topic: string | null; producer_user_id: string };
+    const g = guest as { guest_name: string; email: string | null; program_name: string | null; recording_date: string | null; recording_topic: string | null; producer_user_id: string };
     let deptId: string | null = null;
     let progId: string | null = null;
     if (g.program_name?.trim()) {
@@ -200,6 +202,37 @@ export async function POST(request: NextRequest) {
       payload: { source: "guest_submit_link", storage_path: storagePath, producer_guest_id: t.producer_guest_id },
     });
 
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const statusToken = crypto.randomUUID();
+    await supabase.from("guest_invoice_status_tokens").insert({
+      invoice_id: invoiceId,
+      token: statusToken,
+      guest_email: g.email || null,
+      guest_name: g.guest_name,
+      program_name: g.program_name || null,
+    });
+
+    if (g.email?.includes("@")) {
+      const producerEmailMap = await batchGetUserEmails([g.producer_user_id]);
+      const producerEmail = producerEmailMap.get(g.producer_user_id)?.trim();
+      const { data: producerProfile } = await supabase.from("profiles").select("full_name").eq("id", g.producer_user_id).single();
+      const producerName = producerProfile?.full_name?.trim() || "The Producer";
+      const progName = g.program_name?.trim() || "the programme";
+      const statusLink = `${APP_URL}/submit/status/${statusToken}`;
+      try {
+        await sendGuestSubmissionConfirmation({
+          to: g.email,
+          guestName: g.guest_name,
+          programName: progName,
+          invoiceNumber: seedInvNumber || invoiceId.slice(0, 8),
+          statusLink,
+          producerName,
+        });
+      } catch (emErr) {
+        console.error("[Guest upload] Confirmation email failed:", emErr);
+      }
+    }
+
     const enabled = await isEmailStageEnabled("submission");
     if (enabled) {
       const sendSubmitter = await isRecipientEnabled("submission", "submitter");
@@ -223,6 +256,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       invoice_id: invoiceId,
+      status_token: statusToken,
+      invoice_number: seedInvNumber || invoiceId.slice(0, 8),
       message: "Invoice submitted successfully. Thank you!",
     });
   } catch (e) {
