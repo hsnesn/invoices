@@ -1,17 +1,19 @@
 /**
- * Generate and download bank transfer form (Word docx) for international invoices.
- * When payment is international (IBAN/SWIFT), fills the Türkiye İş Bankası form
- * and returns it as a downloadable file. Also adds the form to invoice_files.
+ * Generate and download bank transfer form (Word docx) for international invoices only.
+ * Türkiye İş Bankası London Branch transfer form.
+ * Block if bank_type != "international" or currency not in [USD,EUR,GBP].
+ * Idempotent: returns existing file unless force=true.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth";
-import { canAccessInvoice } from "@/lib/invoice-access";
-import { generateBankTransferForm } from "@/lib/bank-transfer-form";
-import { sendEmailWithAttachment } from "@/lib/email";
+import { generateBankTransferForm, ACCOUNT_BY_CURRENCY } from "@/lib/bank-transfer-form";
+import { createAuditEvent } from "@/lib/audit";
 
 const BUCKET = "invoices";
-const LONDON_FINANCE_EMAIL = "london.finance@trtworld.com";
+const STORAGE_PREFIX = "bank-transfer";
+const SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP"] as const;
+const WARNING_INCOMPLETE = "WARNING: MISSING BANK DETAILS – VERIFY BEFORE PAYMENT";
 
 export async function GET(
   request: NextRequest,
@@ -21,161 +23,175 @@ export async function GET(
     const { session, profile } = await requireAuth();
     const { id: invoiceId } = await params;
     const supabase = createAdminClient();
+    const { searchParams } = new URL(request.url);
+    const force = searchParams.get("force") === "true";
+
+    // Finance user + department check (admin/operations bypass)
+    const isFinanceOrHigher = ["admin", "operations", "finance"].includes(profile.role ?? "");
+    if (!isFinanceOrHigher) {
+      return NextResponse.json({ error: "Finance access required" }, { status: 403 });
+    }
 
     const { data: invoice } = await supabase
       .from("invoices")
-      .select("id, submitter_user_id, invoice_type, service_description, service_date_from, service_date_to, currency")
+      .select("id, submitter_user_id, department_id, service_description, currency, bank_transfer_form_path, bank_transfer_currency")
       .eq("id", invoiceId)
       .single();
 
     if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-    const allowed = await canAccessInvoice(supabase, invoiceId, session.user.id, {
-      role: profile.role,
-      department_id: profile.department_id,
-      program_ids: profile.program_ids,
-      full_name: profile.full_name ?? null,
-    });
-    if (!allowed) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (profile.role === "finance" && invoice.department_id && profile.department_id !== invoice.department_id) {
+      return NextResponse.json({ error: "Invoice does not belong to your department" }, { status: 403 });
+    }
+
+    // Idempotency: return existing file if present and not forcing
+    const existingPath = (invoice as { bank_transfer_form_path?: string | null }).bank_transfer_form_path;
+    if (existingPath && !force) {
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from(BUCKET)
+        .download(existingPath);
+
+      if (!downloadError && fileData) {
+        const buf = Buffer.from(await fileData.arrayBuffer());
+        const { data: inv } = await supabase
+          .from("invoices")
+          .select("bank_transfer_form_status, bank_transfer_currency, currency")
+          .eq("id", invoiceId)
+          .single();
+        const invRow = inv as { bank_transfer_form_status?: string; bank_transfer_currency?: string; currency?: string } | null;
+        const formStatus = invRow?.bank_transfer_form_status ?? "READY";
+        const currencyFinal = invRow?.bank_transfer_currency ?? invRow?.currency ?? "";
+        const senderAccount = currencyFinal && SUPPORTED_CURRENCIES.includes(currencyFinal as (typeof SUPPORTED_CURRENCIES)[number])
+          ? ACCOUNT_BY_CURRENCY[currencyFinal as (typeof SUPPORTED_CURRENCIES)[number]]
+          : "";
+
+        return new NextResponse(new Uint8Array(buf), {
+          headers: {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "Content-Disposition": `attachment; filename="bank-transfer-form.docx"`,
+            "X-Form-Status": formStatus,
+            "X-Sender-Account-Number": senderAccount,
+            "X-Currency-Final": currencyFinal,
+          },
+        });
+      }
     }
 
     const { data: ext } = await supabase
       .from("invoice_extracted_fields")
-      .select("beneficiary_name, account_number, sort_code, gross_amount, extracted_currency, raw_json")
+      .select("beneficiary_name, account_number, gross_amount, extracted_currency, raw_json")
       .eq("invoice_id", invoiceId)
       .maybeSingle();
 
     const raw = (ext?.raw_json ?? {}) as Record<string, unknown>;
     const bankType = (raw.bank_type as string) ?? null;
-    const isInternational = bankType === "international";
 
-    if (!isInternational) {
+    if (bankType !== "international") {
       return NextResponse.json(
         { error: "Bank transfer form is only for international (IBAN/SWIFT) invoices" },
         { status: 400 }
       );
     }
 
-    const currency = (ext?.extracted_currency ?? invoice.currency ?? "GBP") as "USD" | "EUR" | "GBP";
-    const validCurrency = ["USD", "EUR", "GBP"].includes(currency) ? currency : "GBP";
-
-    const beneficiaryName = ext?.beneficiary_name ?? "";
-    const iban = (raw.iban as string) ?? ext?.account_number ?? "";
-    const swiftBic = (raw.swift_bic as string) ?? ext?.sort_code ?? "";
-    const bankName = (raw.bank_name as string) ?? "";
-    const bankAddress = (raw.bank_address as string) ?? "";
-    const amount = ext?.gross_amount ?? 0;
-
-    if (!iban || !swiftBic) {
+    const currencyFinal = (ext?.extracted_currency ?? invoice.currency ?? "")
+      .toString()
+      .trim()
+      .toUpperCase();
+    if (!SUPPORTED_CURRENCIES.includes(currencyFinal as (typeof SUPPORTED_CURRENCIES)[number])) {
       return NextResponse.json(
-        { error: "IBAN and SWIFT/BIC are required for bank transfer form" },
+        { error: `Currency must be one of USD, EUR, GBP. Got: ${currencyFinal || "(empty)"}` },
         { status: 400 }
       );
     }
+    const validCurrency = currencyFinal as (typeof SUPPORTED_CURRENCIES)[number];
+    const senderAccount = ACCOUNT_BY_CURRENCY[validCurrency];
 
-    const meta = parseServiceDescription(invoice.service_description);
-    const invNumber = meta.invoice_number ?? meta["invoice number"] ?? invoiceId.slice(0, 8);
-    const guestName = meta.guest_name ?? meta["guest name"] ?? (beneficiaryName || "Guest");
-    // Use form creation date (when the form is generated)
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const safeGuestName = guestName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-").slice(0, 40) || "Guest";
-    const formFileName = `${validCurrency}-TRTW-${safeGuestName}-${invNumber}-${dateStr}.docx`;
+    const parsed = parseServiceDescription(invoice.service_description);
+    const parsedInvoiceNumber = parsed.invoice_number ?? null;
+    const parsedGuestName = parsed.guest_name ?? null;
+
+    // Strict field mapping (source of truth order)
+    const beneficiaryName =
+      (ext?.beneficiary_name as string)?.trim() || parsedGuestName || "—";
+    const iban =
+      (raw.iban as string)?.trim() || (ext?.account_number as string)?.trim() || "—";
+    const swiftBic = (raw.swift_bic as string)?.trim() || "—";
+    const bankName = (raw.bank_name as string)?.trim() || "";
+    const bankAddress = (raw.bank_address as string)?.trim() || "";
+    const beneficiaryAddress = (raw.beneficiary_address as string)?.trim() || "";
+
+    const isComplete = !!(raw.iban && raw.swift_bic);
+    const formStatus = isComplete ? "READY" : "INCOMPLETE";
+    const warningLine = formStatus === "INCOMPLETE" ? WARNING_INCOMPLETE : "";
+
+    const amount = ext?.gross_amount ?? 0;
+    const message = parsedInvoiceNumber ? `Invoice ${parsedInvoiceNumber}` : "Invoice";
+    const dateStr = formatDateDDMMYYYY(new Date());
 
     const formData = {
       date: dateStr,
-      beneficiaryName: beneficiaryName || "—",
+      sender_account_number: senderAccount,
+      beneficiary_name: beneficiaryName,
       iban,
-      currency: validCurrency,
-      bankSortCode: "", // For international, sort code is often N/A
-      swiftBic,
-      bankName: bankName || "",
-      bankAddress: bankAddress || "",
+      swift_bic: swiftBic,
+      bank_name: bankName,
+      bank_address: bankAddress,
+      beneficiary_address: beneficiaryAddress,
       amount: amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      message: `Invoice ${invNumber}`,
+      currency: validCurrency,
+      message,
+      bank_sort_code: "",
+      warning_line: warningLine,
+      charges: "",
+      daytime_phone: "",
     };
 
-    const docxBuffer = generateBankTransferForm(formData, validCurrency);
+    const docxBuffer = generateBankTransferForm(formData);
 
-    // Ensure main invoice is in invoice_files first (Invoice File section); then add bank form (Int Transfer)
-    const { data: existingFiles } = await supabase
-      .from("invoice_files")
-      .select("storage_path, sort_order")
-      .eq("invoice_id", invoiceId)
-      .order("sort_order", { ascending: true });
-
-    const { data: invRow } = await supabase.from("invoices").select("storage_path").eq("id", invoiceId).single();
-    const mainStoragePath = invRow?.storage_path ?? null;
-
-    // Backfill main invoice to invoice_files if missing (so it appears in Invoice File section)
-    if (mainStoragePath) {
-      const mainAlreadyInFiles = existingFiles?.some((f) => f.storage_path === mainStoragePath);
-      if (!mainAlreadyInFiles) {
-        const mainFileName = mainStoragePath.split("/").pop() ?? "invoice.pdf";
-        const minOrder = existingFiles?.length
-          ? Math.min(...existingFiles.map((f) => f.sort_order ?? 0))
-          : 0;
-        const mainSortOrder = minOrder - 1; // So main invoice appears first
-        await supabase.from("invoice_files").insert({
-          invoice_id: invoiceId,
-          storage_path: mainStoragePath,
-          file_name: mainFileName,
-          sort_order: mainSortOrder,
-        });
-      }
-    }
-
-    // Upload bank form and add to invoice_files (Int Transfer)
-    const storagePath = `${session.user.id}/${invoiceId}-bank-form-${Date.now()}.docx`;
+    const storagePath = `${STORAGE_PREFIX}/${invoiceId}/bank-transfer-form.docx`;
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(storagePath, docxBuffer, { contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", upsert: false });
+      .upload(storagePath, docxBuffer, {
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        upsert: true,
+      });
 
     if (uploadError) {
       console.error("[bank-transfer-form] Storage upload failed:", uploadError.message);
-    }
-    if (!uploadError) {
-      const { data: afterFiles } = await supabase
-        .from("invoice_files")
-        .select("sort_order")
-        .eq("invoice_id", invoiceId)
-        .order("sort_order", { ascending: false });
-      const nextOrder = (afterFiles?.[0]?.sort_order ?? 0) + 1;
-
-      await supabase.from("invoice_files").insert({
-        invoice_id: invoiceId,
-        storage_path: storagePath,
-        file_name: formFileName,
-        sort_order: nextOrder,
-      });
+      return NextResponse.json({ error: "Failed to save bank transfer form" }, { status: 500 });
     }
 
-    // Send form to London Finance by email
-    try {
-      const result = await sendEmailWithAttachment({
-        to: LONDON_FINANCE_EMAIL,
-        subject: `Bank transfer form — ${formFileName}`,
-        html: `
-          <p>A bank transfer form has been generated for an international invoice.</p>
-          <p><strong>Invoice:</strong> ${invNumber}</p>
-          <p><strong>Guest:</strong> ${guestName}</p>
-          <p><strong>Amount:</strong> ${formData.amount} ${validCurrency}</p>
-          <p><strong>Currency:</strong> ${validCurrency}</p>
-          <p>The form is attached. Please process the payment.</p>
-        `,
-        attachments: [{ filename: formFileName, content: docxBuffer }],
-      });
-      if (!result.success) {
-        console.warn("[bank-transfer-form] Failed to email London Finance:", result.error ?? "Unknown error");
-      }
-    } catch (e) {
-      console.warn("[bank-transfer-form] Email to London Finance failed:", e);
-    }
+    await supabase
+      .from("invoices")
+      .update({
+        bank_transfer_form_path: storagePath,
+        bank_transfer_form_status: formStatus,
+        bank_transfer_currency: validCurrency,
+        bank_transfer_generated_at: new Date().toISOString(),
+        bank_transfer_generated_by: session.user.id,
+      })
+      .eq("id", invoiceId);
+
+    await createAuditEvent({
+      invoice_id: invoiceId,
+      actor_user_id: session.user.id,
+      event_type: "generate_bank_transfer_form",
+      payload: {
+        form_status: formStatus,
+        currency_final: validCurrency,
+        sender_account_number: senderAccount,
+        generated_by: session.user.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
 
     return new NextResponse(new Uint8Array(docxBuffer), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${formFileName}"`,
+        "Content-Disposition": `attachment; filename="bank-transfer-form.docx"`,
+        "X-Form-Status": formStatus,
+        "X-Sender-Account-Number": senderAccount,
+        "X-Currency-Final": validCurrency,
       },
     });
   } catch (e) {
@@ -188,15 +204,66 @@ export async function GET(
   }
 }
 
-function parseServiceDescription(desc: string | null): Record<string, string> {
+function formatDateDDMMYYYY(d: Date): string {
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+const INVOICE_NUMBER_KEYS = [
+  "invoice_number",
+  "invoice number",
+  "inv_number",
+  "invoice no",
+  "invoice #",
+  "inv no",
+];
+const GUEST_NAME_KEYS = ["guest_name", "guest name", "guest", "name"];
+
+function toSnakeCase(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function parseServiceDescription(desc: string | null): {
+  invoice_number?: string;
+  guest_name?: string;
+  [key: string]: string | undefined;
+} {
   const result: Record<string, string> = {};
   if (!desc) return result;
   for (const line of desc.split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx > 0) {
-      const key = line.slice(0, idx).trim().toLowerCase();
-      result[key] = line.slice(idx + 1).trim();
+    const sepIdx = Math.min(
+      line.indexOf(":") >= 0 ? line.indexOf(":") : Infinity,
+      line.indexOf("=") >= 0 ? line.indexOf("=") : Infinity
+    );
+    if (sepIdx > 0) {
+      const keyRaw = line.slice(0, sepIdx).trim();
+      const value = line.slice(sepIdx + 1).trim();
+      const key = toSnakeCase(keyRaw);
+      result[key] = value;
     }
   }
-  return result;
+  const out: Record<string, string | undefined> = { ...result };
+  for (const k of INVOICE_NUMBER_KEYS) {
+    const key = toSnakeCase(k);
+    const v = result[key];
+    if (v) {
+      out.invoice_number = v;
+      break;
+    }
+  }
+  for (const k of GUEST_NAME_KEYS) {
+    const key = toSnakeCase(k);
+    const v = result[key];
+    if (v) {
+      out.guest_name = v;
+      break;
+    }
+  }
+  return out;
 }
