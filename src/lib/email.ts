@@ -781,6 +781,7 @@ export async function sendOtherInvoicePaidToLondonFinance(params: {
       </table>
     </div>
     <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Attachment: ${escapeHtml(params.attachment.filename)}</p>
+    <p style="margin:12px 0 0;font-size:12px"><a href="${APP_URL}/other-invoices?expand=${params.invoiceId}" style="color:#2563eb;text-decoration:none">${isTr ? "Faturayı görüntüle" : "View invoice"}</a></p>
   `);
   const res = await sendEmailWithAttachment({
     to: params.to,
@@ -825,6 +826,35 @@ export async function sendBankTransferFormEmail(params: {
     subject,
     html,
     attachments: [{ filename, content: params.docxBuffer }],
+  });
+  return { success: res.success ?? false, error: res.error as string | undefined };
+}
+
+/** Other invoices due within X days — reminder to Finance. */
+export async function sendOtherInvoiceDueReminderEmail(params: {
+  to: string;
+  invoices: { id: string; beneficiary: string; amount: string; currency: string; dueDate: string }[];
+}): Promise<{ success: boolean; error?: string }> {
+  const rows = params.invoices
+    .map(
+      (i) =>
+        `<tr><td style="padding:8px 12px;color:#1e293b">${escapeHtml(i.beneficiary)}</td><td style="padding:8px 12px;color:#1e293b">${i.amount} ${i.currency}</td><td style="padding:8px 12px;color:#1e293b">${i.dueDate}</td><td style="padding:8px 12px"><a href="${APP_URL}/other-invoices?expand=${i.id}" style="color:#2563eb;text-decoration:none">View</a></td></tr>`
+    )
+    .join("");
+  const html = await wrapWithLogo("Other Invoices Due Soon", `
+    <p style="margin:0 0 12px;font-size:14px;color:#334155;line-height:1.6">The following Other Invoices are due within the next 3 days:</p>
+    <div style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Beneficiary</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Amount</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569">Due Date</th><th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569"></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8"><a href="${APP_URL}/other-invoices" style="color:#2563eb;text-decoration:none">View all Other Invoices →</a></p>
+  `);
+  const res = await sendEmail({
+    to: params.to,
+    subject: `Other Invoices Due Soon — ${params.invoices.length} invoice(s)`,
+    html,
   });
   return { success: res.success ?? false, error: res.error as string | undefined };
 }

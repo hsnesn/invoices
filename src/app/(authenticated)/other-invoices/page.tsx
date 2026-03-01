@@ -39,7 +39,7 @@ export default async function OtherInvoicesPage({
       storage_path,
       submitter_user_id,
       invoice_workflows(status, paid_date, payment_reference),
-      invoice_extracted_fields(beneficiary_name, invoice_number, invoice_date, gross_amount, extracted_currency, net_amount, vat_amount, account_number, sort_code, raw_json),
+      invoice_extracted_fields(beneficiary_name, invoice_number, invoice_date, gross_amount, net_amount, vat_amount, extracted_currency, account_number, sort_code, raw_json),
       invoice_files(storage_path, file_name)
     `)
     .eq("invoice_type", "other")

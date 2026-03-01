@@ -50,7 +50,13 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const result = await runInvoiceExtraction(invoiceId, session.user.id);
+    let body: { fields?: string[] } = {};
+    try {
+      body = (await request.json().catch(() => ({}))) as { fields?: string[] };
+    } catch { /* */ }
+    const targetFields = Array.isArray(body.fields) ? body.fields.filter((f): f is string => typeof f === "string") : undefined;
+
+    const result = await runInvoiceExtraction(invoiceId, session.user.id, { fields: targetFields });
 
     return NextResponse.json({
       success: true,

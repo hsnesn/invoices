@@ -130,8 +130,32 @@ function parseNumberLike(input: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const MONTH_NAMES: Record<string, number> = {
+  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4,
+  may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11,
+  dec: 12, december: 12,
+};
+
+function parseDateWithMonthName(s: string | null | undefined): string | null {
+  if (!s?.trim()) return null;
+  const t = s.trim();
+  let m = t.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\'?(\d{2,4})$/i);
+  if (m) {
+    const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+    const month = MONTH_NAMES[m[2].toLowerCase().slice(0, 3)];
+    if (month) return `${year}-${String(month).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  }
+  m = t.match(/^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})$/i);
+  if (!m) return null;
+  const month = MONTH_NAMES[m[2].toLowerCase().slice(0, 3)];
+  if (!month) return null;
+  return `${m[3]}-${String(month).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+}
+
 function regexExtractFromText(text: string) {
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const normalizedText = text.replace(/[\u2010-\u2015\u2212]/g, "-");
+  const lines = normalizedText.split("\n").map((l) => l.trim()).filter(Boolean);
   const full = lines.join("\n");
   const lineValue = (patterns: RegExp[]): string | null => {
     for (const p of patterns) {
@@ -141,9 +165,10 @@ function regexExtractFromText(text: string) {
     return null;
   };
 
-  const invoiceNumber =
+  const invoiceNumberRaw =
     lineValue([
-      /(?:invoice\s*(?:number|no|#)\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
+      /(?:^|\n)Number\s*[:\t]\s*(\d{4,})/im,
+      /(?:invoice\s*(?:number|no|#)\s*[:\-.]?\s*)(\d{4,})/i,
       /(?:inv(?:oice)?\s*#?\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
       /(?:statement\s*#?\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
       /(?:statement\s*(?:number|no)\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
@@ -152,17 +177,20 @@ function regexExtractFromText(text: string) {
       /(?:bill\s*to|invoice)\s*[:\-.]?\s*([A-Za-z0-9\-\/]{4,})/i,
       /(?:order\s*(?:no|number)|po\s*#?)\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
       /(?:document\s*(?:no|number))\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
-      /(?:^|\n)\s*number\s*[:\-.]?\s*([A-Za-z0-9\-\/]{3,})/im,
+      /(?:^|\n)\s*Number\s*[:\t]\s*([A-Za-z0-9\-\/]+)/im,
     ]) ?? null;
+  const invoiceNumber = invoiceNumberRaw && !/^(not|n\/a|na|none|applicable)$/i.test(invoiceNumberRaw.trim()) ? invoiceNumberRaw : null;
   const sortCodeRaw =
     lineValue([
       /(?:sort\s*\/\s*branch\s*code|sort\s*code|branch\s*sort\s*code)\s*[:\-.]?\s*(\d{6})/i,
+      /(?:sort\s*code)\s*(\d{2}[\s\-.\u2010-\u2015]?\d{2}[\s\-.\u2010-\u2015]?\d{2})/i,
       /(?:sort\s*code|sort\s*\/\s*branch)\s*[:\-.]?\s*(\d{2}[\s\-.]?\d{2}[\s\-.]?\d{2})/i,
       /(?:sort\s*code)\s*[:\-.]?\s*([0-9\s\-]{6,12})/i,
-      /(\d{2}[\s\-]\d{2}[\s\-]\d{2})\s*(?:sort|branch)/i,
+      /(\d{2}[\s\-.\u2010-\u2015]\d{2}[\s\-.\u2010-\u2015]\d{2})\s*(?:account|sort|branch)/i,
     ]) ?? null;
   const accountNumber =
     lineValue([
+      /(?:account\s*no\s*[:\-\s]+)(\d{8})\b/i,
       /(?:account\s*(?:number|no|#)?)\s*[:\-.]?\s*([0-9 ]{6,20})/i,
       /(?:account\s*no\s*[:\-]\s*)(\d{8})\b/i,
       /(?:bank\s+detail|account\s+no|account\s+holder)[\s\S]*?(\d{8})\b/i,
@@ -174,6 +202,7 @@ function regexExtractFromText(text: string) {
     /(?:beneficiary|payee|account\s*(?:name|holder)|name\s+on\s+account)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
     /(?:pay\s*(?:to|able\s*to)|payment\s*to)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
     /(?:remit\s*to|transfer\s*to)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
+    /(?:fast\s*payment|bank\s*details)[\s\S]*?([A-Za-z0-9\s&.,'-]+(?:Accountants|Ltd|Limited|Inc|LLC|Plc)\.?)\s*(?:Natwest|Barclays|HSBC|Lloyds|Santander)\s*Bank/i,
   ]);
   const companyFromLabel = lineValue([
     /(?:company\s+name|business\s+name|trading\s+as)\s*[:\-]?\s*([A-Za-z0-9 '&.,-]{2,120})/i,
@@ -209,21 +238,28 @@ function regexExtractFromText(text: string) {
     lineValue([/(?:vat|tax)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i]) ?? null;
   const date =
     lineValue([
+      /(?:^|\n)Date\s*[:\t]\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\'?\d{2,4})/im,
+      /(?:issued\s*on\s*[#:\s]*)(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i,
       /(?:invoice\s*date|date\s*of\s*invoice|invoice\s*date\s*issued)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4})/i,
       /(?:date|issued)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4})/i,
       /\b(20\d{2}[-\/.]\d{1,2}[-\/.]\d{1,2})\b/,
       /\b(\d{1,2}[-\/.]\d{1,2}[-\/.]20\d{2})\b/,
+      /\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\'?\d{2,4}\b/i,
+      /\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b/i,
     ]) ?? null;
-  const dateNorm = date ? (() => {
+  const dateNorm = date ? (parseDateWithMonthName(date) ?? (() => {
     const d = date.replace(/[/.]/g, "-");
     const m = d.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
     if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
     const m2 = d.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (m2) return `${m2[1]}-${m2[2].padStart(2, "0")}-${m2[3].padStart(2, "0")}`;
     return d;
-  })() : null;
+  })()) : null;
   const dueDate =
     lineValue([
+      /(?:due\s*by|payment\s*due|due\s*date)\s*[:\t]\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\'?\d{2,4})/i,
+      /(?:payment\s*due|due\s*date)\s*[:\s]*(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i,
+      /(?:payment\s*due|due\s*date)[\s\S]*?(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i,
       /(?:due\s*date|payment\s*due|date\s*due)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4}|\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2})/i,
       /(?:due|payable\s*by)\s*[:\-.]?\s*(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4}|\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2})/i,
     ])?.replace(/[/.]/g, "-") ?? null;
@@ -261,9 +297,26 @@ function regexExtractFromText(text: string) {
 
   let dueDateNorm: string | null = null;
   if (dueDate) {
-    const m = dueDate.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
-    if (m) dueDateNorm = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-    else if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) dueDateNorm = dueDate;
+    dueDateNorm = parseDateWithMonthName(dueDate);
+    if (!dueDateNorm) {
+      const m = dueDate.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
+      if (m) dueDateNorm = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) dueDateNorm = dueDate;
+    }
+  }
+
+  let serviceDescription: string | null = null;
+  const periodMatch = full.match(/(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\s*-\s*(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
+  if (/statement/i.test(full) && (/uber/i.test(full) || /uber\s*payments/i.test(String(beneficiary ?? "")))) {
+    serviceDescription = periodMatch
+      ? `Uber for Business - Statement ${periodMatch[1]} - ${periodMatch[2]}`
+      : "Uber for Business - Monthly statement";
+  } else {
+    const lineItemDesc = full.match(/\d+\s+(Prepara\s*[tio]n\s+of\s+[^\n]+?)\s+[\d.]+\s+[\d,.]+\s+[\d.,]+/i)?.[1]
+      ?? full.match(/\d+\s+((?:Services?|Consulting|Professional|Description)[A-Za-z0-9\s,.\-]{15,}?)\s+[\d.]+\s+[\d.,]+/i)?.[1];
+    if (lineItemDesc?.trim()) {
+      serviceDescription = lineItemDesc.trim().replace(/\s+/g, " ").slice(0, 500);
+    }
   }
 
   return {
@@ -280,6 +333,7 @@ function regexExtractFromText(text: string) {
     currency,
     guest_phone: phone && phone.length >= 10 ? phone : null,
     guest_email: email && !/trt|trtworld/i.test(email) ? email : null,
+    service_description: serviceDescription,
   };
 }
 
@@ -385,7 +439,8 @@ function findMatchingTemplateBySimilarity(
   return bestTemplate;
 }
 
-export async function runInvoiceExtraction(invoiceId: string, actorUserId: string | null) {
+export async function runInvoiceExtraction(invoiceId: string, actorUserId: string | null, options?: { fields?: string[] }) {
+  const targetFields = options?.fields?.length ? options.fields : undefined;
   const supabase = createAdminClient();
   const { data: invoice } = await supabase
     .from("invoices")
@@ -407,6 +462,67 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   const text = await extractTextFromBuffer(fileBuffer, ext);
   const regexParsed = regexExtractFromText(text);
 
+  const CERTAIN_SUFFIX = ` Return JSON: {"value": "..." or number, "certain": true/false}. Set "certain": true ONLY when you clearly see the value in the document and are confident. Set "certain": false or omit if unsure.`;
+
+  const FIELD_PROMPTS_MAP: Record<string, string> = {
+    beneficiary_name: `Extract ONLY the beneficiary/account holder name - the person or company who receives the payment. Look for: "Account holder name", "Payee name", "Beneficiary", "Name on account", "Payment to". This is the name that appears in the bank details section. EXCLUDE: addresses, cities, countries, invoice numbers, amounts. NEVER include "TRT" or "TRT World".`,
+    company_name: `Extract ONLY the company/business NAME that issued the invoice (e.g. "FluentWorld Ltd", "Byproductions"). Usually in the header or letterhead. EXCLUDE: "Account Holder" (that is the payee), "Company Reg. No.", "VAT Reg. No.", addresses, cities, countries. Company name = the business/legal entity issuing the invoice.`,
+    account_number: `Extract ONLY the bank account number where payment should be sent. UK: look for "Account No" or "Account Number" - typically 8 digits. International: look for "IBAN". This is in the PAYMENT/BANK DETAILS section. EXCLUDE: Company Registration No., VAT number, phone numbers, reference numbers. Only the account number digits/IBAN.`,
+    sort_code: `Extract ONLY the UK sort code - 6 digits, often formatted as XX-XX-XX. Look in the bank details section near "Sort Code" or "Sort/Branch Code". EXCLUDE: Company Reg. No., VAT No., other numeric codes.`,
+    invoice_number: `Extract ONLY the invoice number/reference. Look for "Invoice No.", "Invoice Number", "Statement #", "Statement Number", "Number", "Ref", "Reference" - format often like INV-123, #12345. EXCLUDE: Company Reg. No., VAT Reg. No., account numbers. Copy exactly: letters, numbers, slashes, hyphens.`,
+    invoice_date: `Extract ONLY the invoice date (when the invoice was issued). Return YYYY-MM-DD format. Look for "Invoice Date", "Date", "Issued".`,
+    due_date: `Extract ONLY the payment due date. Look for "Due Date", "Payment Due", "Payable By". Return YYYY-MM-DD format.`,
+    gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Total Balance", "Total Amount", "Amount Due", "Total Payable", "Balance Due". Use the LARGEST/final amount if multiple totals appear. NOT subtotals or line items. Numeric only, no currency symbols.`,
+    currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP. If € appears, return EUR.`,
+    service_description: `Extract a SHORT description/purpose of the invoice - what the payment is for. Look for: "Description", "Services", "Purpose", "Payment for", "Details", line items, or a brief summary of goods/services. Return 1-2 sentences max. EXCLUDE: bank details, addresses, legal boilerplate. If nothing clear, return empty.`,
+  };
+  if (targetFields?.length && openai) {
+    const { data: existing } = await supabase.from("invoice_extracted_fields").select("*").eq("invoice_id", invoiceId).single();
+    const invType = (invoice as { invoice_type?: string })?.invoice_type;
+    const partialParsed: Record<string, string | number | null> = {};
+    for (const key of targetFields) {
+      if (!FIELD_PROMPTS_MAP[key]) continue;
+      const prompt = FIELD_PROMPTS_MAP[key] + CERTAIN_SUFFIX;
+      try {
+        const extractionModel = process.env.EXTRACTION_MODEL || "gpt-4o";
+        const completion = await openai.chat.completions.create({
+          model: extractionModel,
+          messages: [{ role: "user", content: `${prompt}\n\nDOCUMENT:\n${text}` }],
+          response_format: { type: "json_object" },
+        });
+        const raw = completion.choices[0]?.message?.content;
+        if (raw) {
+          const obj = JSON.parse(raw) as { value?: string | number | null; certain?: boolean };
+          const v = obj?.value;
+          if (v != null && v !== "" && obj?.certain !== false) {
+            if (key === "gross_amount") partialParsed[key] = typeof v === "number" ? v : parseNumberLike(String(v));
+            else partialParsed[key] = typeof v === "string" ? v.trim() : v;
+          }
+        }
+      } catch { /* */ }
+    }
+    if (Object.keys(partialParsed).length > 0) {
+      const existingRaw = (existing as { raw_json?: Record<string, unknown> } | null)?.raw_json ?? {};
+      const rawJson = { ...existingRaw, company_name: partialParsed.company_name ?? existingRaw.company_name, due_date: partialParsed.due_date ?? existingRaw.due_date };
+      const updatePayload: Record<string, unknown> = { invoice_id: invoiceId, raw_json: rawJson, updated_at: new Date().toISOString() };
+      if (partialParsed.beneficiary_name != null) updatePayload.beneficiary_name = partialParsed.beneficiary_name;
+      if (partialParsed.account_number != null) updatePayload.account_number = partialParsed.account_number;
+      if (partialParsed.sort_code != null) updatePayload.sort_code = partialParsed.sort_code;
+      if (partialParsed.invoice_number != null) updatePayload.invoice_number = partialParsed.invoice_number;
+      if (partialParsed.invoice_date != null) updatePayload.invoice_date = partialParsed.invoice_date;
+      if (partialParsed.gross_amount != null) updatePayload.gross_amount = partialParsed.gross_amount;
+      if (partialParsed.currency != null) updatePayload.extracted_currency = partialParsed.currency;
+      if (partialParsed.company_name != null) rawJson.company_name = partialParsed.company_name;
+      if (partialParsed.service_description != null && invType === "other") {
+        const desc = String(partialParsed.service_description).trim().slice(0, 2000);
+        if (desc) await supabase.from("invoices").update({ service_description: desc, updated_at: new Date().toISOString() }).eq("id", invoiceId);
+      }
+      await supabase.from("invoice_extracted_fields").upsert(updatePayload, { onConflict: "invoice_id" });
+      await createAuditEvent({ invoice_id: invoiceId, actor_user_id: actorUserId, event_type: "invoice_extracted", payload: { partial_fields: targetFields } });
+      return { needs_review: false, warning: undefined };
+    }
+  }
+
   let parsed: {
     beneficiary_name?: string | null;
     company_name?: string | null;
@@ -424,8 +540,6 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
   let extractionError: string | null = null;
 
   const hasText = text.trim().length > 30;
-
-  const CERTAIN_SUFFIX = ` Return JSON: {"value": "..." or number, "certain": true/false}. Set "certain": true ONLY when you clearly see the value in the document and are confident. Set "certain": false or omit if unsure.`;
 
   const FIELD_PROMPTS: Record<string, string> = {
     beneficiary_name: `Extract ONLY the beneficiary/account holder name - the person or company who receives the payment. Look for: "Account holder name", "Payee name", "Beneficiary", "Name on account", "Payment to". This is the name that appears in the bank details section. EXCLUDE: addresses, cities, countries, invoice numbers, amounts. NEVER include "TRT" or "TRT World".` + CERTAIN_SUFFIX,
@@ -611,6 +725,10 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     if (regexLooksValid && aiLooksSuspicious) {
       parsed.invoice_number = regexInv;
     }
+  }
+
+  if (!parsed.service_description?.trim() && regexParsed.service_description?.trim()) {
+    parsed.service_description = regexParsed.service_description;
   }
 
   if (parsed.beneficiary_name) {
