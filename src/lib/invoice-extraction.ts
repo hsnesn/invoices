@@ -164,6 +164,18 @@ function regexExtractFromText(text: string) {
     }
     return null;
   };
+  // For Uber/statement docs: multiple "Total" rows (per trip). Use LAST match = statement total.
+  const lineValueLast = (patterns: RegExp[]): string | null => {
+    let last: string | null = null;
+    for (const p of patterns) {
+      const re = new RegExp(p.source, p.flags + (p.flags.includes("g") ? "" : "g"));
+      let m;
+      while ((m = re.exec(full)) !== null) {
+        if (m?.[1]?.trim()) last = m[1].trim();
+      }
+    }
+    return last;
+  };
 
   const invoiceNumberRaw =
     lineValue([
@@ -219,12 +231,14 @@ function regexExtractFromText(text: string) {
   const grossPatterns = [
     /(?:grand\s*total|total\s*amount|amount\s*due|balance\s*due|invoice\s*total|total\s*payable|amount\s*payable|payment\s*due|final\s*(?:total|amount)|amount\s*to\s*pay|invoice\s*value|total\s*due)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:total\s*balance|balance\s*total)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
+    /(?:statement\s*total|total\s*for\s*statement)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:^|\s)(?:total|gross|sum)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:balance\s*due|amount\s*due)\s*[:\-]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:amount\s*payable|payable\s*amount)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
     /(?:total\s*for\s*payment|payment\s*total)\s*[:\-]?\s*[£$€]?\s*([0-9][0-9,]*(?:\.\d{2})?)/i,
   ];
-  let grossRaw = lineValue(grossPatterns);
+  const isUberStatement = /uber/i.test(full) && /statement/i.test(full);
+  let grossRaw = isUberStatement ? lineValueLast(grossPatterns) : lineValue(grossPatterns);
   if (!grossRaw) {
     const amountRegex = /[£$€]\s*([0-9][0-9,]*(?:\.[0-9]{2})?)|([0-9][0-9,]*(?:\.[0-9]{2})?)\s*[£$€]?/g;
     const allAmounts: number[] = [];
@@ -234,7 +248,7 @@ function regexExtractFromText(text: string) {
       const n = s ? parseNumberLike(s) : null;
       if (n != null && n > 0 && n < 10000000) allAmounts.push(n);
     }
-    grossRaw = allAmounts.length > 0 ? String(Math.max(...allAmounts)) : null;
+    if (allAmounts.length > 0) grossRaw = String(Math.max(...allAmounts));
   }
   if (!grossRaw) grossRaw = lineValue([/[£$€]\s*([0-9][0-9,]*(?:\.\d{2})?)/]);
   const netRaw =
@@ -482,7 +496,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     invoice_number: `Extract ONLY the invoice number/reference. Look for "Invoice No.", "Invoice Number", "Statement #", "Statement Number", "Number", "Ref", "Reference" - format often like INV-123, #12345. EXCLUDE: Company Reg. No., VAT Reg. No., account numbers. Copy exactly: letters, numbers, slashes, hyphens.`,
     invoice_date: `Extract ONLY the invoice date (when the invoice was issued). Return YYYY-MM-DD format. Look for "Invoice Date", "Date", "Issued".`,
     due_date: `Extract ONLY the payment due date. Look for "Due Date", "Payment Due", "Payable By". Return YYYY-MM-DD format.`,
-    gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Total Balance", "Total Amount", "Amount Due", "Total Payable", "Balance Due". Use the LARGEST/final amount if multiple totals appear. NOT subtotals or line items. Numeric only, no currency symbols.`,
+    gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Amount Due", "Total Payable", "Statement total". Use the FINAL total at the bottom if multiple totals (e.g. Uber: statement total, NOT per-trip). Numeric only.`,
     currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP. If € appears, return EUR.`,
     service_description: `Extract a SHORT description/purpose of the invoice - what the payment is for. Look for: "Description", "Services", "Purpose", "Payment for", "Details", line items, or a brief summary of goods/services. Return 1-2 sentences max. EXCLUDE: bank details, addresses, legal boilerplate. If nothing clear, return empty.`,
   };
@@ -585,7 +599,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
 - currency: GBP, EUR, USD, or TRY
 - service_description: short purpose (1-2 sentences)
 
-Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "Due By", "Grand Total", "Total Payable". EXCLUDE: TRT World, addresses, VAT numbers.`;
+Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "Due By", "Grand Total", "Total Payable". EXCLUDE: TRT World, addresses, VAT numbers.${/uber/i.test(text) && /statement/i.test(text) ? " For Uber statements with multiple trips: use the FINAL total at the bottom (Amount due, Statement total), NOT per-trip amounts." : ""}`;
       const completion = await openai.chat.completions.create({
         model: OTHER_INVOICE_MODEL,
         messages: [{ role: "user", content: `${prompt}\n\nDOCUMENT:\n${text}` }],
@@ -621,7 +635,7 @@ Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "
     invoice_number: `Extract ONLY the invoice number/reference. Look for "Invoice No.", "Invoice Number", "Statement #", "Statement Number", "Number", "Ref", "Reference" - format often like INV-123, #12345. EXCLUDE: Company Reg. No., VAT Reg. No., account numbers. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
     invoice_date: `Extract ONLY the invoice date (when the invoice was issued). Return YYYY-MM-DD format. Look for "Invoice Date", "Date", "Issued".` + CERTAIN_SUFFIX,
     due_date: `Extract ONLY the payment due date. Look for "Due Date", "Payment Due", "Payable By". Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
-    gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Total Balance", "Total Amount", "Amount Due", "Total Payable", "Balance Due". Use the LARGEST/final amount if multiple totals appear. NOT subtotals or line items. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
+    gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Total Balance", "Total Amount", "Amount Due", "Total Payable", "Balance Due", "Statement total". Use the FINAL total at the bottom of the document if multiple totals appear (e.g. Uber statements: use statement total, NOT per-trip amounts). NOT subtotals or line items. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
     currency: `Extract ONLY the currency code. Return GBP, EUR, USD, or TRY. If £ appears, return GBP. If € appears, return EUR.` + CERTAIN_SUFFIX,
     guest_phone: `Extract ONLY the contact phone number - where the invoice sender can be reached. Look for "Phone", "Tel", "Mobile". UK: +44 or 0xx. EXCLUDE: bank account numbers, sort codes, VAT numbers, fax numbers.` + CERTAIN_SUFFIX,
     guest_email: `Extract ONLY the contact email - where the invoice sender can be reached. Format: name@domain.com. EXCLUDE: TRT World or internal company emails.` + CERTAIN_SUFFIX,
