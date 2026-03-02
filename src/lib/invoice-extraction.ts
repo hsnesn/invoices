@@ -470,8 +470,9 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
 
   const CERTAIN_SUFFIX = ` Return JSON: {"value": "..." or number, "certain": true/false}. Set "certain": true ONLY when you clearly see the value in the document and are confident. Set "certain": false or omit if unsure.`;
 
-  // Other invoices: use best model (gpt-4o by default)
+  // Other invoices: use best model (gpt-4o by default). Set OTHER_INVOICE_EXTRACTION_MODEL=gpt-4o-mini for cost savings.
   const OTHER_INVOICE_MODEL = process.env.OTHER_INVOICE_EXTRACTION_MODEL || process.env.EXTRACTION_MODEL || "gpt-4o";
+  const perFieldModel = invType === "other" ? OTHER_INVOICE_MODEL : (process.env.EXTRACTION_MODEL || "gpt-4o");
 
   const FIELD_PROMPTS_MAP: Record<string, string> = {
     beneficiary_name: `Extract ONLY the beneficiary/account holder name - the person or company who receives the payment. Look for: "Account holder name", "Payee name", "Beneficiary", "Name on account", "Payment to". This is the name that appears in the bank details section. EXCLUDE: addresses, cities, countries, invoice numbers, amounts. NEVER include "TRT" or "TRT World".`,
@@ -632,14 +633,14 @@ Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "
   async function extractSingleField(
     fieldKey: string,
     docText: string,
-    client: OpenAI
+    client: OpenAI,
+    model: string
   ): Promise<{ value: string | number | null; certain: boolean }> {
     const prompt = FIELD_PROMPTS[fieldKey];
     if (!prompt) return { value: null, certain: false };
     try {
-      const extractionModel = process.env.EXTRACTION_MODEL || "gpt-4o";
       const completion = await client.chat.completions.create({
-        model: extractionModel,
+        model,
         messages: [{ role: "user", content: `${prompt}\n\nDOCUMENT:\n${docText}` }],
         response_format: { type: "json_object" },
       });
@@ -741,7 +742,7 @@ Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "
         // Regex or single-call got everything, skip per-field AI
       } else {
       const results = await Promise.all(
-        fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
+        fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!, perFieldModel) }))
       );
       for (const { key, result } of results) {
         applyFieldResult(key, result);
@@ -770,7 +771,7 @@ Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "
       if (openai && text.trim().length > 20) {
         const fieldsToExtract = templateMatched ? AI_ONLY_FIELDS : Object.keys(FIELD_PROMPTS);
         const results = await Promise.all(
-          fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!) }))
+          fieldsToExtract.map(async (key) => ({ key, result: await extractSingleField(key, text, openai!, perFieldModel) }))
         );
         for (const { key, result } of results) {
           applyFieldResult(key, result);
