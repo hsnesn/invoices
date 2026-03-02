@@ -179,6 +179,7 @@ function regexExtractFromText(text: string) {
 
   const invoiceNumberRaw =
     lineValue([
+      /(?:memo\s+)?statement\s*#\s*([A-Za-z0-9]+)/i,
       /(?:^|\n)Number\s*[:\t]\s*(\d{4,})/im,
       /(?:invoice\s*(?:number|no|#)\s*[:\-.]?\s*)(\d{4,})/i,
       /(?:inv(?:oice)?\s*#?\s*[:\-.]?\s*)([A-Za-z0-9\-\/]+)/i,
@@ -191,7 +192,7 @@ function regexExtractFromText(text: string) {
       /(?:document\s*(?:no|number))\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
       /(?:^|\n)\s*Number\s*[:\t]\s*([A-Za-z0-9\-\/]+)/im,
     ]) ?? null;
-  const invoiceNumber = invoiceNumberRaw && !/^(not|n\/a|na|none|applicable)$/i.test(invoiceNumberRaw.trim()) ? invoiceNumberRaw : null;
+  let invoiceNumber = invoiceNumberRaw && !/^(not|n\/a|na|none|applicable)$/i.test(invoiceNumberRaw.trim()) ? invoiceNumberRaw : null;
   const sortCodeRaw =
     lineValue([
       /(?:sort\s*\/\s*branch\s*code|sort\s*code|branch\s*sort\s*code)\s*[:\-.]?\s*(\d{6})/i,
@@ -326,10 +327,17 @@ function regexExtractFromText(text: string) {
 
   let serviceDescription: string | null = null;
   const periodMatch = full.match(/(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\s*-\s*(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
-  if (/statement/i.test(full) && (/uber/i.test(full) || /uber\s*payments/i.test(String(beneficiary ?? "")))) {
+  const isUberStatementDoc = /statement/i.test(full) && (/uber/i.test(full) || /uber\s*payments/i.test(String(beneficiary ?? "")));
+  if (isUberStatementDoc) {
     serviceDescription = periodMatch
       ? `Uber for Business - Statement ${periodMatch[1]} - ${periodMatch[2]}`
       : "Uber for Business - Monthly statement";
+    // Uber "Individual" is generic; use statement period as unique invoice number
+    if ((!invoiceNumber || /^individual$/i.test(invoiceNumber.trim())) && periodMatch) {
+      const d1 = periodMatch[1].replace(/\s+/g, " ").trim();
+      const d2 = periodMatch[2].replace(/\s+/g, " ").trim();
+      invoiceNumber = `Uber-${d1}-${d2}`.replace(/\s+/g, "-");
+    }
   } else {
     const lineItemDesc = full.match(/\d+\s+(Prepara\s*[tio]n\s+of\s+[^\n]+?)\s+[\d.]+\s+[\d,.]+\s+[\d.,]+/i)?.[1]
       ?? full.match(/\d+\s+((?:Services?|Consulting|Professional|Description)[A-Za-z0-9\s,.\-]{15,}?)\s+[\d.]+\s+[\d.,]+/i)?.[1];
@@ -493,7 +501,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
     company_name: `Extract ONLY the company/business NAME that issued the invoice (e.g. "FluentWorld Ltd", "Byproductions"). Usually in the header or letterhead. EXCLUDE: "Account Holder" (that is the payee), "Company Reg. No.", "VAT Reg. No.", addresses, cities, countries. Company name = the business/legal entity issuing the invoice.`,
     account_number: `Extract ONLY the bank account number where payment should be sent. UK: look for "Account No" or "Account Number" - typically 8 digits. International: look for "IBAN". This is in the PAYMENT/BANK DETAILS section. EXCLUDE: Company Registration No., VAT number, phone numbers, reference numbers. Only the account number digits/IBAN.`,
     sort_code: `Extract ONLY the UK sort code - 6 digits, often formatted as XX-XX-XX. Look in the bank details section near "Sort Code" or "Sort/Branch Code". EXCLUDE: Company Reg. No., VAT No., other numeric codes.`,
-    invoice_number: `Extract ONLY the invoice number/reference. Look for "Invoice No.", "Invoice Number", "Statement #", "Statement Number", "Number", "Ref", "Reference" - format often like INV-123, #12345. EXCLUDE: Company Reg. No., VAT Reg. No., account numbers. Copy exactly: letters, numbers, slashes, hyphens.`,
+    invoice_number: `Extract ONLY the invoice number/reference. Look for "Memo Statement #", "Statement #", "Invoice No.", "Number", "Ref" - e.g. 6830BC38CB, INV-123. EXCLUDE: Company Reg. No., VAT Reg. No. Copy exactly.`,
     invoice_date: `Extract ONLY the invoice date (when the invoice was issued). Return YYYY-MM-DD format. Look for "Invoice Date", "Date", "Issued".`,
     due_date: `Extract ONLY the payment due date. Look for "Due Date", "Payment Due", "Payable By". Return YYYY-MM-DD format.`,
     gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Amount Due", "Total Payable", "Statement total". Use the FINAL total at the bottom if multiple totals (e.g. Uber: statement total, NOT per-trip). Numeric only.`,
@@ -590,7 +598,7 @@ export async function runInvoiceExtraction(invoiceId: string, actorUserId: strin
 - company_name: company issuing the invoice (header/letterhead)
 - account_number: 8-digit UK account or IBAN
 - sort_code: UK sort code XX-XX-XX
-- invoice_number: invoice/statement number (not VAT/Company Reg)
+- invoice_number: invoice/statement number (not VAT/Company Reg). For Uber: look for "Memo Statement #" or "Statement #" followed by ID (e.g. 6830BC38CB). NOT "Individual".
 - invoice_date: YYYY-MM-DD
 - due_date: YYYY-MM-DD
 - gross_amount: total to pay (number, no currency)
@@ -632,7 +640,7 @@ Look for: "Account holder", "Payee", "Beneficiary", "Sort Code", "Account No", "
     company_name: `Extract ONLY the company/business NAME that issued the invoice (e.g. "FluentWorld Ltd", "Byproductions"). Usually in the header or letterhead. EXCLUDE: "Account Holder" (that is the payee), "Company Reg. No.", "VAT Reg. No.", addresses, cities, countries. Company name = the business/legal entity issuing the invoice.` + CERTAIN_SUFFIX,
     account_number: `Extract ONLY the bank account number where payment should be sent. UK: look for "Account No" or "Account Number" - typically 8 digits. International: look for "IBAN". This is in the PAYMENT/BANK DETAILS section. EXCLUDE: Company Registration No., VAT number, phone numbers, reference numbers. Only the account number digits/IBAN.` + CERTAIN_SUFFIX,
     sort_code: `Extract ONLY the UK sort code - 6 digits, often formatted as XX-XX-XX. Look in the bank details section near "Sort Code" or "Sort/Branch Code". EXCLUDE: Company Reg. No., VAT No., other numeric codes.` + CERTAIN_SUFFIX,
-    invoice_number: `Extract ONLY the invoice number/reference. Look for "Invoice No.", "Invoice Number", "Statement #", "Statement Number", "Number", "Ref", "Reference" - format often like INV-123, #12345. EXCLUDE: Company Reg. No., VAT Reg. No., account numbers. Copy exactly: letters, numbers, slashes, hyphens.` + CERTAIN_SUFFIX,
+    invoice_number: `Extract ONLY the invoice number/reference. Look for "Memo Statement #", "Statement #", "Invoice No.", "Invoice Number", "Number", "Ref" - e.g. 6830BC38CB, INV-123. EXCLUDE: Company Reg. No., VAT Reg. No., account numbers. Copy exactly.` + CERTAIN_SUFFIX,
     invoice_date: `Extract ONLY the invoice date (when the invoice was issued). Return YYYY-MM-DD format. Look for "Invoice Date", "Date", "Issued".` + CERTAIN_SUFFIX,
     due_date: `Extract ONLY the payment due date. Look for "Due Date", "Payment Due", "Payable By". Return YYYY-MM-DD format.` + CERTAIN_SUFFIX,
     gross_amount: `Extract ONLY the final total amount to pay - the single amount the payer must pay. Look for "Grand Total", "Total", "Total Balance", "Total Amount", "Amount Due", "Total Payable", "Balance Due", "Statement total". Use the FINAL total at the bottom of the document if multiple totals appear (e.g. Uber statements: use statement total, NOT per-trip amounts). NOT subtotals or line items. Numeric only, no currency symbols.` + CERTAIN_SUFFIX,
